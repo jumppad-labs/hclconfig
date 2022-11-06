@@ -43,7 +43,10 @@ type Resource interface {
 	// Info returns the base info for a resource type
 	Info() *ResourceInfo
 	// Parse is called by the parser when the resource is deserialized from a file
-	Parse(configFile string)
+	Parse(configFile string) error
+
+	// Process is called by the parser when the DAG is resolved
+	Process() error
 }
 
 // ResourceInfo is the embedded type for any config resources

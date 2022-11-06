@@ -86,6 +86,10 @@ func (c *Container) Info() *types.ResourceInfo {
 	return &c.ResourceInfo
 }
 
-func (c Container) Parse(file string) {
-	// process volumes
+func (c *Container) Parse(file string) error {
+	return nil
+}
+
+func (c *Container) Process() error {
+	return nil
 }

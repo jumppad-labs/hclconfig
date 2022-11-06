@@ -22,5 +22,10 @@ func (n *Network) Info() *types.ResourceInfo {
 	return &n.ResourceInfo
 }
 
-func (n *Network) Parse(file string) {
+func (n *Network) Parse(file string) error {
+	return nil
+}
+
+func (c *Network) Process() error {
+	return nil
 }

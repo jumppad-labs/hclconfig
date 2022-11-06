@@ -25,5 +25,10 @@ func (t *Module) Info() *ResourceInfo {
 	return &t.ResourceInfo
 }
 
-func (t *Module) Parse(file string) {
+func (t *Module) Parse(file string) error {
+	return nil
+}
+
+func (t *Module) Process() error {
+	return nil
 }

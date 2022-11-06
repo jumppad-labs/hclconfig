@@ -19,5 +19,10 @@ func (t *Variable) Info() *ResourceInfo {
 	return &t.ResourceInfo
 }
 
-func (t *Variable) Parse(file string) {
+func (t *Variable) Parse(file string) error {
+	return nil
+}
+
+func (t *Variable) Process() error {
+	return nil
 }

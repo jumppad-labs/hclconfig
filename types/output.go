@@ -19,5 +19,10 @@ func (t *Output) Info() *ResourceInfo {
 	return &t.ResourceInfo
 }
 
-func (t *Output) Parse(file string) {
+func (t *Output) Parse(file string) error {
+	return nil
+}
+
+func (t *Output) Process() error {
+	return nil
 }

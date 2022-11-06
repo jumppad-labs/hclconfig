@@ -140,8 +140,14 @@ func (c *Config) Walk(wf WalkFunc) error {
 			}
 		}
 
+		// call the resource process method
+		err = r.Process()
+		if err != nil {
+			return diags.Append(fmt.Errorf("error calling process for resource: %s", err))
+		}
+
 		// call the callback
-		err := wf(r)
+		err = wf(r)
 		if err != nil {
 			return diags.Append(fmt.Errorf("error processing graph node: %s", err))
 		}

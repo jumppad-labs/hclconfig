@@ -27,5 +27,10 @@ func (t *Template) Info() *types.ResourceInfo {
 	return &t.ResourceInfo
 }
 
-func (t *Template) Parse(file string) {
+func (t *Template) Parse(file string) error {
+	return nil
+}
+
+func (t *Template) Process() error {
+	return nil
 }
