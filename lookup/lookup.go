@@ -8,6 +8,7 @@ package lookup
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -51,6 +52,39 @@ func LookupI(i interface{}, path []string, tags []string) (reflect.Value, error)
 	return lookup(i, true, path, tags)
 }
 
+func SetValueStringI[V int64 | int | string | reflect.Value](i interface{}, v V, path string, tags []string) error {
+	// First find the variable
+	dest, err := Lookup(i, strings.Split(path, SplitToken), tags)
+	if err != nil {
+		return fmt.Errorf("unable to set value %#v: %s", dest, err)
+	}
+
+	// can we set he value
+	if !dest.CanSet() {
+		return fmt.Errorf("unable to set value %#v at path %v", v, path)
+	}
+
+	var value reflect.Value
+	var valueType reflect.Type
+
+	switch any(v).(type) {
+	case reflect.Value:
+		valueType = any(v).(reflect.Value).Type()
+		value = any(v).(reflect.Value)
+	default:
+		valueType = reflect.ValueOf(v).Type()
+		value = reflect.ValueOf(v)
+	}
+
+	if dest.Type() != valueType {
+		return fmt.Errorf("value of type %s is not assignable to type %s at path %s ", valueType.Name(), path, dest.Type().Name())
+	}
+
+	dest.Set(value)
+
+	return nil
+}
+
 func lookup(i interface{}, caseInsensitive bool, path []string, tags []string) (reflect.Value, error) {
 	value := reflect.ValueOf(i)
 	var parent reflect.Value
@@ -68,65 +102,21 @@ func lookup(i interface{}, caseInsensitive bool, path []string, tags []string) (
 			break
 		}
 
+		// if aggreable and path contains index
+		pp := path[i-1]
+		if hasIndex(pp) {
+			_, ind, _ := parseIndex(pp)
+			value = parent.Index(ind)
+			value, err = getValueByName(value, part, caseInsensitive, tags)
+			break
+		}
+
 		value, err = aggreateAggregableValue(parent, path[i:], caseInsensitive, tags)
 
 		break
 	}
 
 	return value, err
-}
-
-func valueByNameOrTag(v reflect.Value, key string, caseInsensitive bool, tags []string) reflect.Value {
-	var value reflect.Value
-
-	for i := 0; i < v.NumField(); i++ {
-		if caseInsensitive {
-			if strings.EqualFold(v.Type().Field(i).Name, key) {
-				value = v.Field(i)
-				return value
-			}
-		} else {
-			if v.Type().Field(i).Name == key {
-				value = v.Field(i)
-				return value
-			}
-		}
-
-		// if we do not find a value and we have tags specified
-		if !value.IsValid() && len(tags) > 0 {
-			for _, t := range tags {
-				tag := getTagValue(v.Type().Field(i), t)
-
-				if caseInsensitive {
-					if strings.EqualFold(v.Type().Field(i).Name, tag) {
-						value = v.Field(i)
-						return value
-					}
-				} else {
-					if v.Type().Field(i).Name == tag {
-						value = v.Field(i)
-						return value
-					}
-				}
-			}
-		}
-	}
-
-	return value
-}
-
-// getTag returns the first part from the given struct tag, this is often a referenced name
-// i.e `json:"json_type_name,optional"`, getTag(field, "json") returns "json_type_name"
-// returns "" if tag does not exist
-func getTagValue(f reflect.StructField, tagName string) string {
-	tag := string(f.Tag.Get(tagName))
-
-	if tag != "" {
-		parts := strings.Split(tag, ",")
-		return parts[0]
-	}
-
-	return ""
 }
 
 func getValueByName(v reflect.Value, key string, caseInsensitive bool, tags []string) (reflect.Value, error) {
@@ -331,6 +321,53 @@ func lookupType(ty reflect.Type, path []string, caseInsensitive bool, tags []str
 		}
 	}
 	return nil, false
+}
+
+func valueByNameOrTag(v reflect.Value, key string, caseInsensitive bool, tags []string) reflect.Value {
+	for i := 0; i < v.NumField(); i++ {
+		if caseInsensitive {
+			if strings.EqualFold(v.Type().Field(i).Name, key) {
+				return v.Field(i)
+			}
+		} else {
+			if v.Type().Field(i).Name == key {
+				return v.Field(i)
+			}
+		}
+
+		// if we do not find a value and we have tags specified
+		if len(tags) > 0 {
+			for _, t := range tags {
+				tag := getTagValue(v.Type().Field(i), t)
+
+				if caseInsensitive {
+					if strings.EqualFold(key, tag) {
+						return v.Field(i)
+					}
+				} else {
+					if key == tag {
+						return v.Field(i)
+					}
+				}
+			}
+		}
+	}
+
+	return reflect.Value{}
+}
+
+// getTag returns the first part from the given struct tag, this is often a referenced name
+// i.e `json:"json_type_name,optional"`, getTag(field, "json") returns "json_type_name"
+// returns "" if tag does not exist
+func getTagValue(f reflect.StructField, tagName string) string {
+	tag := string(f.Tag.Get(tagName))
+
+	if tag != "" {
+		parts := strings.Split(tag, ",")
+		return parts[0]
+	}
+
+	return ""
 }
 
 func typeByNameOrTag(v reflect.Type, key string, caseInsensitive bool, tags []string) reflect.Type {

@@ -5,17 +5,31 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/shipyard-run/hclconfig/test_fixtures/single_file/structs"
+	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 	"github.com/tj/assert"
 )
 
-func setup() func() {
+func setupParser(t *testing.T, options ...*ParserOptions) (*Config, *Parser) {
 	os.Setenv("SHIPYARD_CONFIG", "/User/yamcha/.shipyard")
 
-	return func() {
+	t.Cleanup(func() {
 		os.Unsetenv("SHIPYARD_CONFIG")
+	})
+
+	c := NewConfig()
+
+	o := DefaultOptions()
+	if len(options) > 0 {
+		o = options[0]
 	}
+
+	p := NewParser(o)
+	p.RegisterType("container", &structs.Container{})
+	p.RegisterType("network", &structs.Network{})
+	p.RegisterType("template", &structs.Template{})
+
+	return c, p
 }
 
 func TestNewParserWithOptions(t *testing.T) {
@@ -34,17 +48,12 @@ func TestNewParserWithOptions(t *testing.T) {
 }
 
 func TestParseFileProcessesResources(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/single_file/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c := NewConfig()
-
-	p := NewParser(DefaultOptions())
-	p.RegisterType("container", &structs.Container{})
-	p.RegisterType("network", &structs.Network{})
-	p.RegisterType("template", &structs.Template{})
+	c, p := setupParser(t)
 
 	c, err = p.ParseFile(absoluteFolderPath, c)
 	assert.NoError(t, err)
@@ -59,20 +68,23 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.Equal(t, "consul", cont.Command[0], "consul")
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
 	require.Equal(t, 2048, cont.Resources.CPU)
+
+	r, err = c.FindResource("template.consul_config")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	r, err = c.FindResource("container.base")
+	require.NoError(t, err)
+	require.NotNil(t, r)
 }
 
 func TestParseFileSetsLinks(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/single_file/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c := NewConfig()
-
-	p := NewParser(DefaultOptions())
-	p.RegisterType("container", &structs.Container{})
-	p.RegisterType("network", &structs.Network{})
-	p.RegisterType("template", &structs.Template{})
+	c, p := setupParser(t)
 
 	c, err = p.ParseFile(absoluteFolderPath, c)
 	assert.NoError(t, err)
@@ -87,198 +99,88 @@ func TestParseFileSetsLinks(t *testing.T) {
 	// this enables us to build a graph of objects and later set these fields to the correct
 	// reference values
 	cont := r.(*structs.Container)
-	require.Equal(t, "resources.network.name", cont.Info().ResouceLinks["network[0].name"])
+	require.Equal(t, "resources.network.onprem.name", cont.Info().ResouceLinks["network[0].name"])
 	require.Equal(t, "resources.container.base.resources.memory", cont.Info().ResouceLinks["resources[0].memory"])
 	require.Equal(t, "resources.template.consul_config.destination", cont.Info().ResouceLinks["volume[1].source"])
 }
 
-//
-//func TestResourceReferenceCreatesDependency(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/single_file")
-//	assert.NoError(t, err)
-//
-//	c := resources.NewConfig()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//}
+func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	assert.NoError(t, err)
 
-//func TestLoadsVariablesFiles(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/container")
-//	assert.NoError(t, err)
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	validEnv := false
-//	con := r.(*Container)
-//	for _, e := range con.Environment {
-//		// should contain a key called "something" with a value "else"
-//		if e.Key == "something" && e.Value == "blah blah" {
-//			validEnv = true
-//		}
-//	}
-//
-//	assert.True(t, validEnv)
-//}
-//
-//func TestLoadsVariablesFromOptionalFile(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/container")
-//	assert.NoError(t, err)
-//
-//	absoluteVarsPath, err := filepath.Abs("../../examples/override.vars")
-//	assert.NoError(t, err)
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, absoluteVarsPath)
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	validEnv := false
-//	con := r.(*Container)
-//	for _, e := range con.Environment {
-//		// should contain a key called "something" with a value "else"
-//		if e.Key == "something" && e.Value == "else" {
-//			validEnv = true
-//		}
-//	}
-//
-//	assert.True(t, validEnv)
-//}
-//
-//func TestLoadsVariablesFilesForSingleFile(t *testing.T) {
-//	absoluteFilePath, err := filepath.Abs("../../examples/container/container.hcl")
-//	assert.NoError(t, err)
-//
-//	absoluteVarsPath, err := filepath.Abs("../../examples/override.vars")
-//	assert.NoError(t, err)
-//
-//	c := New()
-//	err = ParseSingleFile(absoluteFilePath, c, map[string]string{}, absoluteVarsPath)
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	validEnv := false
-//	con := r.(*Container)
-//	for _, e := range con.Environment {
-//		// should contain a key called "something" with a value "else"
-//		if e.Key == "something" && e.Value == "else" {
-//			validEnv = true
-//		}
-//	}
-//
-//	assert.True(t, validEnv)
-//}
-//
-//func TestOverridesVariablesFilesWithFlag(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/container")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, map[string]string{"something": "else"}, "")
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	validEnv := false
-//	con := r.(*Container)
-//	for _, e := range con.Environment {
-//		// should contain a key called "something" with a value "else"
-//		if e.Key == "something" && e.Value == "else" {
-//			validEnv = true
-//		}
-//	}
-//
-//	assert.True(t, validEnv)
-//}
-//
-//func TestOverridesVariablesFilesWithEnv(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/container")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	os.Setenv("SY_VAR_something", "env")
-//	t.Cleanup(func() {
-//		os.Unsetenv("SY_VAR_something")
-//	})
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	validEnv := false
-//	con := r.(*Container)
-//	for _, e := range con.Environment {
-//		// should contain a key called "something" with a value "else"
-//		if e.Key == "something" && e.Value == "env" {
-//			validEnv = true
-//		}
-//	}
-//
-//	assert.True(t, validEnv)
-//}
-//
-//func TestVariablesSetFromDefault(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/variables/simple/")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	con := r.(*Container)
-//
-//	assert.Equal(t, "onprem", con.Networks[0].Name)
-//}
-//
-//func TestOverridesVariableDefaultsWithEnv(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/variables/simple/")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	os.Setenv("SY_VAR_network", "cloud")
-//	t.Cleanup(func() {
-//		os.Unsetenv("SY_VAR_network")
-//	})
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("container.consul")
-//	assert.NoError(t, err)
-//
-//	con := r.(*Container)
-//	assert.Equal(t, "cloud", con.Networks[0].Name)
-//}
-//
+	o := DefaultOptions()
+	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
+
+	c, p := setupParser(t, o)
+
+	c, err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
+	assert.NoError(t, err)
+
+	r, err := c.FindResource("container.consul")
+	assert.NoError(t, err)
+
+	// check variable has been interpolated using the override value
+	cont := r.(*structs.Container)
+	require.Equal(t, 4096, cont.Resources.CPU)
+}
+
+func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	assert.NoError(t, err)
+
+	c, p := setupParser(t)
+
+	os.Setenv("SY_VAR_cpu_resources", "1000")
+
+	t.Cleanup(func() {
+		os.Unsetenv("SY_VAR_cpu_resources")
+	})
+
+	c, err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
+	assert.NoError(t, err)
+
+	r, err := c.FindResource("container.consul")
+	assert.NoError(t, err)
+
+	// check variable has been interpolated using the override value
+	cont := r.(*structs.Container)
+	require.Equal(t, 1000, cont.Resources.CPU)
+}
+
+func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	assert.NoError(t, err)
+
+	c, p := setupParser(t)
+
+	c, err = p.ParseDirectory(absoluteFolderPath, c)
+	assert.NoError(t, err)
+
+	r, err := c.FindResource("container.consul")
+	assert.NoError(t, err)
+
+	// check variable has been interpolated using the override value
+	cont := r.(*structs.Container)
+	require.Equal(t, 1024, cont.Resources.CPU)
+}
+
+func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	assert.NoError(t, err)
+
+	c, p := setupParser(t)
+
+	c, err = p.ParseDirectory(absoluteFolderPath, c)
+	assert.NoError(t, err)
+
+	r, err := c.FindResource("container.consul")
+	assert.NoError(t, err)
+
+	// check variable has been interpolated using the override value
+	cont := r.(*structs.Container)
+	require.Equal(t, 1024, cont.Resources.CPU)
+}
+
 //func TestVariablesSetFromDefaultModule(t *testing.T) {
 //	absoluteFolderPath, err := filepath.Abs("../../examples/variables/with_module/")
 //	if err != nil {

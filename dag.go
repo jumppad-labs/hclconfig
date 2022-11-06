@@ -2,16 +2,21 @@ package hclconfig
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
+	"reflect"
 	"strings"
 
 	"github.com/hashicorp/terraform/dag"
 	"github.com/hashicorp/terraform/tfdiags"
+	"github.com/kr/pretty"
+	"github.com/shipyard-run/hclconfig/lookup"
 	"github.com/shipyard-run/hclconfig/types"
 )
 
-// DoYaLikeDAGs? dags? yeah dags! oh dogs.
+// doYaLikeDAGs? dags? yeah dags! oh dogs.
 // https://www.youtube.com/watch?v=ZXILzUpVx7A&t=0s
-func DoYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
+func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	// create root node
 	root := (&types.Module{}).New("root")
 
@@ -77,7 +82,7 @@ func DoYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 type WalkFunc func(r types.Resource) error
 
 func (c *Config) Walk(wf WalkFunc) error {
-	d, err := DoYaLikeDAGs(c)
+	d, err := doYaLikeDAGs(c)
 	if err != nil {
 		return fmt.Errorf("unable to create graph: %s", err)
 	}
@@ -104,7 +109,36 @@ func (c *Config) Walk(wf WalkFunc) error {
 		// attempt to set the values in the resource links to the resource
 		// all linked values should now have been processed as the graph
 		// will have handled them first
-		return diags.Append(fmt.Errorf("not implemented"))
+		for k, v := range r.Info().ResouceLinks {
+			// get the resource where the value exists
+			parts := strings.Split(v, ".")
+			n := parts[1:3]
+			sn := strings.Join(n, ".")
+
+			// get the value path
+			valPath := parts[3:]
+
+			// get the value from the linked resource
+			l, _ := c.FindResource(sn)
+
+			var src reflect.Value
+			var err error
+
+			src, err = lookup.LookupI(l, valPath, []string{"hcl", "json"})
+
+			if err != nil {
+				// the property might be one of the meta properties check the resource info
+				src, err = lookup.LookupI(l.Info(), valPath, []string{"hcl", "json"})
+				if err != nil {
+					panic(fmt.Sprintf("value not found %s, %s, %s\n", valPath, pretty.Sprint(l), err))
+				}
+			}
+
+			err = lookup.SetValueStringI(r, src, k, []string{"hcl", "json"})
+			if err != nil {
+				return diags.Append(err)
+			}
+		}
 
 		// call the callback
 		err := wf(r)
@@ -116,10 +150,12 @@ func (c *Config) Walk(wf WalkFunc) error {
 	}
 
 	// update the dag and process the nodes
+	log.SetOutput(ioutil.Discard)
+
 	w.Update(d)
 	tf := w.Wait()
 	if tf.Err() != nil {
-		err = tf.Err()
+		return tf.Err()
 	}
 
 	return nil

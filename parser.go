@@ -3,6 +3,7 @@ package hclconfig
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -87,6 +88,58 @@ func (p *Parser) ParseFile(file string, c *Config) (*Config, error) {
 		return nil, err
 	}
 
+	// should return a copy of Config appended with new resources not a mutated version
+	// of the original
+	return c, nil
+}
+
+// ParseDirectory parses all resource and variable files in the given directory
+// note: this method does not recurse into sub folders
+func (p *Parser) ParseDirectory(dir string, c *Config) (*Config, error) {
+	rootContext = buildContext(dir)
+
+	// get all files in a directory
+	path, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return nil, fmt.Errorf("directory %s does not exist", dir)
+	}
+
+	if !path.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", dir)
+	}
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf(" unable to list files in directory %s, error: %s", dir, err)
+	}
+
+	variablesFiles := p.options.VariablesFiles
+
+	// first process vars files
+	for _, f := range files {
+		fn := filepath.Join(dir, f.Name())
+
+		if !f.IsDir() {
+			if strings.HasSuffix(fn, ".vars") {
+				// add to the collection
+				variablesFiles = append(variablesFiles, fn)
+			}
+		}
+	}
+
+	for _, f := range files {
+		fn := filepath.Join(dir, f.Name())
+
+		if !f.IsDir() {
+			if strings.HasSuffix(fn, ".hcl") {
+				err := p.parseFile(rootContext, fn, c, p.options.Variables, variablesFiles)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	return c, nil
 }
 
@@ -98,7 +151,14 @@ func (p *Parser) parseFile(
 	variables map[string]string,
 	variablesFile []string) error {
 
-	setVariables(ctx, variables)
+	// This must be done before any other process as the resources
+	// might reference the variables
+	err := p.parseVariablesInFile(ctx, file, c)
+	if err != nil {
+		return err
+	}
+
+	// override any variables from files
 	for _, vf := range variablesFile {
 		err := loadVariablesFromFile(ctx, vf)
 		if err != nil {
@@ -106,12 +166,8 @@ func (p *Parser) parseFile(
 		}
 	}
 
-	// This must be done before any other process as the resources
-	// might reference the variables
-	err := p.parseVariablesInFile(ctx, file, c)
-	if err != nil {
-		return err
-	}
+	// override default values for variables from environment or variables map
+	setVariables(ctx, variables)
 
 	err = p.parseResourcesInFile(ctx, file, c, "", false, []string{})
 	if err != nil {
