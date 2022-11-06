@@ -139,7 +139,7 @@ fmt.Println("network name", cont.Networks[0].Name) // onprem
 ```
 
 ## TODO
-[x] Basic parsing 
-[x] Variables 
-[x] Resource links 
-[ ] Modules 
+[x] Basic parsing   
+[x] Variables  
+[x] Resource links   
+[ ] Modules   
