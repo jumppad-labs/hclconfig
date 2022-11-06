@@ -130,7 +130,7 @@ c.Walk(func(r types.Resource) error {
 })
 
 // find a resource based on it's type and name
-r, err := c.FindResource("container.consul")
+r, err := c.FindResource("container.base")
 
 // cast it back to the original type and access the paramters
 cont := r.(*Container)
