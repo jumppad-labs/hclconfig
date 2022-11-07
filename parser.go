@@ -631,7 +631,10 @@ func copyContext(path string, ctx *hcl.EvalContext) *hcl.EvalContext {
 }
 
 func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interface{}) error {
-	dr := getDependentResources(b, ctx, p, "")
+	dr, err := getDependentResources(b, ctx, p, "")
+	if err != nil {
+		return err
+	}
 
 	diag := gohcl.DecodeBody(b.Body, ctx, p)
 	if diag.HasErrors() {
@@ -648,7 +651,7 @@ func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interfa
 // i.e. resource.container.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
-func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource interface{}, attribute string) map[string]string {
+func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource interface{}, attribute string) (map[string]string, error) {
 	references := map[string]string{}
 
 	breadcrumb := attribute
@@ -673,6 +676,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 			if strings.HasPrefix(strExpression, "resources.") {
 				// we will resolve these references before processing
 				attrRef := breadcrumb + "." + a.Name
+				attrRef = strings.TrimPrefix(attrRef, ".")
 				references[attrRef] = strExpression
 
 				// we need to find the type of the field we will eventually deserialze into so that
@@ -684,9 +688,17 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.StringVal(""), SrcRange: a.SrcRange}
 				case "int":
 					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.NumberIntVal(0), SrcRange: a.SrcRange}
+				case "bool":
+					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.BoolVal(false), SrcRange: a.SrcRange}
+				case "ptr":
+					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.DynamicVal, SrcRange: a.SrcRange}
+				case "[]string":
+					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.SetVal([]cty.Value{cty.StringVal("")}), SrcRange: a.SrcRange}
+				case "[]int":
+					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.SetVal([]cty.Value{cty.NumberIntVal(0)}), SrcRange: a.SrcRange}
 
 				default:
-					fmt.Println(t)
+					return nil, fmt.Errorf("unable to link resource %s as it references an unsported type %s", strExpression, t)
 				}
 			}
 		}
@@ -703,13 +715,16 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 
 		ref := fmt.Sprintf("%s.%s[%d]", breadcrumb, b.Type, blockIndex[b.Type])
 		ref = strings.TrimPrefix(ref, ".")
-		cr := getDependentResources(b, ctx, resource, ref)
+		cr, err := getDependentResources(b, ctx, resource, ref)
+		if err != nil {
+			return nil, err
+		}
 		for k, v := range cr {
 			references[k] = v
 		}
 	}
 
-	return references
+	return references, nil
 }
 
 // recurses throught destination object and returns the type of the field marked by path
@@ -722,11 +737,11 @@ func findTypeFromInterface(path string, s interface{}) string {
 	value := reflect.ValueOf(s).Type()
 	val, found := lookup.LookupType(value, strings.Split(stripped, "."), false, []string{"hcl", "json"})
 
-	if found {
-		return val.Name()
+	if !found {
+		return ""
 	}
 
-	return ""
+	return val.String()
 }
 
 // ensureAbsolute ensure that the given path is either absolute or

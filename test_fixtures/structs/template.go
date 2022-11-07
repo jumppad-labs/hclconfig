@@ -15,6 +15,7 @@ type Template struct {
 	Destination  string                 `hcl:"destination" json:"destination"`      // Desintation filename to write
 	Vars         interface{}            `hcl:"vars,optional" json:"vars,omitempty"` // Variables to be processed in the template
 	InternalVars map[string]interface{} // stores a converted go type version of the hcl.Value types
+	AppendFile   bool                   `hcl:"append_file,optional" json:"append_file,omitempty"`
 }
 
 // New creates a new Nomad job config resource, implements Resource New method

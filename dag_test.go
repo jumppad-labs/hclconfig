@@ -87,7 +87,23 @@ func TestWalkFuncCalledForEveryResource(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, 5, callCount)
+	require.Equal(t, 6, callCount)
+}
+
+func TestProcessFuncCalledForEveryResource(t *testing.T) {
+	c := setupGraphConfig(t)
+	callCount := 0
+
+	err := c.Walk(func(r types.Resource) error {
+		callCount += 1
+		return nil
+	})
+
+	require.NoError(t, err)
+	base, _ := c.FindResource("container.base")
+
+	// Process in container changes the status from the default value
+	require.Equal(t, types.Applied, base.(*structs.Container).Info().Status)
 }
 
 func TestWalkResolvesReferences(t *testing.T) {
@@ -107,5 +123,13 @@ func TestWalkResolvesReferences(t *testing.T) {
 	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
 	require.Equal(t, 2048, cont.(*structs.Container).Resources.CPU)
 	require.Equal(t, 1024, cont.(*structs.Container).Resources.Memory)
+	require.Contains(t, cont.(*structs.Container).Resources.CPUPin, 1)
+	require.Contains(t, cont.(*structs.Container).DNS, "b")
 	require.Equal(t, "./consul.hcl", cont.(*structs.Container).Volumes[1].Source)
+
+	tmpl, err := c.FindResource("template.consul_config_update")
+	require.NoError(t, err)
+	require.NotNil(t, tmpl)
+
+	require.True(t, tmpl.(*structs.Template).AppendFile)
 }

@@ -1,6 +1,9 @@
 package structs
 
-import "github.com/shipyard-run/hclconfig/types"
+import (
+	"github.com/shipyard-run/hclconfig/types"
+	"github.com/zclconf/go-cty/cty"
+)
 
 // TypeContainer is the resource string for a Container resource
 const TypeContainer types.ResourceType = "container"
@@ -31,6 +34,17 @@ type Container struct {
 	// User block for mapping the user id and group id inside the container
 	RunAs *User `hcl:"run_as,block" json:"run_as,omitempty" mapstructure:"run_as"`
 }
+
+// Equals returns true if the other given Type exactly equals the
+// receiver Type.
+func (c *Container) Equals(other cty.Type) bool { return true }
+
+// FriendlyName returns a human-friendly *English* name for the given
+// type.
+func (c *Container) FriendlyName(mode rune) string { return "foo" }
+
+// GoString implements the GoStringer interface from package fmt.
+func (c *Container) GoString() string { return "aaah" }
 
 type User struct {
 	// Username or UserID of the user to run the container as
@@ -91,5 +105,6 @@ func (c *Container) Parse(file string) error {
 }
 
 func (c *Container) Process() error {
+	c.Info().Status = types.Applied
 	return nil
 }

@@ -69,10 +69,6 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
 	require.Equal(t, 2048, cont.Resources.CPU)
 
-	r, err = c.FindResource("template.consul_config")
-	require.NoError(t, err)
-	require.NotNil(t, r)
-
 	r, err = c.FindResource("container.base")
 	require.NoError(t, err)
 	require.NotNil(t, r)

@@ -126,14 +126,15 @@ func (c *Config) Walk(wf WalkFunc) error {
 
 			src, err = lookup.LookupI(l, valPath, []string{"hcl", "json"})
 
+			// the property might be one of the meta properties check the resource info
 			if err != nil {
-				// the property might be one of the meta properties check the resource info
 				src, err = lookup.LookupI(l.Info(), valPath, []string{"hcl", "json"})
 				if err != nil {
 					panic(fmt.Sprintf("value not found %s, %s, %s\n", valPath, pretty.Sprint(l), err))
 				}
 			}
 
+			// set the linked value on the resource
 			err = lookup.SetValueStringI(r, src, k, []string{"hcl", "json"})
 			if err != nil {
 				return diags.Append(err)

@@ -52,7 +52,7 @@ func LookupI(i interface{}, path []string, tags []string) (reflect.Value, error)
 	return lookup(i, true, path, tags)
 }
 
-func SetValueStringI[V int64 | int | string | reflect.Value](i interface{}, v V, path string, tags []string) error {
+func SetValueStringI[V int64 | int | string | bool | reflect.Value](i interface{}, v V, path string, tags []string) error {
 	// First find the variable
 	dest, err := Lookup(i, strings.Split(path, SplitToken), tags)
 	if err != nil {

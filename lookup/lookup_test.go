@@ -378,6 +378,19 @@ func TestSetValueMutatesListPtr(t *testing.T) {
 	require.Equal(t, "new", data.Values[0].Value)
 }
 
+func TestSetValueMutatesBool(t *testing.T) {
+	type Outer struct {
+		Active bool
+	}
+
+	data := &Outer{Active: true}
+
+	err := SetValueStringI(data, false, "Active", nil)
+	require.NoError(t, err)
+
+	require.Equal(t, false, data.Active)
+}
+
 func TestLookupType(t *testing.T) {
 	typ := reflect.TypeOf(structs.Container{})
 
