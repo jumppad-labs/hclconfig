@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
-	"github.com/shipyard-run/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,102 +33,26 @@ func TestDoYaLikeDAGAddsDependencies(t *testing.T) {
 	g, err := doYaLikeDAGs(c)
 	require.NoError(t, err)
 
-	// check the dependency tree of the container
+	network, _ := c.FindResource("network.onprem")
+	template, _ := c.FindResource("template.consul_config")
+
+	// check the dependency tree of the base container
 	base, _ := c.FindResource("container.base")
 	s, err := g.Descendents(base)
 	require.NoError(t, err)
 
-	network, _ := c.FindResource("network.onprem")
-
 	// check the network is returned
 	list := s.List()
 	require.Contains(t, list, network)
-}
 
-//func TestDoYaLikeDAGAddsDependenciesForModules(t *testing.T) {
-//	c := setupGraphConfig(t)
-//
-//	g, err := doYaLikeDAGs(c)
-//	require.NoError(t, err)
-//
-//	// check the dependency tree of a cluster
-//	s, err := g.Descendents(c.Resources[1])
-//	require.NoError(t, err)
-//
-//	// check that the network and a blueprint is returned
-//	list := s.List()
-//	require.Contains(t, list, c.Resources[0])
-//	require.Contains(t, list, &struct.Container{})
-//}
-
-func TestWalkWithUnresolvedDependencyReturnsError(t *testing.T) {
-	c := setupGraphConfig(t)
-
-	con := (&structs.Container{}).New("test")
-	con.Info().DependsOn = []string{"doesnot.exist"}
-
-	c.AddResource(con)
-
-	err := c.Walk(func(r types.Resource) error {
-		return nil
-	})
-
-	require.Error(t, err)
-}
-
-func TestWalkFuncCalledForEveryResource(t *testing.T) {
-	c := setupGraphConfig(t)
-	callCount := 0
-
-	err := c.Walk(func(r types.Resource) error {
-		callCount += 1
-		return nil
-	})
-
-	require.NoError(t, err)
-	require.Equal(t, 6, callCount)
-}
-
-func TestProcessFuncCalledForEveryResource(t *testing.T) {
-	c := setupGraphConfig(t)
-	callCount := 0
-
-	err := c.Walk(func(r types.Resource) error {
-		callCount += 1
-		return nil
-	})
-
-	require.NoError(t, err)
-	base, _ := c.FindResource("container.base")
-
-	// Process in container changes the status from the default value
-	require.Equal(t, types.Applied, base.(*structs.Container).Info().Status)
-}
-
-func TestWalkResolvesReferences(t *testing.T) {
-	c := setupGraphConfig(t)
-	err := c.Walk(func(r types.Resource) error {
-		return nil
-	})
-
+	// check the dependency tree of the consul container
+	consul, _ := c.FindResource("container.consul")
+	s, err = g.Descendents(consul)
 	require.NoError(t, err)
 
-	cont, err := c.FindResource("container.base")
-	require.NoError(t, err)
-	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
-
-	cont, err = c.FindResource("container.consul")
-	require.NoError(t, err)
-	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
-	require.Equal(t, 2048, cont.(*structs.Container).Resources.CPU)
-	require.Equal(t, 1024, cont.(*structs.Container).Resources.Memory)
-	require.Contains(t, cont.(*structs.Container).Resources.CPUPin, 1)
-	require.Contains(t, cont.(*structs.Container).DNS, "b")
-	require.Equal(t, "./consul.hcl", cont.(*structs.Container).Volumes[1].Source)
-
-	tmpl, err := c.FindResource("template.consul_config_update")
-	require.NoError(t, err)
-	require.NotNil(t, tmpl)
-
-	require.True(t, tmpl.(*structs.Template).AppendFile)
+	// check the network is returned
+	list = s.List()
+	require.Contains(t, list, network)
+	require.Contains(t, list, base)
+	require.Contains(t, list, template)
 }

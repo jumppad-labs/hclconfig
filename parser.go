@@ -34,9 +34,11 @@ func (r ResourceTypeNotExistError) Error() string {
 }
 
 type ParserOptions struct {
-	Variables      map[string]string
-	VariablesFiles []string
-	ModuleCache    string
+	Variables         map[string]string
+	VariablesFiles    []string
+	VariableEnvPrefix string
+	ModuleCache       string
+	Callback          ParseCallback
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -53,7 +55,8 @@ func DefaultOptions() *ParserOptions {
 	os.MkdirAll(cacheDir, os.ModePerm)
 
 	return &ParserOptions{
-		ModuleCache: cacheDir,
+		ModuleCache:       cacheDir,
+		VariableEnvPrefix: "HCL_VAR_",
 	}
 }
 
@@ -87,6 +90,9 @@ func (p *Parser) ParseFile(file string, c *Config) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// process the files and resolve dependency
+	c.process(p.options.Callback)
 
 	// should return a copy of Config appended with new resources not a mutated version
 	// of the original
@@ -140,6 +146,9 @@ func (p *Parser) ParseDirectory(dir string, c *Config) (*Config, error) {
 		}
 	}
 
+	// process the files and resolve dependency
+	c.process(p.options.Callback)
+
 	return c, nil
 }
 
@@ -160,14 +169,14 @@ func (p *Parser) parseFile(
 
 	// override any variables from files
 	for _, vf := range variablesFile {
-		err := loadVariablesFromFile(ctx, vf)
+		err := p.loadVariablesFromFile(ctx, vf)
 		if err != nil {
 			return err
 		}
 	}
 
 	// override default values for variables from environment or variables map
-	setVariables(ctx, variables)
+	p.setVariables(ctx, variables)
 
 	err = p.parseResourcesInFile(ctx, file, c, "", false, []string{})
 	if err != nil {
@@ -183,7 +192,7 @@ func (p *Parser) parseFile(
 }
 
 // loadVariablesFromFile loads variable values from a file
-func loadVariablesFromFile(ctx *hcl.EvalContext, path string) error {
+func (p *Parser) loadVariablesFromFile(ctx *hcl.EvalContext, path string) error {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(path)
@@ -203,14 +212,14 @@ func loadVariablesFromFile(ctx *hcl.EvalContext, path string) error {
 
 // setVariables allow variables to be set from a collection or environment variables
 // Precedence should be file, env, vars
-func setVariables(ctx *hcl.EvalContext, vars map[string]string) {
+func (p *Parser) setVariables(ctx *hcl.EvalContext, vars map[string]string) {
 	// first any vars defined as environment variables
 	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "SY_VAR_") {
+		if strings.HasPrefix(e, p.options.VariableEnvPrefix) {
 			parts := strings.Split(e, "=")
 
 			if len(parts) == 2 {
-				key := strings.Replace(parts[0], "SY_VAR_", "", -1)
+				key := strings.Replace(parts[0], p.options.VariableEnvPrefix, "", -1)
 				setContextVariable(ctx, key, valueFromString(parts[1]))
 			}
 		}
@@ -387,215 +396,43 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 	ctx.Variables["var"] = cty.ObjectVal(valMap)
 }
 
+// setContextVariableFromPath sets a context variable using a nested structure based
+// on the given path. Will create any child maps needed to satisfy the path.
+// i.e "resources.foo.bar" set to "true" would return
+// ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True() = true
+func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) {
+	pathParts := strings.Split(path, ".")
+	ctx.Variables = setMapVariableFromPath(ctx.Variables, pathParts, value)
+}
+
+func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.Value) map[string]cty.Value {
+	// it is possible for root to be nil, ensure this is set to an empty map
+	if root == nil {
+		root = map[string]cty.Value{}
+	}
+
+	// is this the last path so set the value and return
+	if len(path) == 1 {
+		root[path[0]] = value
+		return root
+	}
+
+	// if not we need to create a map node if it does not exist
+	// and recurse
+	val, ok := root[path[0]]
+	if !ok {
+		// if not we need to create a map node
+		// set a map and recurse
+		val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+	}
+
+	updated := setMapVariableFromPath(val.AsValueMap(), path[1:], value)
+	root[path[0]] = cty.ObjectVal(updated)
+
+	return root
+}
+
 func buildContext(filePath string) *hcl.EvalContext {
-
-	var EnvFunc = function.New(&function.Spec{
-		Params: []function.Parameter{
-			{
-				Name:             "env",
-				Type:             cty.String,
-				AllowDynamicType: true,
-			},
-		},
-		Type: function.StaticReturnType(cty.String),
-		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-			return cty.StringVal(os.Getenv(args[0].AsString())), nil
-		},
-	})
-
-	//var HomeFunc = function.New(&function.Spec{
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		return cty.StringVal(utils.HomeFolder()), nil
-	//	},
-	//})
-
-	//var ShipyardFunc = function.New(&function.Spec{
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		return cty.StringVal(utils.ShipyardHome()), nil
-	//	},
-	//})
-
-	//var DockerIPFunc = function.New(&function.Spec{
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		return cty.StringVal(utils.GetDockerIP()), nil
-	//	},
-	//})
-
-	//var DockerHostFunc = function.New(&function.Spec{
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		return cty.StringVal(utils.GetDockerHost()), nil
-	//	},
-	//})
-
-	//var ShipyardIPFunc = function.New(&function.Spec{
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		ip, _ := utils.GetLocalIPAndHostname()
-	//		return cty.StringVal(ip), nil
-	//	},
-	//})
-
-	//var KubeConfigFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "k8s_config",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		_, kcp, _ := utils.CreateKubeConfigPath(args[0].AsString())
-	//		return cty.StringVal(kcp), nil
-	//	},
-	//})
-
-	//var KubeConfigDockerFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "k8s_config_docker",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		_, _, kcp := utils.CreateKubeConfigPath(args[0].AsString())
-	//		return cty.StringVal(kcp), nil
-	//	},
-	//})
-
-	//var FileFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "path",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		// convert the file path to an absolute
-	//		fp := ensureAbsolute(args[0].AsString(), filePath)
-
-	//		// read the contents of the file
-	//		d, err := ioutil.ReadFile(fp)
-	//		if err != nil {
-	//			return cty.StringVal(""), err
-	//		}
-
-	//		return cty.StringVal(string(d)), nil
-	//	},
-	//})
-
-	//var DataFuncWithPerms = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "path",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//		{
-	//			Name:             "permissions",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//			AllowNull:        true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		perms := os.ModePerm
-	//		output, err := strconv.ParseInt(args[1].AsString(), 8, 64)
-	//		if err != nil {
-	//			return cty.StringVal(""), fmt.Errorf("Invalid file permission")
-	//		}
-
-	//		perms = os.FileMode(output)
-	//		return cty.StringVal(utils.GetDataFolder(args[0].AsString(), perms)), nil
-	//	},
-	//})
-
-	//var DataFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "path",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		perms := os.FileMode(os.ModePerm)
-	//		return cty.StringVal(utils.GetDataFolder(args[0].AsString(), perms)), nil
-	//	},
-	//})
-
-	//var ClusterAPIFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "name",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		conf, _ := utils.GetClusterConfig(args[0].AsString())
-
-	//		return cty.StringVal(conf.APIAddress(utils.LocalContext)), nil
-	//	},
-	//})
-
-	//var ClusterPortFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "name",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.Number),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		conf, _ := utils.GetClusterConfig(args[0].AsString())
-
-	//		return cty.NumberIntVal(int64(conf.RemoteAPIPort)), nil
-	//	},
-	//})
-
-	//var LenFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "var",
-	//			Type:             cty.DynamicPseudoType,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.Number),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		if len(args) == 1 && args[0].Type().IsCollectionType() || args[0].Type().IsTupleType() {
-	//			i := args[0].ElementIterator()
-	//			if i.Next() {
-	//				return args[0].Length(), nil
-	//			}
-	//		}
-
-	//		return cty.NumberIntVal(0), nil
-	//	},
-	//})
-
-	//var DirFunc = function.New(&function.Spec{
-	//	Type: function.StaticReturnType(cty.String),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		s, err := filepath.Abs(filePath)
-
-	//		return cty.StringVal(filepath.Dir(s)), err
-	//	},
-	//})
-
 	ctx := &hcl.EvalContext{
 		Functions: map[string]function.Function{},
 		Variables: map[string]cty.Value{},
@@ -604,21 +441,7 @@ func buildContext(filePath string) *hcl.EvalContext {
 	valMap := map[string]cty.Value{}
 	ctx.Variables["resources"] = cty.ObjectVal(valMap)
 
-	//ctx.Functions["len"] = LenFunc
-	ctx.Functions["env"] = EnvFunc
-	//ctx.Functions["k8s_config"] = KubeConfigFunc
-	//ctx.Functions["k8s_config_docker"] = KubeConfigDockerFunc
-	//ctx.Functions["home"] = HomeFunc
-	//ctx.Functions["shipyard"] = ShipyardFunc
-	//ctx.Functions["file"] = FileFunc
-	//ctx.Functions["data"] = DataFunc
-	//ctx.Functions["data_with_permissions"] = DataFuncWithPerms
-	//ctx.Functions["docker_ip"] = DockerIPFunc
-	//ctx.Functions["docker_host"] = DockerHostFunc
-	//ctx.Functions["shipyard_ip"] = ShipyardIPFunc
-	//ctx.Functions["cluster_api"] = ClusterAPIFunc
-	//ctx.Functions["cluster_port"] = ClusterPortFunc
-	//ctx.Functions["file_dir"] = DirFunc
+	ctx.Functions = getDefaultFunctions(filePath)
 
 	return ctx
 }
@@ -636,13 +459,36 @@ func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interfa
 		return err
 	}
 
-	diag := gohcl.DecodeBody(b.Body, ctx, p)
-	if diag.HasErrors() {
-		return errors.New(diag.Error())
+	// filter the list so that they are unique
+	uniqueResources := []string{}
+	for _, v := range dr {
+		found := false
+		for _, r := range uniqueResources {
+			if r == v {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			uniqueResources = append(uniqueResources, v)
+		}
+	}
+
+	// if variable process the body, everything else
+	// lazy process on dag walk
+	if b.Type == string(types.TypeVariable) {
+		diag := gohcl.DecodeBody(b.Body, ctx, p)
+		if diag.HasErrors() {
+			return errors.New(diag.Error())
+		}
 	}
 
 	// set the dependent resources
-	p.(types.Resource).Info().ResouceLinks = dr
+	res := p.(types.Resource)
+	res.Info().ResouceLinks = uniqueResources
+	res.Info().Context = ctx
+	res.Info().Body = b.Body
 
 	return nil
 }
@@ -651,60 +497,20 @@ func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interfa
 // i.e. resource.container.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
-func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource interface{}, attribute string) (map[string]string, error) {
-	references := map[string]string{}
-
-	breadcrumb := attribute
+func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource interface{}, path string) ([]string, error) {
+	references := []string{}
 
 	for _, a := range b.Body.Attributes {
-		// look for scope traversal expressions
-		switch a.Expr.(type) {
-		case *hclsyntax.ScopeTraversalExpr:
-			ste := a.Expr.(*hclsyntax.ScopeTraversalExpr)
-			strExpression := ""
-			for i, t := range ste.Traversal {
-				if i == 0 {
-					strExpression += t.(hcl.TraverseRoot).Name
-				} else {
-					// does this exist in the context
-					strExpression += "." + t.(hcl.TraverseAttr).Name
-				}
-			}
-
-			// add to the references collection and replace with a nil value
-			// only when starts with resources
-			if strings.HasPrefix(strExpression, "resources.") {
-				// we will resolve these references before processing
-				attrRef := breadcrumb + "." + a.Name
-				attrRef = strings.TrimPrefix(attrRef, ".")
-				references[attrRef] = strExpression
-
-				// we need to find the type of the field we will eventually deserialze into so that
-				// we can replace this with a null value for now
-				t := findTypeFromInterface(attrRef, resource)
-
-				switch t {
-				case "string":
-					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.StringVal(""), SrcRange: a.SrcRange}
-				case "int":
-					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.NumberIntVal(0), SrcRange: a.SrcRange}
-				case "bool":
-					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.BoolVal(false), SrcRange: a.SrcRange}
-				case "ptr":
-					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.DynamicVal, SrcRange: a.SrcRange}
-				case "[]string":
-					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.SetVal([]cty.Value{cty.StringVal("")}), SrcRange: a.SrcRange}
-				case "[]int":
-					a.Expr = &hclsyntax.LiteralValueExpr{Val: cty.SetVal([]cty.Value{cty.NumberIntVal(0)}), SrcRange: a.SrcRange}
-
-				default:
-					return nil, fmt.Errorf("unable to link resource %s as it references an unsported type %s", strExpression, t)
-				}
-			}
+		refs, err := processExpr(a.Expr)
+		if err != nil {
+			return nil, err
 		}
+
+		references = append(references, refs...)
 	}
 
-	// we need to keep a count of the block
+	// we need to keep a count of the current block so that we
+	// can get this
 	blockIndex := map[string]int{}
 	for _, b := range b.Body.Blocks {
 		if _, ok := blockIndex[b.Type]; ok {
@@ -713,18 +519,117 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 			blockIndex[b.Type] = 0
 		}
 
-		ref := fmt.Sprintf("%s.%s[%d]", breadcrumb, b.Type, blockIndex[b.Type])
+		ref := fmt.Sprintf("%s.%s[%d]", path, b.Type, blockIndex[b.Type])
 		ref = strings.TrimPrefix(ref, ".")
 		cr, err := getDependentResources(b, ctx, resource, ref)
 		if err != nil {
 			return nil, err
 		}
-		for k, v := range cr {
-			references[k] = v
-		}
+
+		references = append(references, cr...)
 	}
 
 	return references, nil
+}
+
+// processAttribute extracts the necessary data out of the HCL
+// attribute like a function or resource parameter so we can determine
+// which attributes are lazy evaluated due to dependency on another resource.
+// Attributes can be nested, therefore this function needs to return an array of
+// attributes
+// examples:
+// something = resource.mine.attr
+// something = env(resource.mine.attr)
+// something = "testing/${resource.mine.attr}"
+// something = "testing/${env(resource.mine.attr)}"
+func processExpr(expr hclsyntax.Expression) ([]string, error) {
+	resources := []string{}
+
+	switch expr.(type) {
+	case *hclsyntax.TemplateExpr:
+		// a template is a mix of functions, scope expressions and literals
+		// we need to check each part
+		for _, v := range expr.(*hclsyntax.TemplateExpr).Parts {
+			res, err := processExpr(v)
+			if err != nil {
+				return nil, err
+			}
+
+			resources = append(resources, res...)
+		}
+	case *hclsyntax.FunctionCallExpr:
+		for _, v := range expr.(*hclsyntax.FunctionCallExpr).Args {
+			res, err := processExpr(v)
+			if err != nil {
+				return nil, err
+			}
+
+			resources = append(resources, res...)
+		}
+		// a function can contain args that may also have an expression
+	case *hclsyntax.ScopeTraversalExpr:
+		ref, err := processScopeTraversal(expr.(*hclsyntax.ScopeTraversalExpr))
+		if err != nil {
+			return nil, err
+		}
+
+		// only add if a resource has been returned
+		if ref != "" {
+			resources = append(resources, ref)
+		}
+	}
+
+	return resources, nil
+}
+
+func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
+	strExpression := ""
+	for i, t := range expr.Traversal {
+		if i == 0 {
+			strExpression += t.(hcl.TraverseRoot).Name
+
+			// if this is not a resource reference quit
+			if strExpression != "resources" {
+				return "", nil
+			}
+		} else {
+			// does this exist in the context
+			strExpression += "." + t.(hcl.TraverseAttr).Name
+		}
+	}
+
+	// add to the references collection and replace with a nil value
+	// we will resolve these references before processing
+	return strExpression, nil
+}
+
+func addEmptyValueToContext(ctx *hcl.EvalContext, path string, resource interface{}, attr *hclsyntax.Attribute) error {
+	attrRef := path + "." + attr.Name
+	attrRef = strings.TrimPrefix(attrRef, ".")
+
+	// we need to find the type of the field we will eventually deserialze into so that
+	// we can replace this with a null value for now
+	t := findTypeFromInterface(attrRef, resource)
+
+	switch t {
+	case "string":
+		attr.Expr = &hclsyntax.LiteralValueExpr{Val: cty.StringVal(""), SrcRange: attr.Expr.Range()}
+	case "int":
+		attr.Expr = &hclsyntax.LiteralValueExpr{Val: cty.NumberIntVal(0), SrcRange: attr.Expr.Range()}
+	case "bool":
+		attr.Expr = &hclsyntax.LiteralValueExpr{Val: cty.BoolVal(false), SrcRange: attr.Expr.Range()}
+	case "ptr":
+		attr.Expr = &hclsyntax.LiteralValueExpr{Val: cty.DynamicVal, SrcRange: attr.Expr.Range()}
+	case "[]string":
+		attr.Expr = &hclsyntax.LiteralValueExpr{Val: cty.SetVal([]cty.Value{cty.StringVal("")}), SrcRange: attr.Expr.Range()}
+	case "[]int":
+		attr.Expr = &hclsyntax.LiteralValueExpr{Val: cty.SetVal([]cty.Value{cty.NumberIntVal(0)}), SrcRange: attr.Expr.Range()}
+
+	default:
+		return fmt.Errorf("unable to link resource as it references an unspported type %s", t)
+	}
+
+	return nil
 }
 
 // recurses throught destination object and returns the type of the field marked by path

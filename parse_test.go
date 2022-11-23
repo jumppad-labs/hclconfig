@@ -5,9 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hashicorp/hcl2/hcl"
 	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 	"github.com/tj/assert"
+	"github.com/zclconf/go-cty/cty"
 )
 
 func setupParser(t *testing.T, options ...*ParserOptions) (*Config, *Parser) {
@@ -75,7 +77,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 }
 
 func TestParseFileSetsLinks(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/single/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,9 +97,14 @@ func TestParseFileSetsLinks(t *testing.T) {
 	// this enables us to build a graph of objects and later set these fields to the correct
 	// reference values
 	cont := r.(*structs.Container)
-	require.Equal(t, "resources.network.onprem.name", cont.Info().ResouceLinks["network[0].name"])
-	require.Equal(t, "resources.container.base.resources.memory", cont.Info().ResouceLinks["resources[0].memory"])
-	require.Equal(t, "resources.template.consul_config.destination", cont.Info().ResouceLinks["volume[1].source"])
+	require.Len(t, cont.ResouceLinks, 6)
+
+	require.Contains(t, cont.ResouceLinks, "resources.network.onprem.name")
+	require.Contains(t, cont.ResouceLinks, "resources.container.base.dns")
+	require.Contains(t, cont.ResouceLinks, "resources.container.base.resources.cpu_pin")
+	require.Contains(t, cont.ResouceLinks, "resources.container.base.resources.memory")
+	require.Contains(t, cont.ResouceLinks, "resources.template.consul_config.destination")
+	require.Contains(t, cont.ResouceLinks, "resources.template.consul_config.name")
 }
 
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
@@ -126,10 +133,10 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 
 	c, p := setupParser(t)
 
-	os.Setenv("SY_VAR_cpu_resources", "1000")
+	os.Setenv("HCL_VAR_cpu_resources", "1000")
 
 	t.Cleanup(func() {
-		os.Unsetenv("SY_VAR_cpu_resources")
+		os.Unsetenv("HCL_VAR_cpu_resources")
 	})
 
 	c, err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
@@ -591,3 +598,17 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 //	return nil
 //}
 //*/
+
+func TestSetContextVariableFromPath(t *testing.T) {
+	ctx := &hcl.EvalContext{}
+	ctx.Variables = map[string]cty.Value{"resources": cty.ObjectVal(map[string]cty.Value{})}
+
+	setContextVariableFromPath(ctx, "resources.foo.bar", cty.BoolVal(true))
+	setContextVariableFromPath(ctx, "resources.foo.bear", cty.StringVal("Hello World"))
+	setContextVariableFromPath(ctx, "resources.poo", cty.StringVal("Meh"))
+
+	require.True(t, ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True())
+	require.Equal(t, "Hello World", ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bear"].AsString())
+	require.Equal(t, "Meh", ctx.Variables["resources"].AsValueMap()["poo"].AsString())
+
+}

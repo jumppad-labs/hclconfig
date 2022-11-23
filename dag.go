@@ -7,11 +7,12 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/hashicorp/hcl2/gohcl"
 	"github.com/hashicorp/terraform/dag"
 	"github.com/hashicorp/terraform/tfdiags"
-	"github.com/kr/pretty"
 	"github.com/shipyard-run/hclconfig/lookup"
 	"github.com/shipyard-run/hclconfig/types"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // doYaLikeDAGs? dags? yeah dags! oh dogs.
@@ -25,7 +26,6 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 	// Loop over all resources and add to dag
 	for _, resource := range c.Resources {
-		//fmt.Printf("Resource: %s, Type: %s\n", resource.Info().Name, resource.Info().Type)
 		graph.Add(resource)
 	}
 
@@ -78,10 +78,13 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	return graph, nil
 }
 
-// WalkFunc is called with the resource when the graph processes that particular node
-type WalkFunc func(r types.Resource) error
+// ParseCallback is called with the resource when the graph processes that particular node
+type ParseCallback func(r types.Resource) error
 
-func (c *Config) Walk(wf WalkFunc) error {
+// Until parse is called the HCL configuration is not deserialized into
+// the structs. We have to do this using a graph as some inputs depend on
+// outputs from other resrouces, therefore we need to process this is strict order
+func (c *Config) process(wf ParseCallback) error {
 	d, err := doYaLikeDAGs(c)
 	if err != nil {
 		return fmt.Errorf("unable to create graph: %s", err)
@@ -106,10 +109,10 @@ func (c *Config) Walk(wf WalkFunc) error {
 			panic("an item has been added to the graph that is not a resource")
 		}
 
-		// attempt to set the values in the resource links to the resource
+		// attempt to set the values in the resource links to the resource attribute
 		// all linked values should now have been processed as the graph
 		// will have handled them first
-		for k, v := range r.Info().ResouceLinks {
+		for _, v := range r.Info().ResouceLinks {
 			// get the resource where the value exists
 			parts := strings.Split(v, ".")
 			n := parts[1:3]
@@ -119,25 +122,75 @@ func (c *Config) Walk(wf WalkFunc) error {
 			valPath := parts[3:]
 
 			// get the value from the linked resource
-			l, _ := c.FindResource(sn)
+			l, err := c.FindResource(sn)
+			if err != nil {
+				return diags.Append(fmt.Errorf("unable to find dependent resource %s, %s\n", sn, err))
+			}
 
 			var src reflect.Value
-			var err error
 
+			// get the type of the linked resource
+			paramType := findTypeFromInterface(strings.Join(valPath, "."), l)
+
+			// did we find the type if not check the meta properties
+			if paramType == "" {
+				paramType = findTypeFromInterface(strings.Join(valPath, "."), l.Info())
+				if paramType == "" {
+					return diags.Append(fmt.Errorf("type not found %v\n", valPath))
+				}
+			}
+
+			// find the value
 			src, err = lookup.LookupI(l, valPath, []string{"hcl", "json"})
 
 			// the property might be one of the meta properties check the resource info
 			if err != nil {
 				src, err = lookup.LookupI(l.Info(), valPath, []string{"hcl", "json"})
+
+				// still not found return an error
 				if err != nil {
-					panic(fmt.Sprintf("value not found %s, %s, %s\n", valPath, pretty.Sprint(l), err))
+					return diags.Append(fmt.Errorf("value not found %s, %s\n", valPath, err))
 				}
 			}
 
-			// set the linked value on the resource
-			err = lookup.SetValueStringI(r, src, k, []string{"hcl", "json"})
-			if err != nil {
-				return diags.Append(err)
+			// we need to set src in the context
+			var val cty.Value
+			switch paramType {
+			case "string":
+				val = cty.StringVal(src.String())
+			case "int":
+				val = cty.NumberIntVal(src.Int())
+			case "bool":
+				val = cty.BoolVal(src.Bool())
+			case "ptr":
+				return diags.Append(fmt.Errorf("pointer values are not implemented %v", src))
+			case "[]string":
+				vals := []cty.Value{}
+				for i := 0; i < src.Len(); i++ {
+					vals = append(vals, cty.StringVal(src.Index(i).String()))
+				}
+
+				val = cty.SetVal(vals)
+			case "[]int":
+				vals := []cty.Value{}
+				for i := 0; i < src.Len(); i++ {
+					vals = append(vals, cty.NumberIntVal(src.Index(i).Int()))
+				}
+
+				val = cty.SetVal(vals)
+			default:
+				return diags.Append(fmt.Errorf("unable to link resource %s as it references an unsupported type %s", v, paramType))
+			}
+
+			setContextVariableFromPath(r.Info().Context, v, val)
+		}
+
+		// Process the raw resouce now we have the context from the linked
+		// resources
+		if r.Info().Body != nil {
+			diag := gohcl.DecodeBody(r.Info().Body, r.Info().Context, r)
+			if diag.HasErrors() {
+				return diags.Append(fmt.Errorf(diag.Error()))
 			}
 		}
 
@@ -147,10 +200,12 @@ func (c *Config) Walk(wf WalkFunc) error {
 			return diags.Append(fmt.Errorf("error calling process for resource: %s", err))
 		}
 
-		// call the callback
-		err = wf(r)
-		if err != nil {
-			return diags.Append(fmt.Errorf("error processing graph node: %s", err))
+		// call the callbacks
+		if wf != nil {
+			err = wf(r)
+			if err != nil {
+				return diags.Append(fmt.Errorf("error processing graph node: %s", err))
+			}
 		}
 
 		return nil

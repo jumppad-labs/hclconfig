@@ -1,6 +1,11 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/hashicorp/hcl2/hcl"
+	"github.com/hashicorp/hcl2/hcl/hclsyntax"
+)
 
 // ResourceType is the type of the resource
 type ResourceType string
@@ -64,10 +69,14 @@ type ResourceInfo struct {
 	// DependsOn is a list of objects which must exist before this resource can be applied
 	DependsOn []string `json:"depends_on,omitempty" mapstructure:"depends_on"`
 
-	ResouceLinks map[string]string `json:"resource_links,omitempty" mapstructure:"resource_links"`
+	// Linked resources which must be set before this config can be processed
+	ResouceLinks []string `json:"resource_links,omitempty" mapstructure:"resource_links"`
 
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
+
+	Body    *hclsyntax.Body
+	Context *hcl.EvalContext
 }
 
 var TypeNotRegisteredError = fmt.Errorf("type not registered")
