@@ -110,24 +110,22 @@ You only need to call the following methods:
 
 ```go
 // create a config, all processed resources are encapuslated by config
-c := NewConfig()
+c := hclconfig.NewConfig()
 
-// parse a single hcl file
+// define the options for the parser
+opts := hclconfig.DefaultOptions()
+
+// Callback is executed when the parser processes a resource
+opts.Callback = func(r *types.Resource) error {
+  fmt.Println("Parser has processed", r.Info().Name)
+}
+
+// parse a single hcl file.
 // config passed to this function is not mutated but a copy with the new resources parsed is returned
-c, err := p.ParseFile("myfile.hcl", c)
-
-// walk through all resources in the dag processing the links
-// when a resource is processed by the DAG, Process is called
-// at this point all linked attributes will have been resolved
 //
-// optionally you can provide a function that will be called for every resource
-// this callback is executed after the resources Process method
-
-c.Walk(func(r types.Resource) error {
-  fmt.Println("processed:", r.Name)
-
-  return nil
-})
+// when configuration is parsed it's dependencies on other resources are evaluated and this order added
+// to a acyclic graph ensuring that any resources are processed before resources that depend on them.
+c, err := p.ParseFile("myfile.hcl", c)
 
 // find a resource based on it's type and name
 r, err := c.FindResource("container.base")
