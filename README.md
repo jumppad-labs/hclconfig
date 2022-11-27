@@ -126,7 +126,12 @@ opts.Callback = func(r *types.Resource) error {
 // when configuration is parsed it's dependencies on other resources are evaluated and this order added
 // to a acyclic graph ensuring that any resources are processed before resources that depend on them.
 c, err := p.ParseFile("myfile.hcl", c)
+```
 
+You can then access the properties from your types by retrieving them from the returned config.
+
+
+```go
 // find a resource based on it's type and name
 r, err := c.FindResource("container.base")
 
@@ -139,5 +144,6 @@ fmt.Println("network name", cont.Networks[0].Name) // onprem
 ## TODO
 [x] Basic parsing   
 [x] Variables  
-[x] Resource links   
+[x] Resource links and lazy evaluation   
+[ ] Enable custom interpolation functions   
 [ ] Modules   

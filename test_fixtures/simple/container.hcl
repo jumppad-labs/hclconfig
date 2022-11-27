@@ -37,7 +37,7 @@ template "consul_config_update" {
     # Additional
   EOF
 
-  append_file = resources.template.consul_config.append_file
+  append_file = resource.template.consul_config.append_file
 
   destination = "./consul.hcl"
 
@@ -50,7 +50,7 @@ container "base" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
-    name       = resources.network.onprem.name
+    name       = resource.network.onprem.name
     ip_address = "10.6.0.200"
   }
 
@@ -66,29 +66,29 @@ container "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
-    name       = resources.network.onprem.name
+    name       = resource.network.onprem.name
     ip_address = "10.6.0.200"
   }
 
-  dns = resources.container.base.dns
+  dns = resource.container.base.dns
 
   resources {
     # Max CPU to consume, 1024 is one core, default unlimited
     cpu = var.cpu_resources
     # Pin container to specified CPU cores, default all cores
-    cpu_pin = resources.container.base.resources.cpu_pin
+    cpu_pin = resource.container.base.resources.cpu_pin
     # max memory in MB to consume, default unlimited
-    memory = resources.container.base.resources.memory
+    memory = resource.container.base.resources.memory
   }
 
   volume {
     source      = "."
-    destination = "/test/${resources.template.consul_config.destination}"
+    destination = "/test/${resource.template.consul_config.destination}"
   }
   
 
   volume {
-    source      = resources.template.consul_config.destination
+    source      = resource.template.consul_config.destination
     destination = "/config/config.hcl"
   }
 
@@ -100,6 +100,6 @@ container "consul" {
   
   volume {
     source      = "."
-    destination = "/test2/${env(resources.template.consul_config.name)}"
+    destination = "/test2/${env(resource.template.consul_config.name)}"
   }
 }

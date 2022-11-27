@@ -7,6 +7,90 @@ import (
 	"github.com/shipyard-run/hclconfig/types"
 )
 
+type ResourceFQDN struct {
+	// Name of the module
+	Module string
+	// Type of the resource
+	Type types.ResourceType
+	// Resource name
+	Resource string
+	// Attribute for the resource
+	Attribute string
+}
+
+// ParseFQDN parses a resource fqdn and returns the individual components
+// e.g:
+// module.module1.resource.container.mine
+// module.module1.module2.resource.container.mine
+// module.module1.module2
+// module.module1.module2.output.mine
+func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
+	noResource := false
+	moduleName := ""
+	typeName := ""
+	resourceName := ""
+	attribute := ""
+
+	// first split on the resource
+	parts := strings.Split(fqdn, "resource.")
+	if len(parts) < 2 {
+		noResource = true
+	}
+
+	if !noResource {
+		// then split into type and name
+		resourceParts := strings.Split(parts[1], ".")
+		if len(resourceParts) < 2 {
+			return nil, fmt.Errorf("ParseFQDN expects the fqdn to be formatted as resource.type.name or module.name.resource.type.name. The fqdn: %s, does not contain a resource type", fqdn)
+		}
+
+		typeName = resourceParts[0]
+		resourceName = resourceParts[1]
+		attribute = strings.Join(resourceParts[2:], ".")
+	}
+
+	// now attempt to parse the module
+	moduleParts := strings.Split(parts[0], "module.")
+	if len(moduleParts) > 1 {
+
+		// if we have a module does it reference an output
+		outputParts := strings.Split(moduleParts[1], "output.")
+		if len(outputParts) > 1 {
+			moduleName = strings.TrimSuffix(outputParts[0], ".")
+			resourceName = outputParts[1]
+			typeName = string(types.TypeOutput)
+			attribute = "value"
+		} else {
+			// return only the module name
+			moduleName = strings.TrimSuffix(moduleParts[1], ".")
+		}
+	}
+
+	if moduleName == "" && noResource {
+		return nil, fmt.Errorf("ParseFQDN expects the fqdn to be formatted as resource.type.name or module.name.resource.type.name. The fqdn: %s, does not contain a module or resource identifier", fqdn)
+	}
+
+	return &ResourceFQDN{
+		Module:    moduleName,
+		Type:      types.ResourceType(typeName),
+		Resource:  resourceName,
+		Attribute: attribute,
+	}, nil
+}
+
+func (f ResourceFQDN) String() string {
+	modulePart := ""
+	if f.Module != "" {
+		modulePart = fmt.Sprintf("module.%s.", f.Module)
+	}
+
+	if f.Type == types.TypeOutput {
+		return fmt.Sprintf("%s%s.%s", modulePart, f.Type, f.Resource)
+	}
+
+	return fmt.Sprintf("%sresource.%s.%s", modulePart, f.Type, f.Resource)
+}
+
 // Config defines the stack config
 type Config struct {
 	Resources []types.Resource `json:"resources"`
@@ -41,50 +125,28 @@ func NewConfig() *Config {
 	return c
 }
 
-// FindModuleResources returns an array of resources for the given module
-func (c *Config) FindModuleResources(name string) ([]types.Resource, error) {
-	resources := []types.Resource{}
-
-	parts := strings.Split(name, ".")
-
-	for _, r := range c.Resources {
-		if r.Info().Module == parts[1] {
-			resources = append(resources, r)
-		}
-	}
-
-	if len(resources) > 0 {
-		return resources, nil
-	}
-
-	return nil, ResourceNotFoundError{name}
-}
-
 // FindResource returns the resource for the given name
-// name is defined with the convention [module].[type].[name]
-// if a resource can not be found resource will be null and an
+// name is defined with the convention: resource.[type].[name]
+// the keyword "resource" is a required component in the path to allow
+// names of resources to contain "." and to enable easy separate of
+// module parts.
+//
+// "module" is an optional path parameter: module.[module_name].resource.[type].[name]
+// and is required when searching for resources that have the Module flag set.
+//
+// If a resource can not be found, resource will be null and an
 // error will be returned
 //
 // e.g. to find a cluster named k3s
-// r, err := c.FindResource("cluster.k3s")
+// r, err := c.FindResource("resource.cluster.k3s")
 //
-// simple.consul.container.consul
-func (c *Config) FindResource(name string) (types.Resource, error) {
-	parts := strings.Split(name, ".")
-
-	typeIndex := 0
-	if len(parts) > 2 {
-		typeIndex = len(parts) - 1
+// e.g. to find a cluster named k3s in the module module1
+// r, err := c.FindResource("module.module1.resource.cluster.k3s")
+func (c *Config) FindResource(path string) (types.Resource, error) {
+	fqdn, err := ParseFQDN(path)
+	if err != nil {
+		return nil, err
 	}
-
-	module := ""
-	if typeIndex > 0 {
-		module = strings.Join(parts[:typeIndex-1], ".")
-	}
-
-	// the name could contain . so join after the first
-	typ := parts[typeIndex]
-	n := strings.Join(parts[typeIndex+1:], ".")
 
 	// this is an internal error and should not happen unless there is an issue with a provider
 	// there was, hence why we are here
@@ -93,18 +155,40 @@ func (c *Config) FindResource(name string) (types.Resource, error) {
 	}
 
 	for _, r := range c.Resources {
-		if r.Info().Module == module &&
-			r.Info().Type == types.ResourceType(typ) &&
-			r.Info().Name == n {
+		if r.Info().Module == fqdn.Module &&
+			r.Info().Type == fqdn.Type &&
+			r.Info().Name == fqdn.Resource {
 			return r, nil
 		}
 	}
 
-	return nil, ResourceNotFoundError{name}
+	return nil, ResourceNotFoundError{path}
+}
+
+func (c *Config) FindRelativeResource(path string, parentModule string) (types.Resource, error) {
+	fqdn, err := ParseFQDN(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if parentModule != "" {
+		mod := fmt.Sprintf("%s.%s", parentModule, fqdn.Module)
+
+		// fqdn.Module could be nil
+		mod = strings.Trim(mod, ".")
+		fqdn.Module = mod
+	}
+
+	r, err := c.FindResource(fqdn.String())
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
 // FindResourcesByType returns the resources from the given type
-func (c *Config) FindResourcesByType(t string) []types.Resource {
+func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 	res := []types.Resource{}
 
 	for _, r := range c.Resources {
@@ -113,15 +197,68 @@ func (c *Config) FindResourcesByType(t string) []types.Resource {
 		}
 	}
 
-	return res
+	if len(res) > 0 {
+		return res, nil
+	}
+
+	return nil, ResourceNotFoundError{t}
+}
+
+func (c *Config) FindRelativeModuleResources(module string, parent string, includeSubModules bool) ([]types.Resource, error) {
+	fqdn, err := ParseFQDN(module)
+	if err != nil {
+		return nil, err
+	}
+
+	modulePath := module
+
+	if parent != "" {
+		modulePath = fmt.Sprintf("module.%s.%s", parent, fqdn.Module)
+	}
+
+	return c.FindModuleResources(modulePath, includeSubModules)
+}
+
+// FindModuleResources returns an array of resources for the given module
+// if includeSubModules is true then all resources that may be included in a submodule
+// are also returned
+// if includeSubModules is false only the resources defined in the given module are returned
+func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]types.Resource, error) {
+	fqdn, err := ParseFQDN(module)
+	if err != nil {
+		return nil, err
+	}
+
+	resources := []types.Resource{}
+
+	for _, r := range c.Resources {
+		match := false
+		if includeSubModules && strings.HasPrefix(r.Info().Module, fqdn.Module) {
+			match = true
+		}
+
+		if !includeSubModules && r.Info().Module == fqdn.Module {
+			match = true
+		}
+
+		if match {
+			resources = append(resources, r)
+		}
+	}
+
+	if len(resources) > 0 {
+		return resources, nil
+	}
+
+	return nil, ResourceNotFoundError{fqdn.Module}
 }
 
 // AddResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
 func (c *Config) AddResource(r types.Resource) error {
-	rn := fmt.Sprintf("%s.%s", r.Info().Name, r.Info().Type)
+	rn := fmt.Sprintf("resource.%s.%s", r.Info().Type, r.Info().Name)
 	if r.Info().Module != "" {
-		rn = fmt.Sprintf("%s.%s.%s", r.Info().Module, r.Info().Type, r.Info().Name)
+		rn = fmt.Sprintf("module.%s.resource.%s.%s", r.Info().Module, r.Info().Type, r.Info().Name)
 	}
 
 	rf, err := c.FindResource(rn)

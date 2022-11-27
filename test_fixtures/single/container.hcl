@@ -2,34 +2,21 @@ variable "cpu_resources" {
   default = 2048
 }
 
+network "onprem" {
+  subnet = "10.6.0.0/16"
+}
+
 container "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
-    name       = resources.network.onprem.name
+    name       = resource.network.onprem.name
     ip_address = "10.6.0.200"
   }
-
-  dns = resources.container.base.dns
 
   resources {
     # Max CPU to consume, 1024 is one core, default unlimited
     cpu = var.cpu_resources
-    # Pin container to specified CPU cores, default all cores
-    cpu_pin = resources.container.base.resources.cpu_pin
-    # max memory in MB to consume, default unlimited
-    memory = resources.container.base.resources.memory
-  }
-
-  volume {
-    source      = "."
-    destination = "/test/${resources.template.consul_config.destination}"
-  }
-  
-
-  volume {
-    source      = resources.template.consul_config.destination
-    destination = "/config/config.hcl"
   }
 
   volume {
@@ -38,8 +25,12 @@ container "consul" {
     type        = "volume"
   }
   
-  volume {
-    source      = "."
-    destination = "/test2/${env(resources.template.consul_config.name)}"
-  }
+}
+
+output "container_name" {
+  value = resource.container.consul.name
+}
+
+output "container_resources_cpu" {
+  value = resource.container.consul.resources.cpu
 }

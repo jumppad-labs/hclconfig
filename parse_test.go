@@ -7,8 +7,8 @@ import (
 
 	"github.com/hashicorp/hcl2/hcl"
 	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
+	"github.com/shipyard-run/hclconfig/types"
 	"github.com/stretchr/testify/require"
-	"github.com/tj/assert"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -24,6 +24,11 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Config, *Parser) {
 	o := DefaultOptions()
 	if len(options) > 0 {
 		o = options[0]
+	}
+
+	o.Callback = func(r types.Resource) error {
+		//fmt.Printf("Process %s.%s.%s\n", r.Info().Module, r.Info().Type, r.Info().Name)
+		return nil
 	}
 
 	p := NewParser(o)
@@ -58,10 +63,10 @@ func TestParseFileProcessesResources(t *testing.T) {
 	c, p := setupParser(t)
 
 	c, err = p.ParseFile(absoluteFolderPath, c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// check variable has been interpolated
-	r, err := c.FindResource("container.consul")
+	r, err := c.FindResource("resource.container.consul")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
@@ -71,13 +76,13 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
 	require.Equal(t, 2048, cont.Resources.CPU)
 
-	r, err = c.FindResource("container.base")
+	r, err = c.FindResource("resource.container.base")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 }
 
 func TestParseFileSetsLinks(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/single/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +90,10 @@ func TestParseFileSetsLinks(t *testing.T) {
 	c, p := setupParser(t)
 
 	c, err = p.ParseFile(absoluteFolderPath, c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// check variable has been interpolated
-	r, err := c.FindResource("container.consul")
+	r, err := c.FindResource("resource.container.consul")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
@@ -99,17 +104,17 @@ func TestParseFileSetsLinks(t *testing.T) {
 	cont := r.(*structs.Container)
 	require.Len(t, cont.ResouceLinks, 6)
 
-	require.Contains(t, cont.ResouceLinks, "resources.network.onprem.name")
-	require.Contains(t, cont.ResouceLinks, "resources.container.base.dns")
-	require.Contains(t, cont.ResouceLinks, "resources.container.base.resources.cpu_pin")
-	require.Contains(t, cont.ResouceLinks, "resources.container.base.resources.memory")
-	require.Contains(t, cont.ResouceLinks, "resources.template.consul_config.destination")
-	require.Contains(t, cont.ResouceLinks, "resources.template.consul_config.name")
+	require.Contains(t, cont.ResouceLinks, "resource.network.onprem.name")
+	require.Contains(t, cont.ResouceLinks, "resource.container.base.dns")
+	require.Contains(t, cont.ResouceLinks, "resource.container.base.resources.cpu_pin")
+	require.Contains(t, cont.ResouceLinks, "resource.container.base.resources.memory")
+	require.Contains(t, cont.ResouceLinks, "resource.template.consul_config.destination")
+	require.Contains(t, cont.ResouceLinks, "resource.template.consul_config.name")
 }
 
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	o := DefaultOptions()
 	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
@@ -117,10 +122,10 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	c, p := setupParser(t, o)
 
 	c, err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	r, err := c.FindResource("container.consul")
-	assert.NoError(t, err)
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
 
 	// check variable has been interpolated using the override value
 	cont := r.(*structs.Container)
@@ -129,7 +134,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 
 func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c, p := setupParser(t)
 
@@ -140,10 +145,10 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 	})
 
 	c, err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	r, err := c.FindResource("container.consul")
-	assert.NoError(t, err)
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
 
 	// check variable has been interpolated using the override value
 	cont := r.(*structs.Container)
@@ -152,15 +157,15 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 
 func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c, p := setupParser(t)
 
 	c, err = p.ParseDirectory(absoluteFolderPath, c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	r, err := c.FindResource("container.consul")
-	assert.NoError(t, err)
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
 
 	// check variable has been interpolated using the override value
 	cont := r.(*structs.Container)
@@ -169,15 +174,15 @@ func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 
 func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c, p := setupParser(t)
 
 	c, err = p.ParseDirectory(absoluteFolderPath, c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	r, err := c.FindResource("container.consul")
-	assert.NoError(t, err)
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
 
 	// check variable has been interpolated using the override value
 	cont := r.(*structs.Container)
@@ -253,48 +258,49 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 //	assert.True(t, validEnv)
 //}
 //
-//func TestVariablesSetFromModuleStanza(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/modules")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//
-//	// check variable has been interpolated
-//	r, err := c.FindResource("sub_module.consul.container.consul")
-//	assert.NoError(t, err)
-//
-//	con := r.(*Container)
-//
-//	assert.Equal(t, "consul:from-mod", con.Image.Name)
-//}
-//
-//func TestParseModuleCreatesResources(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("../../examples/modules")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	c := New()
-//	err = ParseFolder(absoluteFolderPath, c, false, "", false, []string{}, nil, "")
-//	assert.NoError(t, err)
-//
-//	// count the resources, should create 21
-//	assert.Len(t, c.Resources, 21)
-//
-//	// check depends on is set
-//	r, err := c.FindResource("k8s.k8s_cluster.k3s")
-//	assert.NoError(t, err)
-//	assert.Contains(t, r.Info().DependsOn, "module.consul")
-//
-//	// check the module is set on resources loaded as a module
-//	r, err = c.FindResource("consul.container.consul")
-//	assert.NoError(t, err)
-//	assert.Equal(t, "consul", r.Info().Module)
-//}
+
+func TestParseModuleCreatesResources(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, p := setupParser(t)
+
+	c, err = p.ParseDirectory(absoluteFolderPath, c)
+	require.NoError(t, err)
+
+	// count the resources, should create 4
+	require.Len(t, c.Resources, 13)
+
+	// check resource has been created
+	cont, err := c.FindResource("module.consul_1.resource.container.consul")
+	require.NoError(t, err)
+
+	// check interpolation value
+	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
+
+	// check resource has been created
+	cont, err = c.FindResource("module.consul_2.resource.container.consul")
+	require.NoError(t, err)
+
+	// check interpolation value
+	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
+
+	// check outputs
+	cont, err = c.FindResource("resource.output.module1_container_resources_cpu")
+	require.NoError(t, err)
+
+	// check interpolation value is overriden in the module stanza
+	require.Equal(t, "4096", cont.(*types.Output).Value)
+
+	cont, err = c.FindResource("resource.output.module2_container_resources_cpu")
+	require.NoError(t, err)
+
+	// check interpolation value
+	require.Equal(t, "2048", cont.(*types.Output).Value)
+}
+
 //
 //func TestParseFileFunctionReadCorrectly(t *testing.T) {
 //	absoluteFolderPath, err := filepath.Abs("../../examples/container")
@@ -601,14 +607,13 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 
 func TestSetContextVariableFromPath(t *testing.T) {
 	ctx := &hcl.EvalContext{}
-	ctx.Variables = map[string]cty.Value{"resources": cty.ObjectVal(map[string]cty.Value{})}
+	ctx.Variables = map[string]cty.Value{"resource": cty.ObjectVal(map[string]cty.Value{})}
 
-	setContextVariableFromPath(ctx, "resources.foo.bar", cty.BoolVal(true))
-	setContextVariableFromPath(ctx, "resources.foo.bear", cty.StringVal("Hello World"))
-	setContextVariableFromPath(ctx, "resources.poo", cty.StringVal("Meh"))
+	setContextVariableFromPath(ctx, "resource.foo.bar", cty.BoolVal(true))
+	setContextVariableFromPath(ctx, "resource.foo.bear", cty.StringVal("Hello World"))
+	setContextVariableFromPath(ctx, "resource.poo", cty.StringVal("Meh"))
 
-	require.True(t, ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True())
-	require.Equal(t, "Hello World", ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bear"].AsString())
-	require.Equal(t, "Meh", ctx.Variables["resources"].AsValueMap()["poo"].AsString())
-
+	require.True(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bar"].True())
+	require.Equal(t, "Hello World", ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bear"].AsString())
+	require.Equal(t, "Meh", ctx.Variables["resource"].AsValueMap()["poo"].AsString())
 }

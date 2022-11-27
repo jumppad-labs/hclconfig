@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -64,6 +65,7 @@ func DefaultOptions() *ParserOptions {
 type Parser struct {
 	options         ParserOptions
 	registeredTypes types.RegisteredTypes
+	config          *Config
 }
 
 // NewParser creates a new parser with the given options
@@ -102,8 +104,25 @@ func (p *Parser) ParseFile(file string, c *Config) (*Config, error) {
 // ParseDirectory parses all resource and variable files in the given directory
 // note: this method does not recurse into sub folders
 func (p *Parser) ParseDirectory(dir string, c *Config) (*Config, error) {
+	p.config = c
 	rootContext = buildContext(dir)
 
+	c, err := p.parseDirectory(rootContext, dir, c)
+	if err != nil {
+		return nil, err
+	}
+
+	// process the files and resolve dependency
+	err = c.process(p.options.Callback)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// internal method
+func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) (*Config, error) {
 	// get all files in a directory
 	path, err := os.Stat(dir)
 	if os.IsNotExist(err) {
@@ -138,16 +157,13 @@ func (p *Parser) ParseDirectory(dir string, c *Config) (*Config, error) {
 
 		if !f.IsDir() {
 			if strings.HasSuffix(fn, ".hcl") {
-				err := p.parseFile(rootContext, fn, c, p.options.Variables, variablesFiles)
+				err := p.parseFile(ctx, fn, c, p.options.Variables, variablesFiles)
 				if err != nil {
 					return nil, err
 				}
 			}
 		}
 	}
-
-	// process the files and resolve dependency
-	c.process(p.options.Callback)
 
 	return c, nil
 }
@@ -341,7 +357,63 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 		// create the registered type if not a variable or output
 		// variables and outputs are processed in a separate run
-		if types.ResourceType(b.Type) != types.TypeVariable && types.ResourceType(b.Type) != types.TypeOutput {
+		switch types.ResourceType(b.Type) {
+		case types.TypeVariable:
+			continue
+		case types.TypeOutput:
+			continue
+		case types.TypeModule:
+			rt, _ := types.DefaultTypes().CreateResource(b.Type, name)
+
+			rt.Info().Module = moduleName
+			rt.Info().DependsOn = dependsOn
+
+			err := decodeBody(ctx, file, b, rt)
+			if err != nil {
+				return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
+			}
+
+			// we need to fetch the source so that we can process the child resources
+			// "source" is the attribute but we need to read this manually
+			src, diags := b.Body.Attributes["source"].Expr.Value(ctx)
+			if diags.HasErrors() {
+				return fmt.Errorf("unable to read source from module: %s", diags.Error())
+			}
+
+			// src could be a github module or a realative folder
+			// first check if it is a folder, we need to make it absolute relative to the current file
+			dir := path.Dir(file)
+			moduleSrc := path.Join(dir, src.AsString())
+			fi, err := os.Stat(moduleSrc)
+			if err != nil || !fi.IsDir() {
+				// is not a directory fetch from source using go getter
+				return fmt.Errorf("Go getter Not implemented, please use local module source")
+			}
+
+			// create a new config and add the resources later
+			moduleConfig := NewConfig()
+
+			// modules should have their own context so that variables are not globally scoped
+			subContext := buildContext(moduleSrc)
+
+			_, err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
+			if err != nil {
+				return fmt.Errorf("unable to parse module directory: %s, error: %s", src.AsString(), err)
+			}
+
+			rt.(*types.Module).SubContext = subContext
+
+			// add the module
+			c.AddResource(rt)
+
+			// we need to add the module name to all the returned resources
+			for _, r := range moduleConfig.Resources {
+				r.Info().Module = fmt.Sprintf("%s.%s", name, r.Info().Module)
+				r.Info().Module = strings.TrimSuffix(r.Info().Module, ".")
+				c.AddResource(r)
+			}
+
+		default:
 			rt, err := p.registeredTypes.CreateResource(b.Type, name)
 			if err != nil {
 				return fmt.Errorf("error in file '%s': unable to create resource '%s' %s", file, b.Type, err)
@@ -439,7 +511,7 @@ func buildContext(filePath string) *hcl.EvalContext {
 	}
 
 	valMap := map[string]cty.Value{}
-	ctx.Variables["resources"] = cty.ObjectVal(valMap)
+	ctx.Variables["resource"] = cty.ObjectVal(valMap)
 
 	ctx.Functions = getDefaultFunctions(filePath)
 
@@ -577,6 +649,16 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 		if ref != "" {
 			resources = append(resources, ref)
 		}
+
+	case *hclsyntax.ObjectConsExpr:
+		for _, v := range expr.(*hclsyntax.ObjectConsExpr).Items {
+			res, err := processExpr(v.ValueExpr)
+			if err != nil {
+				return nil, err
+			}
+
+			resources = append(resources, res...)
+		}
 	}
 
 	return resources, nil
@@ -589,7 +671,7 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			strExpression += t.(hcl.TraverseRoot).Name
 
 			// if this is not a resource reference quit
-			if strExpression != "resources" {
+			if strExpression != "resource" && strExpression != "module" {
 				return "", nil
 			}
 		} else {
@@ -690,154 +772,3 @@ func setDisabled(r types.Resource, parentDisabled bool) {
 		r.Info().Status = "disabled"
 	}
 }
-
-// ParseFolder for Resource, Blueprint, and Variable files
-// The onlyResources parameter allows you to specify that the parser
-// moduleName is the name of the module, this should be set to a blank string for the root module
-// disabled sets the disabled flag on all resources, this is used when parsing a module that
-//
-//	has the disabled flag set
-//
-// only reads resource files and will ignore Blueprint and Variable files.
-// This is useful when recursively parsing such as when reading Modules
-//func ParseFolder(
-//	folder string,
-//	c *resources.Config,
-//	onlyResources bool,
-//	moduleName string,
-//	disabled bool,
-//	dependsOn []string,
-//	variables map[string]string,
-//	variablesFile string) error {
-//
-//	rootContext = buildContext(folder)
-//
-//	err := parseFolder(
-//		rootContext,
-//		folder,
-//		c,
-//		onlyResources,
-//		moduleName,
-//		disabled,
-//		dependsOn,
-//		variables,
-//		variablesFile,
-//	)
-//
-//	if err != nil {
-//		return err
-//	}
-//
-//	return parseReferences(c)
-//
-//}
-
-//func parseFolder(
-//	ctx *hcl.EvalContext,
-//	folderPath string,
-//	config *resources.Config,
-//	onlyResources bool,
-//	moduleName string,
-//	disabled bool,
-//	dependsOn []string,
-//	variables map[string]string,
-//	variablesFile string) error {
-//
-//	absolutePath, _ := filepath.Abs(folderPath)
-//
-//	if ctx == nil {
-//		panic("Context nil")
-//	}
-//
-//	if ctx.Functions == nil {
-//		panic("Context Functions nil")
-//	}
-//
-//	// load the variables from the root of the blueprint
-//	if !onlyResources {
-//		variableFiles, err := filepath.Glob(path.Join(absolutePath, "*.vars"))
-//		if err != nil {
-//			return err
-//		}
-//
-//		for _, f := range variableFiles {
-//			err := loadVariablesFromFile(ctx, f)
-//			if err != nil {
-//				return err
-//			}
-//		}
-//
-//		// load variables from any custom files set on the command line
-//		if variablesFile != "" {
-//			err := loadVariablesFromFile(ctx, variablesFile)
-//			if err != nil {
-//				return err
-//			}
-//		}
-//
-//		// setup any variables which are passed as environment variables or in the collection
-//		setVariables(ctx, variables)
-//
-//		yardFilesMD, err := filepath.Glob(path.Join(absolutePath, "README.md"))
-//		if err != nil {
-//			return err
-//		}
-//
-//		if len(yardFilesMD) > 0 {
-//			err := parseYardMarkdown(yardFilesMD[0], config)
-//			if err != nil {
-//				return err
-//			}
-//		}
-//	}
-//
-//	// We need to do a two pass parsing, first we check if there are any
-//	// default variables which should be added to the collection
-//	err := parseVariables(ctx, absolutePath, config)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// Parse Resource files from the current folder
-//	err = parseResources(ctx, absolutePath, config, moduleName, disabled, dependsOn)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// Finally parse the outputs
-//	err = parseOutputs(ctx, absolutePath, disabled, config)
-//	if err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}
-
-//	func getModuleFiles(source, dest string) error {
-//		// check to see if a folder exists at the destination and exit if exists
-//		_, err := os.Stat(dest)
-//		if err == nil {
-//			return nil
-//		}
-//
-//		pwd, err := os.Getwd()
-//		if err != nil {
-//			return err
-//		}
-//
-//		c := &getter.Client{
-//			Ctx:     context.Background(),
-//			Src:     source,
-//			Dst:     dest,
-//			Pwd:     pwd,
-//			Mode:    getter.ClientModeAny,
-//			Options: []getter.ClientOption{},
-//		}
-//
-//		err = c.Get()
-//		if err != nil {
-//			return xerrors.Errorf("unable to fetch files from %s: %w", source, err)
-//		}
-//
-//		return nil
-//	}

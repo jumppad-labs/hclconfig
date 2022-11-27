@@ -33,11 +33,16 @@ func TestDoYaLikeDAGAddsDependencies(t *testing.T) {
 	g, err := doYaLikeDAGs(c)
 	require.NoError(t, err)
 
-	network, _ := c.FindResource("network.onprem")
-	template, _ := c.FindResource("template.consul_config")
+	network, err := c.FindResource("resource.network.onprem")
+	require.NoError(t, err)
+
+	template, err := c.FindResource("resource.template.consul_config")
+	require.NoError(t, err)
 
 	// check the dependency tree of the base container
-	base, _ := c.FindResource("container.base")
+	base, err := c.FindResource("resource.container.base")
+	require.NoError(t, err)
+
 	s, err := g.Descendents(base)
 	require.NoError(t, err)
 
@@ -46,7 +51,9 @@ func TestDoYaLikeDAGAddsDependencies(t *testing.T) {
 	require.Contains(t, list, network)
 
 	// check the dependency tree of the consul container
-	consul, _ := c.FindResource("container.consul")
+	consul, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
+
 	s, err = g.Descendents(consul)
 	require.NoError(t, err)
 

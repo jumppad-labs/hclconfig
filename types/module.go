@@ -1,5 +1,7 @@
 package types
 
+import "github.com/hashicorp/hcl2/hcl"
+
 // TypeModule is the resource string for a Module resource
 const TypeModule ResourceType = "module"
 
@@ -13,6 +15,10 @@ type Module struct {
 	Source string `hcl:"source" json:"source"`
 
 	Variables interface{} `hcl:"variables,optional" json:"variables,omitempty"`
+
+	// SubContext is used to store the variables as a context that can be
+	// passed to child resources
+	SubContext *hcl.EvalContext
 }
 
 // New creates a new Module config resource, implements Resource New method

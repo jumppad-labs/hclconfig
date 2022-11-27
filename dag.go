@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl2/gohcl"
+	"github.com/hashicorp/hcl2/hcl"
 	"github.com/hashicorp/terraform/dag"
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/shipyard-run/hclconfig/lookup"
@@ -37,36 +38,63 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		// this is here for now as we might need to process these two
 		// lists separately
 		for _, v := range resource.Info().ResouceLinks {
-			parts := strings.Split(v, ".")
-			n := parts[1:3]
-			sn := strings.Join(n, ".")
-
-			resource.Info().DependsOn = append(resource.Info().DependsOn, sn)
+			resource.Info().DependsOn = append(resource.Info().DependsOn, v)
 		}
 
 		for _, d := range resource.Info().DependsOn {
+
 			var err error
 			dependencies := []types.Resource{}
+			fqdn, err := ParseFQDN(d)
+			if err != nil {
+				return nil, fmt.Errorf("invalid dependency: %s, error: %s", d, err)
+			}
 
-			if strings.HasPrefix(d, "module.") {
-				// find dependencies from modules
-				dependencies, err = c.FindModuleResources(d)
+			// only search for module dependencies when has a module path and
+			// is not a resource or output
+			if fqdn.Module != "" && fqdn.Resource == "" {
+				deps, err := c.FindRelativeModuleResources(fqdn.Module, resource.Info().Module, true)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("unable to find module resource, module: %s, error: %s", fqdn.Module, err)
 				}
-			} else {
-				// find dependencies for direct resources
-				r, err := c.FindResource(d)
+
+				dependencies = append(dependencies, deps...)
+			}
+
+			if fqdn.Resource != "" {
+				dep, err := c.FindRelativeResource(d, resource.Info().Module)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("unable to find resource from parent module: '%s, error: %s", resource.Info().Module, err)
 				}
-				dependencies = append(dependencies, r)
+
+				dependencies = append(dependencies, dep)
 			}
 
 			for _, d := range dependencies {
 				hasDeps = true
 				graph.Connect(dag.BasicEdge(d, resource))
 			}
+		}
+
+		// if this resource is part of a module make it depend on that module
+		if resource.Info().Module != "" {
+			parts := strings.Split(resource.Info().Module, ".")
+			myModule := parts[(len(parts) - 1)]
+			parentModule := parts[:len(parts)-1]
+
+			fqdn := &ResourceFQDN{
+				Module:   strings.Join(parentModule, "."),
+				Resource: myModule,
+				Type:     types.TypeModule,
+			}
+
+			d, err := c.FindResource(fqdn.String())
+			if err != nil {
+				return nil, fmt.Errorf("unable to find resources parent module: '%s, error: %s", fqdn.String(), err)
+			}
+
+			hasDeps = true
+			graph.Connect(dag.BasicEdge(d, resource))
 		}
 
 		// if no deps add to root node
@@ -113,43 +141,41 @@ func (c *Config) process(wf ParseCallback) error {
 		// all linked values should now have been processed as the graph
 		// will have handled them first
 		for _, v := range r.Info().ResouceLinks {
-			// get the resource where the value exists
-			parts := strings.Split(v, ".")
-			n := parts[1:3]
-			sn := strings.Join(n, ".")
-
-			// get the value path
-			valPath := parts[3:]
+			fqdn, err := ParseFQDN(v)
+			if err != nil {
+				return diags.Append(fmt.Errorf("error parsing resource link error:%s", err))
+			}
 
 			// get the value from the linked resource
-			l, err := c.FindResource(sn)
+			l, err := c.FindRelativeResource(v, r.Info().Module)
 			if err != nil {
-				return diags.Append(fmt.Errorf("unable to find dependent resource %s, %s\n", sn, err))
+				return diags.Append(fmt.Errorf("unable to find dependent resource %s, %s\n", v, err))
 			}
 
 			var src reflect.Value
 
 			// get the type of the linked resource
-			paramType := findTypeFromInterface(strings.Join(valPath, "."), l)
+			paramType := findTypeFromInterface(fqdn.Attribute, l)
 
 			// did we find the type if not check the meta properties
 			if paramType == "" {
-				paramType = findTypeFromInterface(strings.Join(valPath, "."), l.Info())
+				paramType = findTypeFromInterface(fqdn.Attribute, l.Info())
 				if paramType == "" {
-					return diags.Append(fmt.Errorf("type not found %v\n", valPath))
+					return diags.Append(fmt.Errorf("type not found %v\n", fqdn.Attribute))
 				}
 			}
 
 			// find the value
-			src, err = lookup.LookupI(l, valPath, []string{"hcl", "json"})
+			path := strings.Split(fqdn.Attribute, ".")
+			src, err = lookup.LookupI(l, path, []string{"hcl", "json"})
 
 			// the property might be one of the meta properties check the resource info
 			if err != nil {
-				src, err = lookup.LookupI(l.Info(), valPath, []string{"hcl", "json"})
+				src, err = lookup.LookupI(l.Info(), path, []string{"hcl", "json"})
 
 				// still not found return an error
 				if err != nil {
-					return diags.Append(fmt.Errorf("value not found %s, %s\n", valPath, err))
+					return diags.Append(fmt.Errorf("value not found %s, %s\n", fqdn.Attribute, err))
 				}
 			}
 
@@ -205,6 +231,23 @@ func (c *Config) process(wf ParseCallback) error {
 			err = wf(r)
 			if err != nil {
 				return diags.Append(fmt.Errorf("error processing graph node: %s", err))
+			}
+		}
+
+		// if the type is a module we need to add the variables to the
+		// context
+		if r.Info().Type == types.TypeModule {
+			mod := r.(*types.Module)
+
+			var mapVars map[string]cty.Value
+			if att, ok := mod.Variables.(*hcl.Attribute); ok {
+				val, _ := att.Expr.Value(mod.Context)
+				mapVars = val.AsValueMap()
+
+				for k, v := range mapVars {
+					fmt.Println(k, v)
+					setContextVariable(mod.SubContext, k, v)
+				}
 			}
 		}
 
