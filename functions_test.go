@@ -52,3 +52,19 @@ func TestCreateFunctionWithInvalidOutParameterReturnsError(t *testing.T) {
 	_, err := createCtyFunctionFromGoFunc(myfunc)
 	require.Error(t, err)
 }
+
+func TestCreateFunctionCallsFunction(t *testing.T) {
+	myfunc := func(a, b int) int {
+		return a + b
+	}
+
+	ctyFunc, err := createCtyFunctionFromGoFunc(myfunc)
+	require.NoError(t, err)
+
+	val, err := ctyFunc.Call([]cty.Value{cty.NumberIntVal(2), cty.NumberIntVal(3)})
+	require.NoError(t, err)
+
+	bf := val.AsBigFloat()
+	i, _ := bf.Int64()
+	require.Equal(t, 5, i)
+}

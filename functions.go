@@ -63,6 +63,28 @@ func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
 	return function.New(&function.Spec{
 		Params: params,
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+
+			// create the params
+			in := []reflect.Value{}
+			for _, a := range args {
+				switch a.Type() {
+				case cty.String:
+					in = append(in, reflect.ValueOf(a.AsString()))
+				case cty.Number:
+					bf := a.AsBigFloat()
+					val, _ := bf.Int64()
+					in = append(in, reflect.ValueOf(int(val)))
+				}
+			}
+
+			out := reflect.ValueOf(f).Call(in)
+
+			switch retType {
+			case cty.Number:
+				return cty.NumberIntVal(out[0].Int()), nil
+
+			}
+
 			return cty.NullVal(retType), nil
 		},
 		Type: outType,
