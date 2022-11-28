@@ -214,6 +214,9 @@ func (c *Config) process(wf ParseCallback) error {
 		// Process the raw resouce now we have the context from the linked
 		// resources
 		if r.Info().Body != nil {
+			ul := getContextLock(r.Info().Context)
+			defer ul()
+
 			diag := gohcl.DecodeBody(r.Info().Body, r.Info().Context, r)
 			if diag.HasErrors() {
 				return diags.Append(fmt.Errorf(diag.Error()))
@@ -221,14 +224,14 @@ func (c *Config) process(wf ParseCallback) error {
 		}
 
 		// call the resource process method
-		err = r.Process()
+		err := r.Process()
 		if err != nil {
 			return diags.Append(fmt.Errorf("error calling process for resource: %s", err))
 		}
 
 		// call the callbacks
 		if wf != nil {
-			err = wf(r)
+			err := wf(r)
 			if err != nil {
 				return diags.Append(fmt.Errorf("error processing graph node: %s", err))
 			}

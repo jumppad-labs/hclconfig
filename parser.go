@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/hashicorp/hcl2/gohcl"
 	"github.com/hashicorp/hcl2/hcl"
@@ -443,20 +442,13 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 	ctx.Variables["var"] = cty.ObjectVal(valMap)
 }
 
-// ctxMutex ensures that the context is not mutated at the same time
-// from multipl go-routines.
-// Technically each context should have a mutex, however to simplify
-// implementation at the cost of negligable performance a global mutex
-// is used
-var ctxMutex = sync.Mutex{}
-
 // setContextVariableFromPath sets a context variable using a nested structure based
 // on the given path. Will create any child maps needed to satisfy the path.
 // i.e "resources.foo.bar" set to "true" would return
 // ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True() = true
 func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) {
-	ctxMutex.Lock()
-	defer ctxMutex.Unlock()
+	ul := getContextLock(ctx)
+	defer ul()
 
 	pathParts := strings.Split(path, ".")
 	ctx.Variables = setMapVariableFromPath(ctx.Variables, pathParts, value)

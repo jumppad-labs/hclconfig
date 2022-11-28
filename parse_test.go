@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/hcl2/hcl"
@@ -622,12 +623,17 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	o := DefaultOptions()
 	calls := []string{}
+	callSync := sync.Mutex{}
 	o.Callback = func(r types.Resource) error {
+		callSync.Lock()
+
 		calls = append(calls, ResourceFQDN{
 			Module:   r.Info().Module,
 			Resource: r.Info().Name,
 			Type:     r.Info().Type,
 		}.String())
+
+		callSync.Unlock()
 
 		return nil
 	}
