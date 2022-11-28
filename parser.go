@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/hcl2/gohcl"
 	"github.com/hashicorp/hcl2/hcl"
@@ -199,11 +200,6 @@ func (p *Parser) parseFile(
 		return err
 	}
 
-	err = p.parseOutputsInFile(ctx, file, false, c)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -293,42 +289,6 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
-// parseOutputsInFile parses a hcl file and adds any found resources to the config
-func (p *Parser) parseOutputsInFile(ctx *hcl.EvalContext, file string, disabled bool, c *Config) error {
-	parser := hclparse.NewParser()
-
-	f, diag := parser.ParseHCLFile(file)
-	if diag.HasErrors() {
-		return errors.New(diag.Error())
-	}
-
-	body, ok := f.Body.(*hclsyntax.Body)
-	if !ok {
-		return errors.New("Error getting body")
-	}
-
-	for _, b := range body.Blocks {
-		switch b.Type {
-		case string(types.TypeOutput):
-			v := (&types.Output{}).New(b.Labels[0])
-
-			err := decodeBody(ctx, file, b, v)
-			if err != nil {
-				return err
-			}
-
-			setDisabled(v, disabled)
-
-			// if disabled do not add to the resources list
-			if !v.Info().Disabled {
-				c.AddResource(v)
-			}
-		}
-	}
-
-	return nil
-}
-
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
 func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) error {
 	parser := hclparse.NewParser()
@@ -360,86 +320,101 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		switch types.ResourceType(b.Type) {
 		case types.TypeVariable:
 			continue
-		case types.TypeOutput:
-			continue
 		case types.TypeModule:
-			rt, _ := types.DefaultTypes().CreateResource(b.Type, name)
-
-			rt.Info().Module = moduleName
-			rt.Info().DependsOn = dependsOn
-
-			err := decodeBody(ctx, file, b, rt)
+			err := p.parseModule(ctx, c, name, file, b, moduleName, dependsOn)
 			if err != nil {
-				return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
+				return fmt.Errorf("unable to process module: %s", err)
 			}
-
-			// we need to fetch the source so that we can process the child resources
-			// "source" is the attribute but we need to read this manually
-			src, diags := b.Body.Attributes["source"].Expr.Value(ctx)
-			if diags.HasErrors() {
-				return fmt.Errorf("unable to read source from module: %s", diags.Error())
-			}
-
-			// src could be a github module or a realative folder
-			// first check if it is a folder, we need to make it absolute relative to the current file
-			dir := path.Dir(file)
-			moduleSrc := path.Join(dir, src.AsString())
-			fi, err := os.Stat(moduleSrc)
-			if err != nil || !fi.IsDir() {
-				// is not a directory fetch from source using go getter
-				return fmt.Errorf("Go getter Not implemented, please use local module source")
-			}
-
-			// create a new config and add the resources later
-			moduleConfig := NewConfig()
-
-			// modules should have their own context so that variables are not globally scoped
-			subContext := buildContext(moduleSrc)
-
-			_, err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
-			if err != nil {
-				return fmt.Errorf("unable to parse module directory: %s, error: %s", src.AsString(), err)
-			}
-
-			rt.(*types.Module).SubContext = subContext
-
-			// add the module
-			c.AddResource(rt)
-
-			// we need to add the module name to all the returned resources
-			for _, r := range moduleConfig.Resources {
-				r.Info().Module = fmt.Sprintf("%s.%s", name, r.Info().Module)
-				r.Info().Module = strings.TrimSuffix(r.Info().Module, ".")
-				c.AddResource(r)
-			}
-
 		default:
-			rt, err := p.registeredTypes.CreateResource(b.Type, name)
+			err := p.parseResource(ctx, c, name, file, b, moduleName, dependsOn, disabled)
 			if err != nil {
-				return fmt.Errorf("error in file '%s': unable to create resource '%s' %s", file, b.Type, err)
-			}
-
-			rt.Info().Module = moduleName
-			rt.Info().DependsOn = dependsOn
-
-			err = decodeBody(ctx, file, b, rt)
-			if err != nil {
-				return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
-			}
-
-			setDisabled(rt, disabled)
-
-			err = c.AddResource(rt)
-			if err != nil {
-				return fmt.Errorf(
-					"Unable to add resource %s.%s in file %s: %s",
-					b.Type,
-					b.Labels[0],
-					file,
-					err,
-				)
+				return fmt.Errorf("unable to process resource: %s", err)
 			}
 		}
+	}
+
+	return nil
+}
+
+func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
+	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), name)
+
+	rt.Info().Module = moduleName
+	rt.Info().DependsOn = dependsOn
+
+	err := decodeBody(ctx, file, b, rt)
+	if err != nil {
+		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
+	}
+
+	// we need to fetch the source so that we can process the child resources
+	// "source" is the attribute but we need to read this manually
+	src, diags := b.Body.Attributes["source"].Expr.Value(ctx)
+	if diags.HasErrors() {
+		return fmt.Errorf("unable to read source from module: %s", diags.Error())
+	}
+
+	// src could be a github module or a realative folder
+	// first check if it is a folder, we need to make it absolute relative to the current file
+	dir := path.Dir(file)
+	moduleSrc := path.Join(dir, src.AsString())
+	fi, err := os.Stat(moduleSrc)
+	if err != nil || !fi.IsDir() {
+		// is not a directory fetch from source using go getter
+		return fmt.Errorf("Go getter Not implemented, please use local module source")
+	}
+
+	// create a new config and add the resources later
+	moduleConfig := NewConfig()
+
+	// modules should have their own context so that variables are not globally scoped
+	subContext := buildContext(moduleSrc)
+
+	_, err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
+	if err != nil {
+		return fmt.Errorf("unable to parse module directory: %s, error: %s", src.AsString(), err)
+	}
+
+	rt.(*types.Module).SubContext = subContext
+
+	// add the module
+	c.AddResource(rt)
+
+	// we need to add the module name to all the returned resources
+	for _, r := range moduleConfig.Resources {
+		r.Info().Module = fmt.Sprintf("%s.%s", name, r.Info().Module)
+		r.Info().Module = strings.TrimSuffix(r.Info().Module, ".")
+		c.AddResource(r)
+	}
+
+	return nil
+}
+
+func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) error {
+	rt, err := p.registeredTypes.CreateResource(b.Type, name)
+	if err != nil {
+		return fmt.Errorf("error in file '%s': unable to create resource '%s' %s", file, b.Type, err)
+	}
+
+	rt.Info().Module = moduleName
+	rt.Info().DependsOn = dependsOn
+
+	err = decodeBody(ctx, file, b, rt)
+	if err != nil {
+		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
+	}
+
+	setDisabled(rt, disabled)
+
+	err = c.AddResource(rt)
+	if err != nil {
+		return fmt.Errorf(
+			"Unable to add resource %s.%s in file %s: %s",
+			b.Type,
+			b.Labels[0],
+			file,
+			err,
+		)
 	}
 
 	return nil
@@ -468,11 +443,21 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 	ctx.Variables["var"] = cty.ObjectVal(valMap)
 }
 
+// ctxMutex ensures that the context is not mutated at the same time
+// from multipl go-routines.
+// Technically each context should have a mutex, however to simplify
+// implementation at the cost of negligable performance a global mutex
+// is used
+var ctxMutex = sync.Mutex{}
+
 // setContextVariableFromPath sets a context variable using a nested structure based
 // on the given path. Will create any child maps needed to satisfy the path.
 // i.e "resources.foo.bar" set to "true" would return
 // ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True() = true
 func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) {
+	ctxMutex.Lock()
+	defer ctxMutex.Unlock()
+
 	pathParts := strings.Split(path, ".")
 	ctx.Variables = setMapVariableFromPath(ctx.Variables, pathParts, value)
 }

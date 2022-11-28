@@ -69,7 +69,7 @@ func (g *GoGetter) Get(src, dest string, ignoreCache bool) (string, error) {
 		return "", nil
 	}
 
-	g.get(src, downloadPath, pwd)
+	err = g.get(src, downloadPath, pwd)
 
-	return "", nil
+	return downloadPath, err
 }

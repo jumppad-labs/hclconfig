@@ -245,7 +245,6 @@ func (c *Config) process(wf ParseCallback) error {
 				mapVars = val.AsValueMap()
 
 				for k, v := range mapVars {
-					fmt.Println(k, v)
 					setContextVariable(mod.SubContext, k, v)
 				}
 			}

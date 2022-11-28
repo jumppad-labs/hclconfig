@@ -1,6 +1,7 @@
 package hclconfig
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,11 +25,6 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Config, *Parser) {
 	o := DefaultOptions()
 	if len(options) > 0 {
 		o = options[0]
-	}
-
-	o.Callback = func(r types.Resource) error {
-		//fmt.Printf("Process %s.%s.%s\n", r.Info().Module, r.Info().Type, r.Info().Name)
-		return nil
 	}
 
 	p := NewParser(o)
@@ -616,4 +612,67 @@ func TestSetContextVariableFromPath(t *testing.T) {
 	require.True(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bar"].True())
 	require.Equal(t, "Hello World", ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bear"].AsString())
 	require.Equal(t, "Meh", ctx.Variables["resource"].AsValueMap()["poo"].AsString())
+}
+
+func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o := DefaultOptions()
+	calls := []string{}
+	o.Callback = func(r types.Resource) error {
+		calls = append(calls, ResourceFQDN{
+			Module:   r.Info().Module,
+			Resource: r.Info().Name,
+			Type:     r.Info().Type,
+		}.String())
+
+		return nil
+	}
+
+	c, p := setupParser(t, o)
+
+	c, err = p.ParseDirectory(absoluteFolderPath, c)
+	require.NoError(t, err)
+
+	// check the order, should be ...
+	// resource.container.base
+	// -- resource.module.consul_1
+	// -- -- module.consul_1.resource.network.onprem
+	// -- -- -- module.consul_1.resource.container.consul
+	// -- -- -- -- module.consul_1.resource.output.container_name
+	// -- -- -- -- module.consul_1.resource.output.container_resources_cpu
+	// -- -- -- -- -- resource.output.module_1_container_resources_cpu
+	// resource.module.consul_2
+	// -- module.consul_2.resource.network.onprem
+	// -- -- module.consul_2.resource.container.consul
+	// -- -- -- module.consul_2.resource.output.container_name
+	// -- -- -- module.consul_2.resource.output.container_resources_cpu
+	// -- -- -- -- resource.output.module_2_container_resources_cpu
+
+	requireBefore(t, "resource.container.base", "resource.module.consul_1", calls)
+	requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
+	requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
+	requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
+	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
+}
+
+func requireBefore(t *testing.T, first, second string, list []string) {
+	// get the positions
+	pos1 := -1
+	pos2 := -1
+
+	for i, el := range list {
+		if first == el {
+			pos1 = i
+		}
+
+		if second == el {
+			pos2 = i
+		}
+	}
+
+	require.Greater(t, pos2, pos1, fmt.Sprintf("expected %s to be created before %s. calls: %v", first, second, list))
 }

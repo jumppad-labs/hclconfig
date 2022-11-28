@@ -1,6 +1,7 @@
 package hclconfig
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -32,7 +33,7 @@ func setupMockGetter(t *testing.T, err error) (Getter, *[]getterCall) {
 	return g, calls
 }
 
-func TestDoesNothingWhenFolderExistsAndIgnoreCacheFalse(t *testing.T) {
+func TestGetterDoesNothingWhenFolderExistsAndIgnoreCacheFalse(t *testing.T) {
 	dest := t.TempDir()
 	downloadPath := path.Join(dest, "github.com_test")
 	os.MkdirAll(downloadPath, os.ModePerm)
@@ -45,7 +46,7 @@ func TestDoesNothingWhenFolderExistsAndIgnoreCacheFalse(t *testing.T) {
 	require.Len(t, *calls, 0)
 }
 
-func TestCallsGetWhenFolderExistsAndIgnoreCacheTrue(t *testing.T) {
+func TestGetterCallsGetWhenFolderExistsAndIgnoreCacheTrue(t *testing.T) {
 	dest := t.TempDir()
 
 	g, calls := setupMockGetter(t, nil)
@@ -56,7 +57,7 @@ func TestCallsGetWhenFolderExistsAndIgnoreCacheTrue(t *testing.T) {
 	require.Len(t, *calls, 1)
 }
 
-func TestCallsGetWithURLEncodedOutputFolder(t *testing.T) {
+func TestGetterCallsGetWithURLEncodedOutputFolder(t *testing.T) {
 	g, calls := setupMockGetter(t, nil)
 
 	_, err := g.Get("github.com/shipyard-run/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", "/mycache", false)
@@ -65,4 +66,43 @@ func TestCallsGetWithURLEncodedOutputFolder(t *testing.T) {
 	require.Len(t, *calls, 1)
 
 	require.Equal(t, "/mycache/github.com_shipyard-run_hclconfig_ref=7271da1cd14778d3762304954d7061cc753da204", (*calls)[0].dest)
+}
+
+func TestGetterReturnsFullDownloadPath(t *testing.T) {
+	dest := t.TempDir()
+	downloadPath := path.Join(dest, "github.com_test")
+
+	g, calls := setupMockGetter(t, nil)
+
+	path, err := g.Get("github.com/test", dest, true)
+	require.NoError(t, err)
+
+	require.Len(t, *calls, 1)
+
+	require.Equal(t, downloadPath, path)
+}
+
+func TestGetterReturnsErrorWhenUnableToDownload(t *testing.T) {
+	dest := t.TempDir()
+
+	g, calls := setupMockGetter(t, fmt.Errorf("unable to download"))
+
+	_, err := g.Get("github.com/test", dest, true)
+	require.Error(t, err)
+	require.Len(t, *calls, 1)
+}
+
+func TestGetterFunctionalTest(t *testing.T) {
+	dest := t.TempDir()
+
+	if os.Getenv("ACC_TEST") != "1" {
+		return
+	}
+
+	g := NewGoGetter()
+	download, err := g.Get("github.com/shipyard-run/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", dest, false)
+	require.NoError(t, err)
+
+	require.DirExists(t, download)
+	require.FileExists(t, path.Join(download, "README.md"))
 }
