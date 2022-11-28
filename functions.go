@@ -1,13 +1,73 @@
 package hclconfig
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
+
+func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
+	// get the parameters
+	params := []function.Parameter{}
+
+	rf := reflect.TypeOf(f)
+	for i := 0; i < rf.NumIn(); i++ {
+		fp := rf.In(i)
+
+		switch fp.Kind() {
+		case reflect.String:
+			params = append(params, function.Parameter{
+				Name:             fp.Name(),
+				Type:             cty.String,
+				AllowDynamicType: true,
+			})
+		case reflect.Int16:
+			fallthrough
+		case reflect.Int32:
+			fallthrough
+		case reflect.Int64:
+			fallthrough
+		case reflect.Int:
+			params = append(params, function.Parameter{
+				Name:             fp.Name(),
+				Type:             cty.Number,
+				AllowDynamicType: true,
+			})
+		default:
+			return function.Function{}, fmt.Errorf("type %v is not a valid cyt type, only primative types like string and basic numbers are supported", fp.Kind())
+		}
+	}
+
+	var outType function.TypeFunc
+	outParam := rf.Out(0)
+	switch outParam.Kind() {
+	case reflect.String:
+		outType = function.StaticReturnType(cty.String)
+	case reflect.Int16:
+		fallthrough
+	case reflect.Int32:
+		fallthrough
+	case reflect.Int64:
+		fallthrough
+	case reflect.Int:
+		outType = function.StaticReturnType(cty.Number)
+	default:
+		return function.Function{}, fmt.Errorf("type %v is not a valid cyt type, only primative types like string and basic numbers are supported", rf.Out(0).Kind())
+	}
+
+	return function.New(&function.Spec{
+		Params: params,
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			return cty.NullVal(retType), nil
+		},
+		Type: outType,
+	}), nil
+}
 
 func getDefaultFunctions(filePath string) map[string]function.Function {
 	var EnvFunc = function.New(&function.Spec{
