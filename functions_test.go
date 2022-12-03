@@ -51,11 +51,18 @@ func TestCreateFunctionWithInvalidOutParameterReturnsError(t *testing.T) {
 
 	_, err := createCtyFunctionFromGoFunc(myfunc)
 	require.Error(t, err)
+
+	myfunc2 := func(a string, b int) int {
+		return 1
+	}
+
+	_, err = createCtyFunctionFromGoFunc(myfunc2)
+	require.Error(t, err)
 }
 
 func TestCreateFunctionCallsFunction(t *testing.T) {
-	myfunc := func(a, b int) int {
-		return a + b
+	myfunc := func(a, b int) (int, error) {
+		return a + b, nil
 	}
 
 	ctyFunc, err := createCtyFunctionFromGoFunc(myfunc)
@@ -66,5 +73,40 @@ func TestCreateFunctionCallsFunction(t *testing.T) {
 
 	bf := val.AsBigFloat()
 	i, _ := bf.Int64()
-	require.Equal(t, 5, i)
+	require.Equal(t, int64(5), i)
+}
+
+func TestCreateFunctionHandlesInputParams(t *testing.T) {
+	type testCase struct {
+		name string
+		f    interface{}
+	}
+
+	cases := []testCase{
+		{
+			name: "integer input parameters",
+			f: func(a, b int) (int, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "int16 input parameters",
+			f: func(a, b int16) (int16, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "int32 input parameters",
+			f: func(a, b int32) (int32, error) {
+				return a + b, nil
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := createCtyFunctionFromGoFunc(c.f)
+			require.NoError(t, err)
+		})
+	}
 }
