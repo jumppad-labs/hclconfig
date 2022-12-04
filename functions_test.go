@@ -9,8 +9,8 @@ import (
 )
 
 func TestCreateFunctionCreatesFunctionWithCorrectInParameters(t *testing.T) {
-	myfunc := func(a string, b int) int {
-		return 0
+	myfunc := func(a string, b int) (int, error) {
+		return 0, nil
 	}
 
 	ctyFunc, err := createCtyFunctionFromGoFunc(myfunc)
@@ -21,8 +21,8 @@ func TestCreateFunctionCreatesFunctionWithCorrectInParameters(t *testing.T) {
 }
 
 func TestCreateFunctionWithInvalidInParameterReturnsError(t *testing.T) {
-	myfunc := func(a string, complex func() error) int {
-		return 0
+	myfunc := func(a string, complex func() error) (int, error) {
+		return 0, nil
 	}
 
 	_, err := createCtyFunctionFromGoFunc(myfunc)
@@ -30,8 +30,8 @@ func TestCreateFunctionWithInvalidInParameterReturnsError(t *testing.T) {
 }
 
 func TestCreateFunctionCreatesFunctionWithCorrectOutParameters(t *testing.T) {
-	myfunc := func(a string, b int) int {
-		return 0
+	myfunc := func(a string, b int) (int, error) {
+		return 0, nil
 	}
 
 	ctyFunc, err := createCtyFunctionFromGoFunc(myfunc)
@@ -98,6 +98,54 @@ func TestCreateFunctionHandlesInputParams(t *testing.T) {
 		{
 			name: "int32 input parameters",
 			f: func(a, b int32) (int32, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "int64 input parameters",
+			f: func(a, b int64) (int64, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint input parameters",
+			f: func(a, b uint) (uint, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint16 input parameters",
+			f: func(a, b uint16) (uint16, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint32 input parameters",
+			f: func(a, b uint32) (uint32, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint64 input parameters",
+			f: func(a, b uint64) (uint64, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "float32 input parameters",
+			f: func(a, b float32) (float32, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "float64 input parameters",
+			f: func(a, b float64) (float64, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "string input parameters",
+			f: func(a, b string) (string, error) {
 				return a + b, nil
 			},
 		},
