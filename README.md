@@ -15,65 +15,52 @@ the HashiCorp HCL2 library.
 Resources to be parsed are defined as Go structs that implement the Resource interface and annoted with the `hcl` tag
 
 ```go
-const TypeContainer types.ResourceType = "container"
+// Config defines the type `config`
+type Config struct {
+	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
+	// add the methods from the `Resource` interface
+	types.ResourceMetadata `hcl:",remain"`
 
-type Container struct {
-	// embedded type holding name, etc
-	types.ResourceInfo `hcl:",remain" mapstructure:",squash"`
+	ID string `hcl:"id"`
 
-	Networks []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"` // Attach to the correct network // only when Image is specified
-	
-  CPU string `hcl:"cpu" json:"cpu"`
+	DBConnectionString string `hcl:"db_connection_string"`
+
+	// Fields that are of `struct` type must be marked using the `block`
+	// parameter in the tags. To make a `block` Field, types marked as block must be
+	// a reference i.e. *Timeouts
+	Timeouts *Timeouts `hcl:"timeouts,block"`
 }
 
-// New creates a new Nomad job config resource, implements Resource New method
-func (c *Container) New(name string) types.Resource {
-	return &Container{ResourceInfo: types.ResourceInfo{Name: name, Type: TypeContainer, Status: types.PendingCreation}}
+func (t *Config) Process() error {
+	// override default values
+	if t.Timeouts.TLSHandshake == 0 {
+		t.Timeouts.TLSHandshake = 5
+	}
+
+	return nil
 }
 
-// Info returns the resource info implements the Resource Info method
-func (c *Container) Info() *types.ResourceInfo {
-	return &c.ResourceInfo
+// PostgreSQL defines the Resource `postgres`
+type PostgreSQL struct {
+	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
+	// add the methods from the `Resource` interface
+	types.ResourceMetadata `hcl:",remain"`
+
+	Location string `hcl:"location"`
+	Port     int    `hcl:"port"`
+	DBName   string `hcl:"name"`
+	Username string `hcl:"username"`
+	Password string `hcl:"password"`
+
+	// ConnectionString is a computed field and must be marked optional
+	ConnectionString string `hcl:"connection_string,optional"`
 }
 
-// Called when the resource is parsed from a file
-func (c Container) Parse(file string) error {
-  return nil
-}
-
-// Called when the DAG processes the resource
-func (n *Network) Process(file string) error {
-  return nil
-}
-
-// TypeNetwork is the string resource type for Network resources
-const TypeNetwork types.ResourceType = "network"
-
-// Network defines a Docker network
-type Network struct {
-	types.ResourceInfo `hcl:",remain" mapstructure:",squash"`
-
-	Subnet string `hcl:"subnet" json:"subnet"`
-}
-
-// New creates a new Nomad job config resource, implements Resource New method
-func (n *Network) New(name string) types.Resource {
-	return &Network{ResourceInfo: types.ResourceInfo{Name: name, Type: TypeNetwork, Status: types.PendingCreation}}
-}
-
-// Info returns the resource info implements the Resource Info method
-func (n *Network) Info() *types.ResourceInfo {
-	return &n.ResourceInfo
-}
-
-// Called when the resources is parsed
-func (n *Network) Parse(file string) error {
-  return nil
-}
-
-// Called when the DAG processes the resource
-func (n *Network) Process(file string) error {
-  return nil
+// Process is called using an order calculated from the dependency graph
+// this is where you can set any computed fields
+func (t *PostgreSQL) Process() error {
+	t.ConnectionString = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", t.Username, t.Password, t.Location, t.Port, t.DBName)
+	return nil
 }
 ```
 
@@ -85,28 +72,59 @@ p.RegisterType("container", &structs.Container{})
 p.RegisterType("network", &structs.Network{})
 ```
 
-To process the following HCL configuration:
+The following configuration reflects the previously defined structs. `config` refers to `postgres` through the link
+`resource.postgres.mydb.connection_string`. The parser understands these links and will process `postgres` first allowing
+you to set any calculated fields in the `Process` callback.  `config` also leverages a custom function `random_number`,
+custom functions allow you to set values at parse time using go functions.
 
 ```javascript
-variable "cpu_resources" {
-  default = 2048
+variable "db_username" {
+  default = "admin"
 }
 
-network "onprem" {
-  subnet = "10.6.0.0/16"
+variable "db_password" {
+  default = "admin"
 }
 
-container "base" {
-  network {
-    name       = resources.network.onprem.name
-    ip_address = "10.6.0.200"
+config "myapp" {
+  // Custom functions can be created to enable functionality like generating random numbers
+  id = "myapp_${random_number()}"
+
+  // resource.postgres.mydb.connection_string will be available after the `Process` has
+  // been called on the `postgres` resource. HCLConfig understands dependency and will
+  // call Process in a strict order
+  db_connection_string = resource.postgres.mydb.connection_string
+
+  timeouts {
+    connection = 10
+    keep_alive = 60
+    // optional parameter tls_handshake not specified
+    // TLSHandshake = 10
   }
+}
 
-  cpu = var.cpu_resources
+postgres "mydb" {
+  location = "localhost"
+  port = 5432
+  name = "mydatabase"
+
+  // Varaibles can be used to set values, the default values for these variables will be overidden
+  // by values set by the environment variables HCL_db_username and HCL_db_password
+  username = var.db_username
+  password = var.db_password
 }
 ```
 
-You only need to call the following methods:
+To process the above config, first you need to register the custom `random_number` function.
+
+```go
+// register a custom function
+p.RegisterFunction("random_number", func() (int, error) {
+	return rand.Intn(100), nil
+})
+```
+
+Then you can create the config and parse the file. 
 
 ```go
 // create a config, all processed resources are encapuslated by config
@@ -133,17 +151,17 @@ You can then access the properties from your types by retrieving them from the r
 
 ```go
 // find a resource based on it's type and name
-r, err := c.FindResource("container.base")
+r, err := c.FindResource("config.myapp")
 
 // cast it back to the original type and access the paramters
-cont := r.(*Container)
-fmt.Println("cpu", cont.CPU) // 2048
-fmt.Println("network name", cont.Networks[0].Name) // onprem
+c := r.(*Config)
+fmt.Println("id", c.ID) // = myapp_81, where 81 is a random number between 0 and 100
+fmt.Println("db_connection_string", c.db_connection_string) // = postgresql://admin:admin@localhost:5432/mydatabase
 ```
 
 ## TODO
 [x] Basic parsing   
 [x] Variables  
 [x] Resource links and lazy evaluation   
-[ ] Enable custom interpolation functions   
-[ ] Modules   
+[x] Enable custom interpolation functions   
+[x] Modules   
