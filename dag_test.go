@@ -21,7 +21,7 @@ func setupGraphConfig(t *testing.T) *Config {
 	p.RegisterType("network", &structs.Network{})
 	p.RegisterType("template", &structs.Template{})
 
-	c, err = p.ParseFile(absoluteFolderPath, c)
+	err = p.ParseFile(absoluteFolderPath, c)
 	require.NoError(t, err)
 
 	return c

@@ -20,7 +20,7 @@ import (
 // https://www.youtube.com/watch?v=ZXILzUpVx7A&t=0s
 func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	// create root node
-	root := (&types.Module{}).New("root")
+	root, _ := types.DefaultTypes().CreateResource(types.TypeModule, "root")
 
 	graph := &dag.AcyclicGraph{}
 	graph.Add(root)
@@ -37,14 +37,14 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		// add links to dependencies
 		// this is here for now as we might need to process these two
 		// lists separately
-		for _, v := range resource.Info().ResouceLinks {
-			resource.Info().DependsOn = append(resource.Info().DependsOn, v)
+		for _, v := range resource.Metadata().ResourceLinks {
+			resource.Metadata().DependsOn = append(resource.Metadata().DependsOn, v)
 		}
 
-		for _, d := range resource.Info().DependsOn {
-
+		// use a map to keep a unique list
+		dependencies := map[types.Resource]bool{}
+		for _, d := range resource.Metadata().DependsOn {
 			var err error
-			dependencies := []types.Resource{}
 			fqdn, err := ParseFQDN(d)
 			if err != nil {
 				return nil, fmt.Errorf("invalid dependency: %s, error: %s", d, err)
@@ -53,32 +53,34 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			// only search for module dependencies when has a module path and
 			// is not a resource or output
 			if fqdn.Module != "" && fqdn.Resource == "" {
-				deps, err := c.FindRelativeModuleResources(fqdn.Module, resource.Info().Module, true)
+				deps, err := c.FindRelativeModuleResources(fqdn.Module, resource.Metadata().Module, true)
 				if err != nil {
 					return nil, fmt.Errorf("unable to find module resource, module: %s, error: %s", fqdn.Module, err)
 				}
 
-				dependencies = append(dependencies, deps...)
+				for _, d := range deps {
+					dependencies[d] = true
+				}
 			}
 
 			if fqdn.Resource != "" {
-				dep, err := c.FindRelativeResource(d, resource.Info().Module)
+				dep, err := c.FindRelativeResource(d, resource.Metadata().Module)
 				if err != nil {
-					return nil, fmt.Errorf("unable to find resource from parent module: '%s, error: %s", resource.Info().Module, err)
+					return nil, fmt.Errorf("unable to find resource from parent module: '%s, error: %s", resource.Metadata().Module, err)
 				}
 
-				dependencies = append(dependencies, dep)
-			}
-
-			for _, d := range dependencies {
-				hasDeps = true
-				graph.Connect(dag.BasicEdge(d, resource))
+				dependencies[dep] = true
 			}
 		}
 
+		for d := range dependencies {
+			hasDeps = true
+			graph.Connect(dag.BasicEdge(d, resource))
+		}
+
 		// if this resource is part of a module make it depend on that module
-		if resource.Info().Module != "" {
-			parts := strings.Split(resource.Info().Module, ".")
+		if resource.Metadata().Module != "" {
+			parts := strings.Split(resource.Metadata().Module, ".")
 			myModule := parts[(len(parts) - 1)]
 			parentModule := parts[:len(parts)-1]
 
@@ -106,13 +108,14 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	return graph, nil
 }
 
-// ParseCallback is called with the resource when the graph processes that particular node
-type ParseCallback func(r types.Resource) error
+// ProcessCallback is called with the resource when the graph processes that particular node
+type ProcessCallback func(r types.Resource) error
 
 // Until parse is called the HCL configuration is not deserialized into
 // the structs. We have to do this using a graph as some inputs depend on
 // outputs from other resrouces, therefore we need to process this is strict order
-func (c *Config) process(wf ParseCallback) error {
+func (c *Config) process(wf ProcessCallback) error {
+	// build the graph
 	d, err := doYaLikeDAGs(c)
 	if err != nil {
 		return fmt.Errorf("unable to create graph: %s", err)
@@ -121,6 +124,7 @@ func (c *Config) process(wf ParseCallback) error {
 	// reduce the graph nodes to unique instances
 	d.TransitiveReduction()
 
+	// validate the dependency graph is ok
 	err = d.Validate()
 	if err != nil {
 		return fmt.Errorf("Unable to validate dependency graph: %w", err)
@@ -128,26 +132,56 @@ func (c *Config) process(wf ParseCallback) error {
 
 	// define the walker callback that will be called for every node in the graph
 	w := dag.Walker{}
-	w.Callback = func(v dag.Vertex) (diags tfdiags.Diagnostics) {
+	w.Callback = c.createCallback(wf)
+
+	// update the dag and process the nodes
+	log.SetOutput(ioutil.Discard)
+
+	w.Update(d)
+	diags := w.Wait()
+	if diags.HasErrors() {
+		err := diags.Err()
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tfdiags.Diagnostics) {
+	return func(v dag.Vertex) (diags tfdiags.Diagnostics) {
 
 		r, ok := v.(types.Resource)
-
 		// not a resource skip, this should never happen
 		if !ok {
 			panic("an item has been added to the graph that is not a resource")
 		}
 
+		// if this is the root module skip
+		if r.Metadata().Name == "root" && r.Metadata().Module == "" && r.Metadata().Type == types.TypeModule {
+			return nil
+		}
+
+		bdy, err := c.getBody(r)
+		if err != nil {
+			panic("no body found for resource")
+		}
+
+		ctx, err := c.getContext(r)
+		if err != nil {
+			panic("no context found for resource")
+		}
+
 		// attempt to set the values in the resource links to the resource attribute
 		// all linked values should now have been processed as the graph
 		// will have handled them first
-		for _, v := range r.Info().ResouceLinks {
+		for _, v := range r.Metadata().ResourceLinks {
 			fqdn, err := ParseFQDN(v)
 			if err != nil {
 				return diags.Append(fmt.Errorf("error parsing resource link error:%s", err))
 			}
 
 			// get the value from the linked resource
-			l, err := c.FindRelativeResource(v, r.Info().Module)
+			l, err := c.FindRelativeResource(v, r.Metadata().Module)
 			if err != nil {
 				return diags.Append(fmt.Errorf("unable to find dependent resource %s, %s\n", v, err))
 			}
@@ -159,7 +193,7 @@ func (c *Config) process(wf ParseCallback) error {
 
 			// did we find the type if not check the meta properties
 			if paramType == "" {
-				paramType = findTypeFromInterface(fqdn.Attribute, l.Info())
+				paramType = findTypeFromInterface(fqdn.Attribute, l.Metadata())
 				if paramType == "" {
 					return diags.Append(fmt.Errorf("type not found %v\n", fqdn.Attribute))
 				}
@@ -171,7 +205,7 @@ func (c *Config) process(wf ParseCallback) error {
 
 			// the property might be one of the meta properties check the resource info
 			if err != nil {
-				src, err = lookup.LookupI(l.Info(), path, []string{"hcl", "json"})
+				src, err = lookup.LookupI(l.Metadata(), path, []string{"hcl", "json"})
 
 				// still not found return an error
 				if err != nil {
@@ -208,26 +242,31 @@ func (c *Config) process(wf ParseCallback) error {
 				return diags.Append(fmt.Errorf("unable to link resource %s as it references an unsupported type %s", v, paramType))
 			}
 
-			setContextVariableFromPath(r.Info().Context, v, val)
+			setContextVariableFromPath(ctx, v, val)
 		}
 
 		// Process the raw resouce now we have the context from the linked
 		// resources
-		if r.Info().Body != nil {
-			ul := getContextLock(r.Info().Context)
-			defer ul()
+		ul := getContextLock(ctx)
+		defer ul()
 
-			diag := gohcl.DecodeBody(r.Info().Body, r.Info().Context, r)
-			if diag.HasErrors() {
-				return diags.Append(fmt.Errorf(diag.Error()))
+		diag := gohcl.DecodeBody(bdy, ctx, r)
+		if diag.HasErrors() {
+			return appendDiagnostic(diags, diag)
+		}
+
+		// if the config implements the processable interface call the resource process method
+		if p, ok := r.(types.Processable); ok {
+			err := p.Process()
+			if err != nil {
+				fqdn := &ResourceFQDN{Module: r.Metadata().Module, Type: r.Metadata().Type, Resource: r.Metadata().Name}
+				return diags.Append(fmt.Errorf("error calling process for resource: %s, %s", fqdn, err))
 			}
 		}
-
-		// call the resource process method
-		err := r.Process()
-		if err != nil {
-			return diags.Append(fmt.Errorf("error calling process for resource: %s", err))
-		}
+		//err := r.Process()
+		//if err != nil {
+		//	return diags.Append(fmt.Errorf("error calling process for resource: %s", err))
+		//}
 
 		// call the callbacks
 		if wf != nil {
@@ -239,12 +278,12 @@ func (c *Config) process(wf ParseCallback) error {
 
 		// if the type is a module we need to add the variables to the
 		// context
-		if r.Info().Type == types.TypeModule {
+		if r.Metadata().Type == types.TypeModule {
 			mod := r.(*types.Module)
 
 			var mapVars map[string]cty.Value
 			if att, ok := mod.Variables.(*hcl.Attribute); ok {
-				val, _ := att.Expr.Value(mod.Context)
+				val, _ := att.Expr.Value(ctx)
 				mapVars = val.AsValueMap()
 
 				for k, v := range mapVars {
@@ -255,15 +294,12 @@ func (c *Config) process(wf ParseCallback) error {
 
 		return nil
 	}
+}
 
-	// update the dag and process the nodes
-	log.SetOutput(ioutil.Discard)
-
-	w.Update(d)
-	tf := w.Wait()
-	if tf.Err() != nil {
-		return tf.Err()
+func appendDiagnostic(tf tfdiags.Diagnostics, diags hcl.Diagnostics) tfdiags.Diagnostics {
+	for _, d := range diags {
+		tf = tf.Append(d)
 	}
 
-	return nil
+	return tf
 }

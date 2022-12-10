@@ -18,7 +18,7 @@ type Timeouts struct {
 type Config struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceInfo `hcl:",remain"`
+	types.ResourceMetadata `hcl:",remain"`
 
 	ID string `hcl:"id"`
 
@@ -28,20 +28,6 @@ type Config struct {
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
 	Timeouts *Timeouts `hcl:"timeouts,block"`
-}
-
-// New creates a new Config config resource, implements Resource New method
-func (t *Config) New(name string) types.Resource {
-	return &Config{ResourceInfo: types.ResourceInfo{Name: name, Type: types.ResourceType("config"), Status: types.PendingCreation}}
-}
-
-// Info returns the resource info implements the Resource Info method
-func (t *Config) Info() *types.ResourceInfo {
-	return &t.ResourceInfo
-}
-
-func (t *Config) Parse(file string) error {
-	return nil
 }
 
 func (t *Config) Process() error {
@@ -58,7 +44,7 @@ func (t *Config) Process() error {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceInfo `hcl:",remain"`
+	types.ResourceMetadata `hcl:",remain"`
 
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`
@@ -68,20 +54,6 @@ type PostgreSQL struct {
 
 	// ConnectionString is a computed field and must be marked optional
 	ConnectionString string `hcl:"connection_string,optional"`
-}
-
-// New creates a new Config config resource, implements Resource New method
-func (t *PostgreSQL) New(name string) types.Resource {
-	return &PostgreSQL{ResourceInfo: types.ResourceInfo{Name: name, Type: types.ResourceType("postgres"), Status: types.PendingCreation}}
-}
-
-// Info returns the resource info implements the Resource Info method
-func (t *PostgreSQL) Info() *types.ResourceInfo {
-	return &t.ResourceInfo
-}
-
-func (t *PostgreSQL) Parse(file string) error {
-	return nil
 }
 
 // Process is called using an order calculated from the dependency graph

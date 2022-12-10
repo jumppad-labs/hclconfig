@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 
 	"github.com/shipyard-run/hclconfig"
-	"github.com/shipyard-run/hclconfig/types"
 )
 
 func main() {
@@ -20,10 +20,14 @@ func main() {
 	p.RegisterType("config", &Config{})
 	p.RegisterType("postgres", &PostgreSQL{})
 
+	// register a custom function
+	p.RegisterFunction("random_number", func() (int, error) {
+		return rand.Intn(100), nil
+	})
+
 	c := hclconfig.NewConfig()
 
-	var err error
-	_, err = p.ParseFile("./config.hcl", c)
+	err := p.ParseFile("./config.hcl", c)
 	if err != nil {
 		fmt.Printf("An error occurred processing the config: %s", err)
 		os.Exit(1)
@@ -35,10 +39,10 @@ func main() {
 
 func printConfig(c *hclconfig.Config) {
 	for _, r := range c.Resources {
-		switch r.Info().Type {
-		case types.ResourceType("config"):
+		switch r.Metadata().Type {
+		case "config":
 			t := r.(*Config)
-			fmt.Printf("Config %s\n", t.Info().Name)
+			fmt.Printf("Config %s\n", t.Name)
 			fmt.Printf("--- ID: %s\n", t.ID)
 			fmt.Printf("--- DBConnectionString: %s\n", t.DBConnectionString)
 			fmt.Printf("--- Timeouts\n")
@@ -46,9 +50,9 @@ func printConfig(c *hclconfig.Config) {
 			fmt.Printf("------ KeepAlive: %d\n", t.Timeouts.KeepAlive)
 			fmt.Printf("------ TLSHandshake: %d\n", t.Timeouts.TLSHandshake)
 
-		case types.ResourceType("postgres"):
+		case "postgres":
 			t := r.(*PostgreSQL)
-			fmt.Printf("Postgres %s\n", t.Info().Name)
+			fmt.Printf("Postgres %s\n", t.Name)
 			fmt.Printf("--- Location: %s\n", t.Location)
 			fmt.Printf("--- Port: %d\n", t.Port)
 			fmt.Printf("--- DBName: %s\n", t.DBName)

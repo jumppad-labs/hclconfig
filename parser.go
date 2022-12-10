@@ -39,7 +39,7 @@ type ParserOptions struct {
 	VariablesFiles    []string
 	VariableEnvPrefix string
 	ModuleCache       string
-	Callback          ParseCallback
+	Callback          ProcessCallback
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -63,9 +63,10 @@ func DefaultOptions() *ParserOptions {
 
 // Parser can parse HCL configuration files
 type Parser struct {
-	options         ParserOptions
-	registeredTypes types.RegisteredTypes
-	config          *Config
+	options             ParserOptions
+	registeredTypes     types.RegisteredTypes
+	registeredFunctions map[string]function.Function
+	config              *Config
 }
 
 // NewParser creates a new parser with the given options
@@ -76,7 +77,7 @@ func NewParser(options *ParserOptions) *Parser {
 		o = DefaultOptions()
 	}
 
-	return &Parser{options: *o, registeredTypes: types.DefaultTypes()}
+	return &Parser{options: *o, registeredTypes: types.DefaultTypes(), registeredFunctions: map[string]function.Function{}}
 }
 
 // RegisterType type registers a struct that implements Resource with the given name
@@ -85,40 +86,45 @@ func (p *Parser) RegisterType(name string, resource types.Resource) {
 	p.registeredTypes[name] = resource
 }
 
-func (p *Parser) ParseFile(file string, c *Config) (*Config, error) {
-	rootContext = buildContext(file)
+// RegisterFunction type registers a custom interpolation function
+// with the given name
+// the parser uses this list to convert hcl defined resources into concrete types
+func (p *Parser) RegisterFunction(name string, f interface{}) error {
+	ctyFunc, err := createCtyFunctionFromGoFunc(f)
+	if err != nil {
+		return nil
+	}
+
+	p.registeredFunctions[name] = ctyFunc
+
+	return nil
+}
+
+func (p *Parser) ParseFile(file string, c *Config) error {
+	rootContext = buildContext(file, p.registeredFunctions)
 
 	err := p.parseFile(rootContext, file, c, p.options.Variables, p.options.VariablesFiles)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// process the files and resolve dependency
-	c.process(p.options.Callback)
-
-	// should return a copy of Config appended with new resources not a mutated version
-	// of the original
-	return c, nil
+	return c.process(p.options.Callback)
 }
 
 // ParseDirectory parses all resource and variable files in the given directory
 // note: this method does not recurse into sub folders
-func (p *Parser) ParseDirectory(dir string, c *Config) (*Config, error) {
+func (p *Parser) ParseDirectory(dir string, c *Config) error {
 	p.config = c
-	rootContext = buildContext(dir)
+	rootContext = buildContext(dir, p.registeredFunctions)
 
 	c, err := p.parseDirectory(rootContext, dir, c)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// process the files and resolve dependency
-	err = c.process(p.options.Callback)
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return c.process(p.options.Callback)
 }
 
 // internal method
@@ -272,8 +278,9 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	for _, b := range body.Blocks {
 		switch b.Type {
-		case string(types.TypeVariable):
-			v := (&types.Variable{}).New(b.Labels[0]).(*types.Variable)
+		case types.TypeVariable:
+			r, _ := p.registeredTypes.CreateResource(types.TypeVariable, b.Labels[0])
+			v := r.(*types.Variable)
 
 			err := decodeBody(ctx, file, b, v)
 			if err != nil {
@@ -316,7 +323,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 		// create the registered type if not a variable or output
 		// variables and outputs are processed in a separate run
-		switch types.ResourceType(b.Type) {
+		switch b.Type {
 		case types.TypeVariable:
 			continue
 		case types.TypeModule:
@@ -338,8 +345,8 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), name)
 
-	rt.Info().Module = moduleName
-	rt.Info().DependsOn = dependsOn
+	rt.Metadata().Module = moduleName
+	rt.Metadata().DependsOn = dependsOn
 
 	err := decodeBody(ctx, file, b, rt)
 	if err != nil {
@@ -367,7 +374,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	moduleConfig := NewConfig()
 
 	// modules should have their own context so that variables are not globally scoped
-	subContext := buildContext(moduleSrc)
+	subContext := buildContext(moduleSrc, p.registeredFunctions)
 
 	_, err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
 	if err != nil {
@@ -377,13 +384,25 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	rt.(*types.Module).SubContext = subContext
 
 	// add the module
-	c.AddResource(rt)
+	c.addResource(rt, ctx, b.Body)
 
 	// we need to add the module name to all the returned resources
 	for _, r := range moduleConfig.Resources {
-		r.Info().Module = fmt.Sprintf("%s.%s", name, r.Info().Module)
-		r.Info().Module = strings.TrimSuffix(r.Info().Module, ".")
-		c.AddResource(r)
+		// ensure the module name has the parent appended to it
+		r.Metadata().Module = fmt.Sprintf("%s.%s", name, r.Metadata().Module)
+		r.Metadata().Module = strings.TrimSuffix(r.Metadata().Module, ".")
+
+		ctx, err := moduleConfig.getContext(r)
+		if err != nil {
+			panic("no body found for resource")
+		}
+
+		bdy, err := moduleConfig.getBody(r)
+		if err != nil {
+			panic("no body found for resource")
+		}
+
+		c.addResource(r, ctx, bdy)
 	}
 
 	return nil
@@ -395,8 +414,8 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 		return fmt.Errorf("error in file '%s': unable to create resource '%s' %s", file, b.Type, err)
 	}
 
-	rt.Info().Module = moduleName
-	rt.Info().DependsOn = dependsOn
+	rt.Metadata().Module = moduleName
+	rt.Metadata().DependsOn = dependsOn
 
 	err = decodeBody(ctx, file, b, rt)
 	if err != nil {
@@ -405,7 +424,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 
 	setDisabled(rt, disabled)
 
-	err = c.AddResource(rt)
+	err = c.addResource(rt, ctx, b.Body)
 	if err != nil {
 		return fmt.Errorf(
 			"Unable to add resource %s.%s in file %s: %s",
@@ -481,7 +500,7 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 	return root
 }
 
-func buildContext(filePath string) *hcl.EvalContext {
+func buildContext(filePath string, customFunctions map[string]function.Function) *hcl.EvalContext {
 	ctx := &hcl.EvalContext{
 		Functions: map[string]function.Function{},
 		Variables: map[string]cty.Value{},
@@ -492,11 +511,16 @@ func buildContext(filePath string) *hcl.EvalContext {
 
 	ctx.Functions = getDefaultFunctions(filePath)
 
+	// add the custom functions
+	for k, v := range customFunctions {
+		ctx.Functions[k] = v
+	}
+
 	return ctx
 }
 
 func copyContext(path string, ctx *hcl.EvalContext) *hcl.EvalContext {
-	newCtx := buildContext(path)
+	newCtx := buildContext(path, ctx.Functions)
 	newCtx.Variables = ctx.Variables
 
 	return newCtx
@@ -535,9 +559,7 @@ func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interfa
 
 	// set the dependent resources
 	res := p.(types.Resource)
-	res.Info().ResouceLinks = uniqueResources
-	res.Info().Context = ctx
-	res.Info().Body = b.Body
+	res.Metadata().ResourceLinks = uniqueResources
 
 	return nil
 }
@@ -740,12 +762,12 @@ func ensureAbsolute(path, file string) string {
 // parent is disabled
 func setDisabled(r types.Resource, parentDisabled bool) {
 	if parentDisabled {
-		r.Info().Disabled = true
+		r.Metadata().Disabled = true
 	}
 
 	// when the resource is disabled set the status
 	// so the engine will not create or delete it
-	if r.Info().Disabled {
-		r.Info().Status = "disabled"
+	if r.Metadata().Disabled {
+		r.Metadata().Status = "disabled"
 	}
 }

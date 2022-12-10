@@ -2,16 +2,15 @@ package structs
 
 import (
 	"github.com/shipyard-run/hclconfig/types"
-	"github.com/zclconf/go-cty/cty"
 )
 
 // TypeContainer is the resource string for a Container resource
-const TypeContainer types.ResourceType = "container"
+const TypeContainer = "container"
 
 // Container defines a structure for creating Docker containers
 type Container struct {
 	// embedded type holding name, etc
-	types.ResourceInfo `hcl:",remain" mapstructure:",squash"`
+	types.ResourceMetadata `hcl:",remain"`
 
 	Depends []string `hcl:"depends_on,optional" json:"depends,omitempty"`
 
@@ -34,17 +33,6 @@ type Container struct {
 	// User block for mapping the user id and group id inside the container
 	RunAs *User `hcl:"run_as,block" json:"run_as,omitempty" mapstructure:"run_as"`
 }
-
-// Equals returns true if the other given Type exactly equals the
-// receiver Type.
-func (c *Container) Equals(other cty.Type) bool { return true }
-
-// FriendlyName returns a human-friendly *English* name for the given
-// type.
-func (c *Container) FriendlyName(mode rune) string { return "foo" }
-
-// GoString implements the GoStringer interface from package fmt.
-func (c *Container) GoString() string { return "aaah" }
 
 type User struct {
 	// Username or UserID of the user to run the container as
@@ -90,21 +78,6 @@ type Build struct {
 	Tag     string `hcl:"tag,optional" json:"tag,omitempty"`   // Image tag, defaults to latest
 }
 
-// New creates a new Nomad job config resource, implements Resource New method
-func (c *Container) New(name string) types.Resource {
-	return &Container{ResourceInfo: types.ResourceInfo{Name: name, Type: TypeContainer, Status: types.PendingCreation}}
-}
-
-// Info returns the resource info implements the Resource Info method
-func (c *Container) Info() *types.ResourceInfo {
-	return &c.ResourceInfo
-}
-
-func (c *Container) Parse(file string) error {
-	return nil
-}
-
 func (c *Container) Process() error {
-	c.Info().Status = types.Applied
 	return nil
 }

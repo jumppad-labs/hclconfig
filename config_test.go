@@ -9,50 +9,55 @@ import (
 )
 
 func testSetupConfig(t *testing.T) *Config {
-	net1 := (&structs.Network{}).New("cloud")
-	con1 := (&structs.Container{}).New("test_dev")
+	typs := types.DefaultTypes()
+	typs[structs.TypeNetwork] = &structs.Network{}
+	typs[structs.TypeContainer] = &structs.Container{}
+	typs[structs.TypeTemplate] = &structs.Template{}
+
+	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
+	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 
 	// depending on a module should return all resouces and
 	// all child resources
-	con1.Info().DependsOn = []string{"module.module1"}
+	con1.Metadata().DependsOn = []string{"module.module1"}
 
 	// onc 2 is embedded in module1
-	con2 := (&structs.Container{}).New("test_dev")
-	con2.Info().Module = "module1"
+	con2, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
+	con2.Metadata().Module = "module1"
 
 	// con 3 is loaded from a module inside module1
-	con3 := (&structs.Container{}).New("test_dev")
-	con3.Info().Module = "module1.module2"
+	con3, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
+	con3.Metadata().Module = "module1.module2"
 
 	// con 3 is loaded from a module inside module1
-	con4 := (&structs.Container{}).New("test_dev2")
-	con4.Info().Module = "module1.module2"
+	con4, _ := typs.CreateResource(structs.TypeContainer, "test_dev2")
+	con4.Metadata().Module = "module1.module2"
 
 	// depends on would be added relative as a resource
 	// when a resource is defined, it has no idea on its
 	// module
-	con4.Info().DependsOn = []string{"resource.container.test_dev"}
+	con4.Metadata().DependsOn = []string{"resource.container.test_dev"}
 
-	out1 := (&types.Output{}).New("fqdn")
-	out1.Info().Module = "module1.module2"
+	out1, _ := typs.CreateResource(types.TypeOutput, "fqdn")
+	out1.Metadata().Module = "module1.module2"
 
 	c := NewConfig()
-	err := c.AddResource(net1)
+	err := c.addResource(net1, nil, nil)
 	require.NoError(t, err)
 
-	err = c.AddResource(con1)
+	err = c.addResource(con1, nil, nil)
 	require.NoError(t, err)
 
-	err = c.AddResource(con2)
+	err = c.addResource(con2, nil, nil)
 	require.NoError(t, err)
 
-	err = c.AddResource(con3)
+	err = c.addResource(con3, nil, nil)
 	require.NoError(t, err)
 
-	err = c.AddResource(con4)
+	err = c.addResource(con4, nil, nil)
 	require.NoError(t, err)
 
-	err = c.AddResource(out1)
+	err = c.addResource(out1, nil, nil)
 	require.NoError(t, err)
 
 	return c
@@ -66,7 +71,7 @@ func TestResourceCount(t *testing.T) {
 func TestAddResourceExistsReturnsError(t *testing.T) {
 	c := testSetupConfig(t)
 
-	err := c.AddResource(c.Resources[3])
+	err := c.addResource(c.Resources[3], nil, nil)
 	require.Error(t, err)
 }
 
@@ -172,16 +177,19 @@ func TestFindRelativeModuleResourcesFindsResources(t *testing.T) {
 func TestRemoveResourceRemoves(t *testing.T) {
 	c := testSetupConfig(t)
 
-	err := c.RemoveResource(c.Resources[0])
+	err := c.removeResource(c.Resources[0])
 	require.NoError(t, err)
 	require.Len(t, c.Resources, 5)
 }
 
 func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
-	c := testSetupConfig(t)
-	net1 := (&structs.Network{}).New("notfound")
+	typs := types.DefaultTypes()
+	typs[structs.TypeNetwork] = &structs.Network{}
 
-	err := c.RemoveResource(net1)
+	c := testSetupConfig(t)
+	net1, _ := typs.CreateResource(structs.TypeNetwork, "notfound")
+
+	err := c.removeResource(net1)
 	require.Error(t, err)
 	require.Len(t, c.Resources, 6)
 }
@@ -191,7 +199,7 @@ func TestParseFQDNParsesComponents(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "module1.module2", fqdn.Module)
-	require.Equal(t, types.ResourceType("container"), fqdn.Type)
+	require.Equal(t, structs.TypeContainer, fqdn.Type)
 	require.Equal(t, "mine", fqdn.Resource)
 	require.Equal(t, "attr", fqdn.Attribute)
 }
@@ -218,7 +226,7 @@ func TestParseFQDNReturnsModuleWhenOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "module1.module2", fqdn.Module)
-	require.Equal(t, types.ResourceType("output"), fqdn.Type)
+	require.Equal(t, types.TypeOutput, fqdn.Type)
 	require.Equal(t, "mine", fqdn.Resource)
 	require.Equal(t, "value", fqdn.Attribute)
 }

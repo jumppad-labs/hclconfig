@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/hcl2/hcl"
+	"github.com/hashicorp/hcl2/hcl/hclsyntax"
 	"github.com/shipyard-run/hclconfig/types"
 )
 
@@ -11,7 +13,7 @@ type ResourceFQDN struct {
 	// Name of the module
 	Module string
 	// Type of the resource
-	Type types.ResourceType
+	Type string
 	// Resource name
 	Resource string
 	// Attribute for the resource
@@ -58,7 +60,7 @@ func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
 		if len(outputParts) > 1 {
 			moduleName = strings.TrimSuffix(outputParts[0], ".")
 			resourceName = outputParts[1]
-			typeName = string(types.TypeOutput)
+			typeName = types.TypeOutput
 			attribute = "value"
 		} else {
 			// return only the module name
@@ -72,7 +74,7 @@ func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
 
 	return &ResourceFQDN{
 		Module:    moduleName,
-		Type:      types.ResourceType(typeName),
+		Type:      typeName,
 		Resource:  resourceName,
 		Attribute: attribute,
 	}, nil
@@ -94,10 +96,8 @@ func (f ResourceFQDN) String() string {
 // Config defines the stack config
 type Config struct {
 	Resources []types.Resource `json:"resources"`
-}
-
-func IsRegisteredType(t types.ResourceType) bool {
-	return true
+	contexts  map[types.Resource]*hcl.EvalContext
+	bodies    map[types.Resource]*hclsyntax.Body
 }
 
 // ResourceNotFoundError is thrown when a resource could not be found
@@ -120,7 +120,11 @@ func (e ResourceExistsError) Error() string {
 
 // New creates a new Config
 func NewConfig() *Config {
-	c := &Config{}
+	c := &Config{
+		Resources: []types.Resource{},
+		contexts:  map[types.Resource]*hcl.EvalContext{},
+		bodies:    map[types.Resource]*hclsyntax.Body{},
+	}
 
 	return c
 }
@@ -155,9 +159,9 @@ func (c *Config) FindResource(path string) (types.Resource, error) {
 	}
 
 	for _, r := range c.Resources {
-		if r.Info().Module == fqdn.Module &&
-			r.Info().Type == fqdn.Type &&
-			r.Info().Name == fqdn.Resource {
+		if r.Metadata().Module == fqdn.Module &&
+			r.Metadata().Type == fqdn.Type &&
+			r.Metadata().Name == fqdn.Resource {
 			return r, nil
 		}
 	}
@@ -192,7 +196,7 @@ func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 	res := []types.Resource{}
 
 	for _, r := range c.Resources {
-		if r.Info().Type == types.ResourceType(t) {
+		if r.Metadata().Type == t {
 			res = append(res, r)
 		}
 	}
@@ -233,11 +237,11 @@ func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]t
 
 	for _, r := range c.Resources {
 		match := false
-		if includeSubModules && strings.HasPrefix(r.Info().Module, fqdn.Module) {
+		if includeSubModules && strings.HasPrefix(r.Metadata().Module, fqdn.Module) {
 			match = true
 		}
 
-		if !includeSubModules && r.Info().Module == fqdn.Module {
+		if !includeSubModules && r.Metadata().Module == fqdn.Module {
 			match = true
 		}
 
@@ -253,25 +257,32 @@ func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]t
 	return nil, ResourceNotFoundError{fqdn.Module}
 }
 
+// ResourceCount defines the number of resources in a config
+func (c *Config) ResourceCount() int {
+	return len(c.Resources)
+}
+
 // AddResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
-func (c *Config) AddResource(r types.Resource) error {
-	rn := fmt.Sprintf("resource.%s.%s", r.Info().Type, r.Info().Name)
-	if r.Info().Module != "" {
-		rn = fmt.Sprintf("module.%s.resource.%s.%s", r.Info().Module, r.Info().Type, r.Info().Name)
+func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
+	rn := fmt.Sprintf("resource.%s.%s", r.Metadata().Type, r.Metadata().Name)
+	if r.Metadata().Module != "" {
+		rn = fmt.Sprintf("module.%s.resource.%s.%s", r.Metadata().Module, r.Metadata().Type, r.Metadata().Name)
 	}
 
 	rf, err := c.FindResource(rn)
 	if err == nil && rf != nil {
-		return ResourceExistsError{r.Info().Name}
+		return ResourceExistsError{r.Metadata().Name}
 	}
 
 	c.Resources = append(c.Resources, r)
+	c.contexts[r] = ctx
+	c.bodies[r] = b
 
 	return nil
 }
 
-func (c *Config) RemoveResource(rf types.Resource) error {
+func (c *Config) removeResource(rf types.Resource) error {
 	pos := -1
 	for i, r := range c.Resources {
 		if rf == r {
@@ -284,13 +295,28 @@ func (c *Config) RemoveResource(rf types.Resource) error {
 	// preserve order
 	if pos > -1 {
 		c.Resources = append(c.Resources[:pos], c.Resources[pos+1:]...)
+
+		// clean up the context and body
+		delete(c.contexts, rf)
+		delete(c.bodies, rf)
 		return nil
 	}
 
 	return ResourceNotFoundError{}
 }
 
-// ResourceCount defines the number of resources in a config
-func (c *Config) ResourceCount() int {
-	return len(c.Resources)
+func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
+	if ctx, ok := c.contexts[rf]; ok {
+		return ctx, nil
+	}
+
+	return nil, ResourceNotFoundError{}
+}
+
+func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
+	if b, ok := c.bodies[rf]; ok {
+		return b, nil
+	}
+
+	return nil, ResourceNotFoundError{}
 }
