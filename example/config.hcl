@@ -35,8 +35,7 @@ postgres "mydb" {
 }
 
 module "mymodule" {
-  #source = "github.com/shipyard-run/hclconfig//example"
-  source = "./modules/db"
+  source = "github.com/shipyard-run/hclconfig/example/modules//db"
 
   variables = {
     db_username = "root"
