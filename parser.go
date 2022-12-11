@@ -52,7 +52,7 @@ func DefaultOptions() *ParserOptions {
 		cacheDir = "."
 	}
 
-	cacheDir = filepath.Join(".", ".hclconfig", "cache")
+	cacheDir = filepath.Join(cacheDir, ".hclconfig", "cache")
 	os.MkdirAll(cacheDir, os.ModePerm)
 
 	return &ParserOptions{
@@ -364,10 +364,19 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	// first check if it is a folder, we need to make it absolute relative to the current file
 	dir := path.Dir(file)
 	moduleSrc := path.Join(dir, src.AsString())
+
 	fi, err := os.Stat(moduleSrc)
 	if err != nil || !fi.IsDir() {
+
 		// is not a directory fetch from source using go getter
-		return fmt.Errorf("Go getter Not implemented, please use local module source")
+		gg := NewGoGetter()
+
+		mp, err := gg.Get(src.AsString(), p.options.ModuleCache, false)
+		if err != nil {
+			return fmt.Errorf("unable to fetch remote module %s: %s", src.AsString(), err)
+		}
+
+		moduleSrc = mp
 	}
 
 	// create a new config and add the resources later

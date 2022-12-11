@@ -31,7 +31,6 @@ type Config struct {
 }
 
 func (t *Config) Process() error {
-	fmt.Println("timeout", t.Timeouts.TLSHandshake)
 	// override default values
 	if t.Timeouts.TLSHandshake == 0 {
 		t.Timeouts.TLSHandshake = 5
@@ -59,7 +58,6 @@ type PostgreSQL struct {
 // Process is called using an order calculated from the dependency graph
 // this is where you can set any computed fields
 func (t *PostgreSQL) Process() error {
-	fmt.Println("postgres")
 	t.ConnectionString = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", t.Username, t.Password, t.Location, t.Port, t.DBName)
 	return nil
 }

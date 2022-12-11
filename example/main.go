@@ -12,9 +12,6 @@ func main() {
 
 	o := hclconfig.DefaultOptions()
 
-	// set the environment variable prefix
-	o.VariableEnvPrefix = "HCL_"
-
 	p := hclconfig.NewParser(o)
 	// register the types
 	p.RegisterType("config", &Config{})
@@ -29,7 +26,7 @@ func main() {
 
 	err := p.ParseFile("./config.hcl", c)
 	if err != nil {
-		fmt.Printf("An error occurred processing the config: %s", err)
+		fmt.Printf("An error occurred processing the config: %s\n", err)
 		os.Exit(1)
 	}
 
@@ -43,6 +40,7 @@ func printConfig(c *hclconfig.Config) {
 		case "config":
 			t := r.(*Config)
 			fmt.Printf("Config %s\n", t.Name)
+			fmt.Printf("Module %s\n", t.Module)
 			fmt.Printf("--- ID: %s\n", t.ID)
 			fmt.Printf("--- DBConnectionString: %s\n", t.DBConnectionString)
 			fmt.Printf("--- Timeouts\n")
@@ -53,6 +51,7 @@ func printConfig(c *hclconfig.Config) {
 		case "postgres":
 			t := r.(*PostgreSQL)
 			fmt.Printf("Postgres %s\n", t.Name)
+			fmt.Printf("Module %s\n", t.Module)
 			fmt.Printf("--- Location: %s\n", t.Location)
 			fmt.Printf("--- Port: %d\n", t.Port)
 			fmt.Printf("--- DBName: %s\n", t.DBName)
@@ -60,5 +59,7 @@ func printConfig(c *hclconfig.Config) {
 			fmt.Printf("--- Password: %s\n", t.Password)
 			fmt.Printf("--- ConnectionString: %s\n", t.ConnectionString)
 		}
+
+		fmt.Println("")
 	}
 }

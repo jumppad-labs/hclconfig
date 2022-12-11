@@ -3,7 +3,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  default = "admin"
+  default = "password"
 }
 
 config "myapp" {
@@ -32,4 +32,14 @@ postgres "mydb" {
   // by values set by the environment variables HCL_db_username and HCL_db_password
   username = var.db_username
   password = var.db_password
+}
+
+module "mymodule" {
+  #source = "github.com/shipyard-run/hclconfig//example"
+  source = "./modules/db"
+
+  variables = {
+    db_username = "root"
+    db_password = "topsecret"
+  }
 }

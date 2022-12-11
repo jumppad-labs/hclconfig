@@ -66,7 +66,7 @@ func (g *GoGetter) Get(src, dest string, ignoreCache bool) (string, error) {
 	// check to see if the destination exists
 	_, err = os.Stat(downloadPath)
 	if err == nil && !ignoreCache {
-		return "", nil
+		return downloadPath, nil
 	}
 
 	err = g.get(src, downloadPath, pwd)
