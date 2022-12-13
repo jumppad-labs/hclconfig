@@ -34,6 +34,13 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	for _, resource := range c.Resources {
 		hasDeps := false
 
+		// if disabled ignore any dependencies
+		if resource.Metadata().Disabled {
+			// add all disabled resources to the root
+			graph.Connect(dag.BasicEdge(root, resource))
+			continue
+		}
+
 		// add links to dependencies
 		// this is here for now as we might need to process these two
 		// lists separately
@@ -55,7 +62,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			if fqdn.Module != "" && fqdn.Resource == "" {
 				deps, err := c.FindRelativeModuleResources(fqdn.Module, resource.Metadata().Module, true)
 				if err != nil {
-					return nil, fmt.Errorf("unable to find module resource, module: %s, error: %s", fqdn.Module, err)
+					return nil, fmt.Errorf("unable to find module resource in module: %s, error: %s", fqdn.Module, err)
 				}
 
 				for _, d := range deps {
@@ -66,7 +73,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			if fqdn.Resource != "" {
 				dep, err := c.FindRelativeResource(d, resource.Metadata().Module)
 				if err != nil {
-					return nil, fmt.Errorf("unable to find resource from parent module: '%s, error: %s", resource.Metadata().Module, err)
+					return nil, fmt.Errorf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
 				}
 
 				dependencies[dep] = true
@@ -156,8 +163,8 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			panic("an item has been added to the graph that is not a resource")
 		}
 
-		// if this is the root module skip
-		if r.Metadata().Name == "root" && r.Metadata().Module == "" && r.Metadata().Type == types.TypeModule {
+		// if this is the root module or is disabled skip
+		if (r.Metadata().Name == "root" && r.Metadata().Module == "" && r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
 			return nil
 		}
 

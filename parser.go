@@ -342,6 +342,25 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
+func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, parentDisabled bool) error {
+	if parentDisabled {
+		r.Metadata().Disabled = true
+		return nil
+	}
+
+	if attr, ok := b.Attributes["disabled"]; ok {
+
+		disabled, diags := attr.Expr.Value(ctx)
+		if diags.HasErrors() {
+			return fmt.Errorf("unable to read source from module: %s", diags.Error())
+		}
+
+		r.Metadata().Disabled = disabled.True()
+	}
+
+	return nil
+}
+
 func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), name)
 
@@ -352,6 +371,8 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	if err != nil {
 		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
 	}
+
+	setDisabled(ctx, rt, b.Body, false)
 
 	// we need to fetch the source so that we can process the child resources
 	// "source" is the attribute but we need to read this manually
@@ -411,6 +432,9 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 			panic("no body found for resource")
 		}
 
+		// set disabled
+		setDisabled(ctx, r, bdy, rt.Metadata().Disabled)
+
 		c.addResource(r, ctx, bdy)
 	}
 
@@ -431,7 +455,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
 	}
 
-	setDisabled(rt, disabled)
+	setDisabled(ctx, rt, b.Body, disabled)
 
 	err = c.addResource(rt, ctx, b.Body)
 	if err != nil {
@@ -765,18 +789,4 @@ func ensureAbsolute(path, file string) string {
 	fp := filepath.Join(baseDir, path)
 
 	return filepath.Clean(fp)
-}
-
-// setDisabled sets the disabled flag on a resource when the
-// parent is disabled
-func setDisabled(r types.Resource, parentDisabled bool) {
-	if parentDisabled {
-		r.Metadata().Disabled = true
-	}
-
-	// when the resource is disabled set the status
-	// so the engine will not create or delete it
-	if r.Metadata().Disabled {
-		r.Metadata().Status = "disabled"
-	}
 }

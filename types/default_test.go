@@ -30,5 +30,4 @@ func TestCreateResourceCreatesType(t *testing.T) {
 
 	require.Equal(t, r.Metadata().Type, TypeVariable)
 	require.Equal(t, r.Metadata().Name, "test")
-	require.Equal(t, r.Metadata().Status, PendingProcess)
 }

@@ -215,7 +215,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 		},
 	})
 
-	var FileFunc = function.New(&function.Spec{
+	var ReadFileFunc = function.New(&function.Spec{
 		Params: []function.Parameter{
 			{
 				Name:             "path",
@@ -255,6 +255,10 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 				}
 			}
 
+			if len(args) == 1 && args[0].Type() == cty.String {
+				return cty.NumberIntVal(int64(len(args[0].AsString()))), nil
+			}
+
 			return cty.NumberIntVal(0), nil
 		},
 	})
@@ -273,7 +277,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 	funcs["len"] = LenFunc
 	funcs["env"] = EnvFunc
 	funcs["home"] = HomeFunc
-	funcs["file"] = FileFunc
+	funcs["file"] = ReadFileFunc
 	funcs["dir"] = DirFunc
 
 	return funcs
