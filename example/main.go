@@ -22,9 +22,7 @@ func main() {
 		return rand.Intn(100), nil
 	})
 
-	c := hclconfig.NewConfig()
-
-	err := p.ParseFile("./config.hcl", c)
+	c, err := p.ParseFile("./config.hcl")
 	if err != nil {
 		fmt.Printf("An error occurred processing the config: %s\n", err)
 		os.Exit(1)

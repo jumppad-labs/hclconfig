@@ -33,6 +33,12 @@ type ResourceMetadata struct {
 
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
+
+	// File is the absolute path of the file where the resource is defined
+	File string `json:"file"`
+
+	// Properties holds a collection that can be used to store adhoc data
+	Properties map[string]interface{} `hcl:"properties,optional" json:"properties,omitempty"`
 }
 
 func (r *ResourceMetadata) Metadata() *ResourceMetadata {

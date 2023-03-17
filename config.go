@@ -1,6 +1,8 @@
 package hclconfig
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -119,7 +121,7 @@ func (e ResourceExistsError) Error() string {
 }
 
 // New creates a new Config
-func NewConfig() *Config {
+func newConfig() *Config {
 	c := &Config{
 		Resources: []types.Resource{},
 		contexts:  map[types.Resource]*hcl.EvalContext{},
@@ -319,4 +321,18 @@ func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
 	}
 
 	return nil, ResourceNotFoundError{}
+}
+
+// ToJSON converts the config to a serializable json string
+func (c *Config) ToJSON() ([]byte, error) {
+	buf := bytes.NewBuffer([]byte{})
+	enc := json.NewEncoder(buf)
+
+	enc.SetIndent("", " ")
+	err := enc.Encode(c)
+	if err != nil {
+		return nil, fmt.Errorf("unable to encode config: %s", err)
+	}
+
+	return buf.Bytes(), nil
 }

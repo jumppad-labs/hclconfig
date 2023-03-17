@@ -1,6 +1,7 @@
 package hclconfig
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -66,7 +67,6 @@ type Parser struct {
 	options             ParserOptions
 	registeredTypes     types.RegisteredTypes
 	registeredFunctions map[string]function.Function
-	config              *Config
 }
 
 // NewParser creates a new parser with the given options
@@ -100,48 +100,50 @@ func (p *Parser) RegisterFunction(name string, f interface{}) error {
 	return nil
 }
 
-func (p *Parser) ParseFile(file string, c *Config) error {
+func (p *Parser) ParseFile(file string) (*Config, error) {
+	c := newConfig()
 	rootContext = buildContext(file, p.registeredFunctions)
 
 	err := p.parseFile(rootContext, file, c, p.options.Variables, p.options.VariablesFiles)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// process the files and resolve dependency
-	return c.process(p.options.Callback)
+	return c, c.process(p.options.Callback)
 }
 
 // ParseDirectory parses all resource and variable files in the given directory
 // note: this method does not recurse into sub folders
-func (p *Parser) ParseDirectory(dir string, c *Config) error {
-	p.config = c
+func (p *Parser) ParseDirectory(dir string) (*Config, error) {
+	c := newConfig()
 	rootContext = buildContext(dir, p.registeredFunctions)
 
-	c, err := p.parseDirectory(rootContext, dir, c)
+	err := p.parseDirectory(rootContext, dir, c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// process the files and resolve dependency
-	return c.process(p.options.Callback)
+	return c, c.process(p.options.Callback)
 }
 
 // internal method
-func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) (*Config, error) {
+func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) error {
+
 	// get all files in a directory
 	path, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("directory %s does not exist", dir)
+		return fmt.Errorf("directory %s does not exist", dir)
 	}
 
 	if !path.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", dir)
+		return fmt.Errorf("%s is not a directory", dir)
 	}
 
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf(" unable to list files in directory %s, error: %s", dir, err)
+		return fmt.Errorf(" unable to list files in directory %s, error: %s", dir, err)
 	}
 
 	variablesFiles := p.options.VariablesFiles
@@ -165,13 +167,13 @@ func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) (*C
 			if strings.HasSuffix(fn, ".hcl") {
 				err := p.parseFile(ctx, fn, c, p.options.Variables, variablesFiles)
 				if err != nil {
-					return nil, err
+					return err
 				}
 			}
 		}
 	}
 
-	return c, nil
+	return nil
 }
 
 // parseFile loads variables and resources from the given file
@@ -366,6 +368,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 
 	rt.Metadata().Module = moduleName
 	rt.Metadata().DependsOn = dependsOn
+	rt.Metadata().File = file
 
 	err := decodeBody(ctx, file, b, rt)
 	if err != nil {
@@ -401,12 +404,12 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	}
 
 	// create a new config and add the resources later
-	moduleConfig := NewConfig()
+	moduleConfig := newConfig()
 
 	// modules should have their own context so that variables are not globally scoped
 	subContext := buildContext(moduleSrc, p.registeredFunctions)
 
-	_, err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
+	err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
 	if err != nil {
 		return fmt.Errorf("unable to parse module directory: %s, error: %s", src.AsString(), err)
 	}
@@ -449,6 +452,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 
 	rt.Metadata().Module = moduleName
 	rt.Metadata().DependsOn = dependsOn
+	rt.Metadata().File = file
 
 	err = decodeBody(ctx, file, b, rt)
 	if err != nil {
@@ -789,4 +793,38 @@ func ensureAbsolute(path, file string) string {
 	fp := filepath.Join(baseDir, path)
 
 	return filepath.Clean(fp)
+}
+
+// UnmarshalJSON parses a JSON string from a serialized Config and returns a
+// valid Config.
+func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
+	conf := newConfig()
+
+	var objMap map[string]*json.RawMessage
+	err := json.Unmarshal(d, &objMap)
+	if err != nil {
+		return nil, err
+	}
+
+	var rawMessagesForResources []*json.RawMessage
+	err = json.Unmarshal(*objMap["resources"], &rawMessagesForResources)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, m := range rawMessagesForResources {
+		mm := map[string]interface{}{}
+		err := json.Unmarshal(*m, &mm)
+		if err != nil {
+			return nil, err
+		}
+
+		r, err := p.registeredTypes.CreateResource(mm["type"].(string), mm["name"].(string))
+		resData, _ := json.Marshal(mm)
+
+		json.Unmarshal(resData, r)
+		conf.addResource(r, nil, nil)
+	}
+
+	return conf, nil
 }

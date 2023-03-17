@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -271,6 +272,20 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 			return cty.StringVal(filepath.Dir(s)), err
 		},
 	})
+	
+	var TrimFunc = function.New(&function.Spec{
+		Params: []function.Parameter{
+			{
+				Name:             "string",
+				Type:             cty.String,
+				AllowDynamicType: true,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			return cty.StringVal(strings.TrimSpace(args[0].AsString())), nil
+		},
+	})
 
 	funcs := map[string]function.Function{}
 
@@ -279,6 +294,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 	funcs["home"] = HomeFunc
 	funcs["file"] = ReadFileFunc
 	funcs["dir"] = DirFunc
+	funcs["trim"] = TrimFunc
 
 	return funcs
 }

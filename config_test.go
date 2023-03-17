@@ -41,7 +41,7 @@ func testSetupConfig(t *testing.T) *Config {
 	out1, _ := typs.CreateResource(types.TypeOutput, "fqdn")
 	out1.Metadata().Module = "module1.module2"
 
-	c := NewConfig()
+	c := newConfig()
 	err := c.addResource(net1, nil, nil)
 	require.NoError(t, err)
 
@@ -256,4 +256,14 @@ func TestFQDNStringWithModuleResourceReturnsCorrectly(t *testing.T) {
 	fqdnStr := fqdn.String()
 
 	require.Equal(t, "module.module1.module2.resource.container.mine", fqdnStr)
+}
+
+func TestToJSONSerializesJSON(t *testing.T) {
+	c := testSetupConfig(t)
+
+	d, err := c.ToJSON()
+	require.NoError(t, err)
+	require.Greater(t, len(d), 0)
+
+	require.Contains(t, string(d), `"name": "test_dev"`)
 }

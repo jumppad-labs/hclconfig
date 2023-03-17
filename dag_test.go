@@ -14,14 +14,12 @@ func setupGraphConfig(t *testing.T) *Config {
 		t.Fatal(err)
 	}
 
-	c := NewConfig()
-
 	p := NewParser(DefaultOptions())
 	p.RegisterType("container", &structs.Container{})
 	p.RegisterType("network", &structs.Network{})
 	p.RegisterType("template", &structs.Template{})
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	return c

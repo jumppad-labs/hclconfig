@@ -159,9 +159,168 @@ fmt.Println("id", c.ID) // = myapp_81, where 81 is a random number between 0 and
 fmt.Println("db_connection_string", c.db_connection_string) // = postgresql://admin:admin@localhost:5432/mydatabase
 ```
 
-## TODO
-[x] Basic parsing   
-[x] Variables  
-[x] Resource links and lazy evaluation   
-[x] Enable custom interpolation functions   
-[x] Modules   
+## Default functions
+
+HCLConfig supports functions that can be used inside your configuration
+
+
+```javascript
+postgres "mydb" {
+  location = "localhost"
+  port = 5432
+  name = "mydatabase"
+
+  username = var.db_username
+
+  // functions can be used inside the configuration,
+  // functions are evaluated when the configuration is parsed 
+  password = env("DB_PASSWORD")
+}
+```
+
+HCLConfig has the following default functions
+
+### len(type)
+
+Returns the length of a string or collection
+
+```javascript
+mytype "test" {
+  collection = ["one", "two"]
+  string = "mystring"
+}
+
+myothertype "test" {
+  // Value = 2
+  collection_length = len(resource.mytype.test.collection)
+
+  // Value = 8
+  string_length = len(resource.mytype.test.string)
+}
+```
+
+### env(name)
+
+Returns the value of a system environment variable
+
+```javascript
+mytype "test" {
+  // returns the value of the system environment variable $GOPATH
+  gopath = env("GOPATH")
+}
+```
+
+### home()
+
+Returns the location of the users home directory
+
+```javascript
+mytype "test" {
+  // returns the value of the system home directory
+  home_folder = home()
+}
+```
+
+### file(path)
+
+Returns the contents of a file at the given path.
+
+```javascript
+
+# given the file "./myfile.txt" with the contents "foo bar"
+
+mytype "test" {
+  // my_file = "foobar"
+  my_file = file("./myfile.txt")
+}
+```
+
+### dir()
+
+Returns the absolute path of the directory containing the current resource
+
+```javascript
+mytype "test" {
+  resource_folder = dir()
+}
+```
+
+### trim(string)
+
+Returns the given string with leading and trailing whitespace removed
+of the given string
+
+```javascript
+mytype "test" {
+  // trimmed = "abc 123"
+  trimmed = trim("  abc  123   ")
+}
+```
+
+## Custom Functions
+
+In addition to the default functions it is possible to register custom functions.
+
+For example, given a requirement to have a function that returns a random number in a set
+range you could write a go function that looks like the following. Note: only a single
+return type can be consumed by the HCL parser and assigned to the resource value.
+
+```go
+func RandRange(min, max int) int {
+	return rand.Intn((max-min)+1) + min
+}
+```
+
+This could then be referenced in the following config
+
+```javascript
+postgres "mydb" {
+  location = "localhost"
+
+  // custom function to return a random number between 5000 and 6000
+  port = rand(5000,6000)
+  
+  name = "mydatabase"
+}
+```
+
+You set up the parser as normal
+
+```go
+p := NewParser(DefaultOptions())
+p.RegisterType("postgres", &structs.Postgres{})
+```
+
+However, in order to use the custom function before parsing you register it with the 
+`RegisterFunction` method as shown below.
+
+```go
+p.RegisterFunction("rand", RandRange)
+```
+
+At present only the following simple types are supported for custom functions
+
+* string
+* uint
+* uint32
+* uint64
+* int
+* int32
+* int64
+* float32
+* float64
+
+### Errors in custom functions
+To signify that an error occurred in a custom function and to halt parsing of the
+config your function can optionally return a tuple of (type, error). For example
+to add error handling to the random function you could write it as shown below.
+
+```go
+func RandRange(min, max int) (int, error) {
+  if min >= max {
+    return -1, fmt.Errorf("minimum value '%d' must be smaller than the maximum value '%d')
+  }
+
+	return rand.Intn((max-min)+1) + min
+}
+```

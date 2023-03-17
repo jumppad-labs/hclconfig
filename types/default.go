@@ -27,6 +27,7 @@ func (r RegisteredTypes) CreateResource(resourceType, resourceName string) (Reso
 		res := ptr.Interface().(Resource)
 		res.Metadata().Name = resourceName
 		res.Metadata().Type = resourceType
+		res.Metadata().Properties = map[string]interface{}{}
 
 		return res, nil
 	}

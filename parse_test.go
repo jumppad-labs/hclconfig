@@ -14,14 +14,12 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-func setupParser(t *testing.T, options ...*ParserOptions) (*Config, *Parser) {
+func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 	os.Setenv("SHIPYARD_CONFIG", "/User/yamcha/.shipyard")
 
 	t.Cleanup(func() {
 		os.Unsetenv("SHIPYARD_CONFIG")
 	})
-
-	c := NewConfig()
 
 	o := DefaultOptions()
 	if len(options) > 0 {
@@ -33,7 +31,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Config, *Parser) {
 	p.RegisterType("network", &structs.Network{})
 	p.RegisterType("template", &structs.Template{})
 
-	return c, p
+	return p
 }
 
 func TestNewParserWithOptions(t *testing.T) {
@@ -57,9 +55,9 @@ func TestParseFileProcessesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -68,6 +66,9 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.NotNil(t, r)
 
 	cont := r.(*structs.Container)
+
+	require.Equal(t, "consul", cont.Metadata().Name)
+	require.Equal(t, absoluteFolderPath, cont.Metadata().File)
 
 	require.Equal(t, "consul", cont.Command[0], "consul")
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
@@ -84,9 +85,9 @@ func TestParseFileSetsLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -116,9 +117,9 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	o := DefaultOptions()
 	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
 
-	c, p := setupParser(t, o)
+	p := setupParser(t, o)
 
-	err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
+	c, err := p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"))
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.consul")
@@ -133,7 +134,7 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
 	require.NoError(t, err)
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
 	os.Setenv("HCL_VAR_cpu_resources", "1000")
 
@@ -141,7 +142,7 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 		os.Unsetenv("HCL_VAR_cpu_resources")
 	})
 
-	err = p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"), c)
+	c, err := p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"))
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.consul")
@@ -156,9 +157,9 @@ func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
 	require.NoError(t, err)
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseDirectory(absoluteFolderPath, c)
+	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.consul")
@@ -173,9 +174,9 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
 	require.NoError(t, err)
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseDirectory(absoluteFolderPath, c)
+	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.consul")
@@ -192,9 +193,9 @@ func TestParseModuleCreatesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// count the resources, should create 4
@@ -234,9 +235,9 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -253,9 +254,9 @@ func TestParseContainerWithNoLabelReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
 }
 
@@ -265,9 +266,9 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.disabled")
@@ -281,9 +282,9 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("module.disabled.resource.container.enabled")
@@ -308,8 +309,8 @@ func TestParseProcessesDefaultFunctions(t *testing.T) {
 
 	home, _ := os.UserHomeDir()
 
-	c, p := setupParser(t)
-	err = p.ParseFile(absoluteFolderPath, c)
+	p := setupParser(t)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.base")
@@ -317,11 +318,13 @@ func TestParseProcessesDefaultFunctions(t *testing.T) {
 
 	cont := r.(*structs.Container)
 
-	require.Equal(t, "3", cont.Env["len"])
+	require.Equal(t, "3", cont.Env["len_string"])
+	require.Equal(t, "2", cont.Env["len_collection"])
 	require.Equal(t, "myvalue", cont.Env["env"])
 	require.Equal(t, home, cont.Env["home"])
 	require.Contains(t, cont.Env["file"], "container")
 	require.Contains(t, cont.Env["dir"], filepath.Dir(absoluteFolderPath))
+	require.Contains(t, cont.Env["trim"], "foo bar")
 }
 
 func TestParseProcessesCustomFunctions(t *testing.T) {
@@ -330,10 +333,10 @@ func TestParseProcessesCustomFunctions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, p := setupParser(t)
+	p := setupParser(t)
 	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("resource.container.base")
@@ -380,9 +383,9 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		return nil
 	}
 
-	c, p := setupParser(t, o)
+	p := setupParser(t, o)
 
-	err = p.ParseFile(absoluteFolderPath, c)
+	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check the order, should be ...
@@ -405,6 +408,44 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
 	requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
 	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
+}
+
+func TestParserDesrializesJsonCorrectly(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	json, err := c.ToJSON()
+	require.NoError(t, err)
+
+	conf, err := p.UnmarshalJSON(json)
+	require.NoError(t, err)
+	require.NotNil(t, conf)
+
+	orig, err := c.FindResource("resource.container.base")
+	require.NoError(t, err)
+
+	parsed, err := conf.FindResource("resource.container.base")
+	require.NoError(t, err)
+
+	require.Equal(t, orig.Metadata().File, parsed.Metadata().File)
+	require.Equal(t, orig.(*structs.Container).Networks[0].Name, parsed.(*structs.Container).Networks[0].Name)
+	require.Equal(t, orig.(*structs.Container).Command, parsed.(*structs.Container).Command)
+	require.Equal(t, orig.(*structs.Container).Resources.CPUPin, parsed.(*structs.Container).Resources.CPUPin)
+
+	orig, err = c.FindResource("resource.container.consul")
+	require.NoError(t, err)
+
+	parsed, err = conf.FindResource("resource.container.consul")
+	require.NoError(t, err)
+
+	require.Equal(t, orig.(*structs.Container).Volumes[0].Destination, parsed.(*structs.Container).Volumes[0].Destination)
 }
 
 func requireBefore(t *testing.T, first, second string, list []string) {
