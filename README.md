@@ -127,9 +127,6 @@ p.RegisterFunction("random_number", func() (int, error) {
 Then you can create the config and parse the file. 
 
 ```go
-// create a config, all processed resources are encapuslated by config
-c := hclconfig.NewConfig()
-
 // define the options for the parser
 opts := hclconfig.DefaultOptions()
 
@@ -143,7 +140,7 @@ opts.Callback = func(r *types.Resource) error {
 //
 // when configuration is parsed it's dependencies on other resources are evaluated and this order added
 // to a acyclic graph ensuring that any resources are processed before resources that depend on them.
-c, err := p.ParseFile("myfile.hcl", c)
+c, err := p.ParseFile("myfile.hcl")
 ```
 
 You can then access the properties from your types by retrieving them from the returned config.

@@ -39,6 +39,9 @@ type ResourceMetadata struct {
 
 	// Properties holds a collection that can be used to store adhoc data
 	Properties map[string]interface{} `hcl:"properties,optional" json:"properties,omitempty"`
+
+	// ParentConfig allows the location of other resources in the config
+	ParentConfig Findable
 }
 
 func (r *ResourceMetadata) Metadata() *ResourceMetadata {

@@ -472,6 +472,10 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 		)
 	}
 
+	// add a reference to the config so that resources can find out about their
+	// world
+
+
 	return nil
 }
 
@@ -820,6 +824,10 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 		}
 
 		r, err := p.registeredTypes.CreateResource(mm["type"].(string), mm["name"].(string))
+		if err != nil {
+			return nil, err
+		}
+
 		resData, _ := json.Marshal(mm)
 
 		json.Unmarshal(resData, r)

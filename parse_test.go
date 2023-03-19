@@ -410,7 +410,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
 }
 
-func TestParserDesrializesJsonCorrectly(t *testing.T) {
+func TestParserDesrializesJSONCorrectly(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)

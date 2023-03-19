@@ -45,6 +45,9 @@ func testSetupConfig(t *testing.T) *Config {
 	err := c.addResource(net1, nil, nil)
 	require.NoError(t, err)
 
+	// ensure the config reference is set
+	require.Equal(t, c, net1.Metadata().ParentConfig)
+
 	err = c.addResource(con1, nil, nil)
 	require.NoError(t, err)
 
@@ -266,4 +269,38 @@ func TestToJSONSerializesJSON(t *testing.T) {
 	require.Greater(t, len(d), 0)
 
 	require.Contains(t, string(d), `"name": "test_dev"`)
+}
+
+func TestAppendResourcesMerges(t *testing.T) {
+	typs := types.DefaultTypes()
+	typs[structs.TypeNetwork] = &structs.Network{}
+
+	c := testSetupConfig(t)
+
+	c2 := newConfig()
+	net1, err := typs.CreateResource(structs.TypeNetwork, "cloud2")
+	require.NoError(t, err)
+	c2.addResource(net1, nil, nil)
+
+	err = c.AppendResourcesFromConfig(c2)
+	require.NoError(t, err)
+
+	net2, err := c.FindResource("resource.network.cloud2")
+	require.NoError(t, err)
+	require.Equal(t, net1, net2)
+}
+
+func TestAppendResourcesWhenExistsReturnsError(t *testing.T) {
+	typs := types.DefaultTypes()
+	typs[structs.TypeNetwork] = &structs.Network{}
+
+	c := testSetupConfig(t)
+
+	c2 := newConfig()
+	net1, err := typs.CreateResource(structs.TypeNetwork, "cloud")
+	require.NoError(t, err)
+	c2.addResource(net1, nil, nil)
+
+	err = c.AppendResourcesFromConfig(c2)
+	require.Error(t, err)
 }

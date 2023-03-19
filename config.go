@@ -82,6 +82,15 @@ func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
 	}, nil
 }
 
+// FQDNFromResource returns the ResourceFQDN for the given Resource
+func FQDNFromResource(r types.Resource) *ResourceFQDN {
+	return &ResourceFQDN{
+		Module:   r.Metadata().Module,
+		Resource: r.Metadata().Name,
+		Type:     r.Metadata().Type,
+	}
+}
+
 func (f ResourceFQDN) String() string {
 	modulePart := ""
 	if f.Module != "" {
@@ -264,6 +273,25 @@ func (c *Config) ResourceCount() int {
 	return len(c.Resources)
 }
 
+// AppendResourcesFromConfig adds the resources in the given config to
+// this config. If a resources all ready exists a ResourceExistsError
+// error is returned
+func (c *Config) AppendResourcesFromConfig(new *Config) error {
+	for _, r := range new.Resources {
+		fqdn := FQDNFromResource(r).String()
+		// does the resource already exist?
+		if _, err := c.FindResource(fqdn); err == nil {
+			return ResourceExistsError{Name: fqdn}
+		}
+
+		// we need to add the context and the body from the other resource
+		// so we can use it when parsing
+		c.addResource(r, new.contexts[r], new.bodies[r])
+	}
+
+	return nil
+}
+
 // AddResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
 func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
@@ -280,6 +308,8 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	c.Resources = append(c.Resources, r)
 	c.contexts[r] = ctx
 	c.bodies[r] = b
+
+	r.Metadata().ParentConfig = c
 
 	return nil
 }
@@ -324,6 +354,8 @@ func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
 }
 
 // ToJSON converts the config to a serializable json string
+// to unmarshal the output of this method back into a config you can use
+// the Parser.UnmarshalJSON method
 func (c *Config) ToJSON() ([]byte, error) {
 	buf := bytes.NewBuffer([]byte{})
 	enc := json.NewEncoder(buf)
