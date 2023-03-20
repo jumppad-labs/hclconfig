@@ -67,6 +67,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 
 	cont := r.(*structs.Container)
 
+	require.Equal(t, "resource.container.consul", cont.Metadata().ID)
 	require.Equal(t, "consul", cont.Metadata().Name)
 	require.Equal(t, absoluteFolderPath, cont.Metadata().File)
 
@@ -372,7 +373,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
-		calls = append(calls, ResourceFQDN{
+		calls = append(calls, types.ResourceFQDN{
 			Module:   r.Metadata().Module,
 			Resource: r.Metadata().Name,
 			Type:     r.Metadata().Type,

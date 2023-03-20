@@ -52,7 +52,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		dependencies := map[types.Resource]bool{}
 		for _, d := range resource.Metadata().DependsOn {
 			var err error
-			fqdn, err := ParseFQDN(d)
+			fqdn, err := types.ParseFQDN(d)
 			if err != nil {
 				return nil, fmt.Errorf("invalid dependency: %s, error: %s", d, err)
 			}
@@ -91,7 +91,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			myModule := parts[(len(parts) - 1)]
 			parentModule := parts[:len(parts)-1]
 
-			fqdn := &ResourceFQDN{
+			fqdn := &types.ResourceFQDN{
 				Module:   strings.Join(parentModule, "."),
 				Resource: myModule,
 				Type:     types.TypeModule,
@@ -182,7 +182,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		// all linked values should now have been processed as the graph
 		// will have handled them first
 		for _, v := range r.Metadata().ResourceLinks {
-			fqdn, err := ParseFQDN(v)
+			fqdn, err := types.ParseFQDN(v)
 			if err != nil {
 				return diags.Append(fmt.Errorf("error parsing resource link error:%s", err))
 			}
@@ -266,7 +266,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		if p, ok := r.(types.Processable); ok {
 			err := p.Process()
 			if err != nil {
-				fqdn := &ResourceFQDN{Module: r.Metadata().Module, Type: r.Metadata().Type, Resource: r.Metadata().Name}
+				fqdn := &types.ResourceFQDN{Module: r.Metadata().Module, Type: r.Metadata().Type, Resource: r.Metadata().Name}
 				return diags.Append(fmt.Errorf("error calling process for resource: %s, %s", fqdn, err))
 			}
 		}

@@ -370,6 +370,9 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	rt.Metadata().DependsOn = dependsOn
 	rt.Metadata().File = file
 
+	// set the id
+	rt.Metadata().ID = types.FQDNFromResource(rt).String()
+
 	err := decodeBody(ctx, file, b, rt)
 	if err != nil {
 		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
@@ -454,6 +457,9 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 	rt.Metadata().DependsOn = dependsOn
 	rt.Metadata().File = file
 
+	// set the id
+	rt.Metadata().ID = types.FQDNFromResource(rt).String()
+
 	err = decodeBody(ctx, file, b, rt)
 	if err != nil {
 		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
@@ -474,7 +480,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 
 	// add a reference to the config so that resources can find out about their
 	// world
-
 
 	return nil
 }

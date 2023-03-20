@@ -14,8 +14,13 @@ type Resource interface {
 }
 
 // ResourceMetadata is the embedded type for any config resources
-// it deinfes common meta data that all resources share
+// it defines common meta data that all resources share
 type ResourceMetadata struct {
+	// ID is the unique id for the resource
+	// this follows the convention module_name.resource_name
+	// i.e module.module1.module2.resource.container.mine
+	ID string `json:"id"`
+
 	// Name is the name of the resource
 	Name string `json:"name"`
 
@@ -41,7 +46,7 @@ type ResourceMetadata struct {
 	Properties map[string]interface{} `hcl:"properties,optional" json:"properties,omitempty"`
 
 	// ParentConfig allows the location of other resources in the config
-	ParentConfig Findable
+	ParentConfig Findable `json:"-"`
 }
 
 func (r *ResourceMetadata) Metadata() *ResourceMetadata {
