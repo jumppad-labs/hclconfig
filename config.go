@@ -1,6 +1,8 @@
 package hclconfig
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,90 +10,6 @@ import (
 	"github.com/hashicorp/hcl2/hcl/hclsyntax"
 	"github.com/shipyard-run/hclconfig/types"
 )
-
-type ResourceFQDN struct {
-	// Name of the module
-	Module string
-	// Type of the resource
-	Type string
-	// Resource name
-	Resource string
-	// Attribute for the resource
-	Attribute string
-}
-
-// ParseFQDN parses a resource fqdn and returns the individual components
-// e.g:
-// module.module1.resource.container.mine
-// module.module1.module2.resource.container.mine
-// module.module1.module2
-// module.module1.module2.output.mine
-func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
-	noResource := false
-	moduleName := ""
-	typeName := ""
-	resourceName := ""
-	attribute := ""
-
-	// first split on the resource
-	parts := strings.Split(fqdn, "resource.")
-	if len(parts) < 2 {
-		noResource = true
-	}
-
-	if !noResource {
-		// then split into type and name
-		resourceParts := strings.Split(parts[1], ".")
-		if len(resourceParts) < 2 {
-			return nil, fmt.Errorf("ParseFQDN expects the fqdn to be formatted as resource.type.name or module.name.resource.type.name. The fqdn: %s, does not contain a resource type", fqdn)
-		}
-
-		typeName = resourceParts[0]
-		resourceName = resourceParts[1]
-		attribute = strings.Join(resourceParts[2:], ".")
-	}
-
-	// now attempt to parse the module
-	moduleParts := strings.Split(parts[0], "module.")
-	if len(moduleParts) > 1 {
-
-		// if we have a module does it reference an output
-		outputParts := strings.Split(moduleParts[1], "output.")
-		if len(outputParts) > 1 {
-			moduleName = strings.TrimSuffix(outputParts[0], ".")
-			resourceName = outputParts[1]
-			typeName = types.TypeOutput
-			attribute = "value"
-		} else {
-			// return only the module name
-			moduleName = strings.TrimSuffix(moduleParts[1], ".")
-		}
-	}
-
-	if moduleName == "" && noResource {
-		return nil, fmt.Errorf("ParseFQDN expects the fqdn to be formatted as resource.type.name or module.name.resource.type.name. The fqdn: %s, does not contain a module or resource identifier", fqdn)
-	}
-
-	return &ResourceFQDN{
-		Module:    moduleName,
-		Type:      typeName,
-		Resource:  resourceName,
-		Attribute: attribute,
-	}, nil
-}
-
-func (f ResourceFQDN) String() string {
-	modulePart := ""
-	if f.Module != "" {
-		modulePart = fmt.Sprintf("module.%s.", f.Module)
-	}
-
-	if f.Type == types.TypeOutput {
-		return fmt.Sprintf("%s%s.%s", modulePart, f.Type, f.Resource)
-	}
-
-	return fmt.Sprintf("%sresource.%s.%s", modulePart, f.Type, f.Resource)
-}
 
 // Config defines the stack config
 type Config struct {
@@ -119,7 +37,7 @@ func (e ResourceExistsError) Error() string {
 }
 
 // New creates a new Config
-func NewConfig() *Config {
+func newConfig() *Config {
 	c := &Config{
 		Resources: []types.Resource{},
 		contexts:  map[types.Resource]*hcl.EvalContext{},
@@ -147,7 +65,7 @@ func NewConfig() *Config {
 // e.g. to find a cluster named k3s in the module module1
 // r, err := c.FindResource("module.module1.resource.cluster.k3s")
 func (c *Config) FindResource(path string) (types.Resource, error) {
-	fqdn, err := ParseFQDN(path)
+	fqdn, err := types.ParseFQDN(path)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +88,7 @@ func (c *Config) FindResource(path string) (types.Resource, error) {
 }
 
 func (c *Config) FindRelativeResource(path string, parentModule string) (types.Resource, error) {
-	fqdn, err := ParseFQDN(path)
+	fqdn, err := types.ParseFQDN(path)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +127,7 @@ func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 }
 
 func (c *Config) FindRelativeModuleResources(module string, parent string, includeSubModules bool) ([]types.Resource, error) {
-	fqdn, err := ParseFQDN(module)
+	fqdn, err := types.ParseFQDN(module)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +146,7 @@ func (c *Config) FindRelativeModuleResources(module string, parent string, inclu
 // are also returned
 // if includeSubModules is false only the resources defined in the given module are returned
 func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]types.Resource, error) {
-	fqdn, err := ParseFQDN(module)
+	fqdn, err := types.ParseFQDN(module)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +180,26 @@ func (c *Config) ResourceCount() int {
 	return len(c.Resources)
 }
 
+// AppendResourcesFromConfig adds the resources in the given config to
+// this config. If a resources all ready exists a ResourceExistsError
+// error is returned
+func (c *Config) AppendResourcesFromConfig(new *Config) error {
+	for _, r := range new.Resources {
+		fqdn := types.FQDNFromResource(r).String()
+
+		// does the resource already exist?
+		if _, err := c.FindResource(fqdn); err == nil {
+			return ResourceExistsError{Name: fqdn}
+		}
+
+		// we need to add the context and the body from the other resource
+		// so we can use it when parsing
+		c.addResource(r, new.contexts[r], new.bodies[r])
+	}
+
+	return nil
+}
+
 // AddResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
 func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
@@ -278,6 +216,8 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	c.Resources = append(c.Resources, r)
 	c.contexts[r] = ctx
 	c.bodies[r] = b
+
+	r.Metadata().ParentConfig = c
 
 	return nil
 }
@@ -319,4 +259,20 @@ func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
 	}
 
 	return nil, ResourceNotFoundError{}
+}
+
+// ToJSON converts the config to a serializable json string
+// to unmarshal the output of this method back into a config you can use
+// the Parser.UnmarshalJSON method
+func (c *Config) ToJSON() ([]byte, error) {
+	buf := bytes.NewBuffer([]byte{})
+	enc := json.NewEncoder(buf)
+
+	enc.SetIndent("", " ")
+	err := enc.Encode(c)
+	if err != nil {
+		return nil, fmt.Errorf("unable to encode config: %s", err)
+	}
+
+	return buf.Bytes(), nil
 }

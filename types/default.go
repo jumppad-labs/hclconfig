@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-var TypeNotRegisteredError = fmt.Errorf("type not registered")
+var ErrTypeNotRegistered = fmt.Errorf("type not registered")
 
 type RegisteredTypes map[string]Resource
 
@@ -27,9 +27,10 @@ func (r RegisteredTypes) CreateResource(resourceType, resourceName string) (Reso
 		res := ptr.Interface().(Resource)
 		res.Metadata().Name = resourceName
 		res.Metadata().Type = resourceType
+		res.Metadata().Properties = map[string]interface{}{}
 
 		return res, nil
 	}
 
-	return nil, TypeNotRegisteredError
+	return nil, ErrTypeNotRegistered
 }

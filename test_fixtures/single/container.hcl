@@ -2,11 +2,11 @@ variable "cpu_resources" {
   default = 2048
 }
 
-network "onprem" {
+resource "network" "onprem" {
   subnet = "10.6.0.0/16"
 }
 
-container "consul" {
+resource "container" "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
@@ -16,7 +16,7 @@ container "consul" {
 
   resources {
     # Max CPU to consume, 1024 is one core, default unlimited
-    cpu = var.cpu_resources
+    cpu = variable.cpu_resources
   }
 
   volume {
@@ -24,7 +24,7 @@ container "consul" {
     destination = "/cache"
     type        = "volume"
   }
-  
+
 }
 
 output "container_name" {

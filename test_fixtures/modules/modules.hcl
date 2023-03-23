@@ -1,4 +1,8 @@
-container "base" {
+variable "default_cpu" {
+  default = "512"
+}
+
+resource "container" "base" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
@@ -6,12 +10,12 @@ container "base" {
     ip_address = "10.6.0.200"
   }
 
-  dns = ["a","b","c"]
+  dns = ["a", "b", "c"]
 
   resources {
-    memory = 1024
+    memory  = 1024
     cpu_pin = [1]
-    cpu = 4096
+    cpu     = 4096
   }
 }
 
@@ -24,6 +28,16 @@ module "consul_1" {
 
 module "consul_2" {
   source = "../single"
+  variables = {
+    cpu_resources = variable.default_cpu
+  }
+}
+
+module "consul_3" {
+  // all resources in this module will only be created after all the 
+  // resources in 'consul_1' have been created.
+  depends_on = ["module.consul_1"]
+  source     = "../single"
 }
 
 output "module1_container_resources_cpu" {
@@ -32,4 +46,8 @@ output "module1_container_resources_cpu" {
 
 output "module2_container_resources_cpu" {
   value = module.consul_2.output.container_resources_cpu
+}
+
+output "module3_container_resources_cpu" {
+  value = module.consul_3.output.container_resources_cpu
 }

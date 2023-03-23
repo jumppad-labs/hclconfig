@@ -1,11 +1,12 @@
 variable "cpu_resources" {
   default = 2048
 }
-network "onprem" {
+
+resource "network" "onprem" {
   subnet = "10.6.0.0/16"
 }
 
-template "consul_config" {
+resource "template" "consul_config" {
   disabled = false
 
   source = <<-EOF
@@ -30,7 +31,7 @@ template "consul_config" {
   }
 }
 
-template "consul_config_update" {
+resource "template" "consul_config_update" {
   disabled = false
 
   source = <<-EOF
@@ -46,7 +47,7 @@ template "consul_config_update" {
   }
 }
 
-container "base" {
+resource "container" "base" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
@@ -54,15 +55,15 @@ container "base" {
     ip_address = "10.6.0.200"
   }
 
-  dns = ["a","b","c"]
+  dns = ["a", "b", "c"]
 
   resources {
-    memory = 1024
+    memory  = 1024
     cpu_pin = [1]
   }
 }
 
-container "consul" {
+resource "container" "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
@@ -74,7 +75,7 @@ container "consul" {
 
   resources {
     # Max CPU to consume, 1024 is one core, default unlimited
-    cpu = var.cpu_resources
+    cpu = variable.cpu_resources
     # Pin container to specified CPU cores, default all cores
     cpu_pin = resource.container.base.resources.cpu_pin
     # max memory in MB to consume, default unlimited
@@ -85,7 +86,7 @@ container "consul" {
     source      = "."
     destination = "/test/${resource.template.consul_config.destination}"
   }
-  
+
 
   volume {
     source      = resource.template.consul_config.destination
@@ -97,7 +98,7 @@ container "consul" {
     destination = "/cache"
     type        = "volume"
   }
-  
+
   volume {
     source      = "."
     destination = "/test2/${env(resource.template.consul_config.name)}"

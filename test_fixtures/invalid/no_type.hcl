@@ -1,4 +1,4 @@
-resource "container" "enabled" {
+resource "myresource" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {

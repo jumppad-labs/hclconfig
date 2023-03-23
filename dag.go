@@ -44,15 +44,13 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		// add links to dependencies
 		// this is here for now as we might need to process these two
 		// lists separately
-		for _, v := range resource.Metadata().ResourceLinks {
-			resource.Metadata().DependsOn = append(resource.Metadata().DependsOn, v)
-		}
+		resource.Metadata().DependsOn = append(resource.Metadata().DependsOn, resource.Metadata().ResourceLinks...)
 
 		// use a map to keep a unique list
 		dependencies := map[types.Resource]bool{}
 		for _, d := range resource.Metadata().DependsOn {
 			var err error
-			fqdn, err := ParseFQDN(d)
+			fqdn, err := types.ParseFQDN(d)
 			if err != nil {
 				return nil, fmt.Errorf("invalid dependency: %s, error: %s", d, err)
 			}
@@ -60,9 +58,9 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			// only search for module dependencies when has a module path and
 			// is not a resource or output
 			if fqdn.Module != "" && fqdn.Resource == "" {
-				deps, err := c.FindRelativeModuleResources(fqdn.Module, resource.Metadata().Module, true)
+				deps, err := c.FindRelativeModuleResources(d, resource.Metadata().Module, true)
 				if err != nil {
-					return nil, fmt.Errorf("unable to find module resource in module: %s, error: %s", fqdn.Module, err)
+					return nil, fmt.Errorf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
 				}
 
 				for _, d := range deps {
@@ -91,7 +89,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			myModule := parts[(len(parts) - 1)]
 			parentModule := parts[:len(parts)-1]
 
-			fqdn := &ResourceFQDN{
+			fqdn := &types.ResourceFQDN{
 				Module:   strings.Join(parentModule, "."),
 				Resource: myModule,
 				Type:     types.TypeModule,
@@ -118,10 +116,43 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 // ProcessCallback is called with the resource when the graph processes that particular node
 type ProcessCallback func(r types.Resource) error
 
+// Process creates a Directed Acyclic Graph for the configuration resources depending on their
+// links and references. All the resources defined in the graph are traversed and
+// the provided callback is executed for every resource.
+// graph.
+// Specifying the reverse option to 'true' causes the graph to be traversed in reverse
+// order.
+func (c *Config) Process(wf ProcessCallback, reverse bool) error {
+	return c.process(
+		func(v dag.Vertex) (diags tfdiags.Diagnostics) {
+
+			r, ok := v.(types.Resource)
+			// not a resource skip, this should never happen
+			if !ok {
+				panic("an item has been added to the graph that is not a resource")
+			}
+
+			// if this is the root module or is disabled skip
+			if (r.Metadata().Name == "root" && r.Metadata().Module == "" && r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
+				return nil
+			}
+
+			// call the callback
+			err := wf(r)
+			if err != nil {
+				diags.Append(err)
+			}
+
+			return nil
+		},
+		reverse,
+	)
+}
+
 // Until parse is called the HCL configuration is not deserialized into
 // the structs. We have to do this using a graph as some inputs depend on
-// outputs from other resrouces, therefore we need to process this is strict order
-func (c *Config) process(wf ProcessCallback) error {
+// outputs from other resources, therefore we need to process this is strict order
+func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	// build the graph
 	d, err := doYaLikeDAGs(c)
 	if err != nil {
@@ -139,7 +170,8 @@ func (c *Config) process(wf ProcessCallback) error {
 
 	// define the walker callback that will be called for every node in the graph
 	w := dag.Walker{}
-	w.Callback = c.createCallback(wf)
+	w.Callback = wf
+	w.Reverse = reverse
 
 	// update the dag and process the nodes
 	log.SetOutput(ioutil.Discard)
@@ -182,7 +214,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		// all linked values should now have been processed as the graph
 		// will have handled them first
 		for _, v := range r.Metadata().ResourceLinks {
-			fqdn, err := ParseFQDN(v)
+			fqdn, err := types.ParseFQDN(v)
 			if err != nil {
 				return diags.Append(fmt.Errorf("error parsing resource link error:%s", err))
 			}
@@ -266,7 +298,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		if p, ok := r.(types.Processable); ok {
 			err := p.Process()
 			if err != nil {
-				fqdn := &ResourceFQDN{Module: r.Metadata().Module, Type: r.Metadata().Type, Resource: r.Metadata().Name}
+				fqdn := &types.ResourceFQDN{Module: r.Metadata().Module, Type: r.Metadata().Type, Resource: r.Metadata().Name}
 				return diags.Append(fmt.Errorf("error calling process for resource: %s, %s", fqdn, err))
 			}
 		}
