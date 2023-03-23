@@ -34,7 +34,10 @@ module "consul_2" {
 }
 
 module "consul_3" {
-  source = "../single"
+  // all resources in this module will only be created after all the 
+  // resources in 'consul_1' have been created.
+  depends_on = ["module.consul_1"]
+  source     = "../single"
 }
 
 output "module1_container_resources_cpu" {

@@ -36,17 +36,30 @@ func (r ResourceTypeNotExistError) Error() string {
 }
 
 type ParserOptions struct {
-	Variables         map[string]string
-	VariablesFiles    []string
+	// list of default variable values to add to the parser
+	Variables map[string]string
+	// list of variable files to be read by the parser
+	VariablesFiles []string
+	// environment variable prefix
 	VariableEnvPrefix string
-	ModuleCache       string
-	Callback          ProcessCallback
+	// location of any downloaded modules
+	ModuleCache string
+	// callback executed when the parser reads a resource stanza, callbacks are
+	// executed based on a directed acyclic graph. If resource 'a' references
+	// a property defined in resource 'b', i.e 'resouce.a.myproperty' then the
+	// callback for resource 'b' will be executed before resource 'a'. This allows
+	// you to set the dependent properties of resource 'b' before resource 'a'
+	// consumes them.
+	ParseCallback ProcessCallback
 }
 
 // DefaultOptions returns a ParserOptions object with the
 // ModuleCache set to the default directory of $HOME/.hclconfig/cache
 // if the $HOME folder can not be determined, the cache is set to the
 // current folder
+// VariableEnvPrefix is set to 'HCL_VAR_', should a variable be defined
+// called 'foo' setting the environment variable 'HCL_VAR_foo' will override
+// any default value
 func DefaultOptions() *ParserOptions {
 	cacheDir, err := os.UserHomeDir()
 	if err != nil {
@@ -110,7 +123,7 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 	}
 
 	// process the files and resolve dependency
-	return c, c.process(p.options.Callback)
+	return c, c.process(c.createCallback(p.options.ParseCallback), false)
 }
 
 // ParseDirectory parses all resource and variable files in the given directory
@@ -125,7 +138,7 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	}
 
 	// process the files and resolve dependency
-	return c, c.process(p.options.Callback)
+	return c, c.process(c.createCallback(p.options.ParseCallback), false)
 }
 
 // internal method
@@ -365,6 +378,26 @@ func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, pare
 	return nil
 }
 
+func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dependsOn []string) error {
+	r.Metadata().DependsOn = dependsOn
+
+	if attr, ok := b.Attributes["depends_on"]; ok {
+
+		dependsOnVal, diags := attr.Expr.Value(ctx)
+		if diags.HasErrors() {
+			return fmt.Errorf("unable to read source from module: %s", diags.Error())
+		}
+
+		// depends on is a slice of string
+		dependsOnSlice := dependsOnVal.AsValueSlice()
+		for _, d := range dependsOnSlice {
+			r.Metadata().DependsOn = append(r.Metadata().DependsOn, d.AsString())
+		}
+	}
+
+	return nil
+}
+
 func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
 	// check the module has a name
 	if len(b.Labels) != 1 {
@@ -376,7 +409,6 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), b.Labels[0])
 
 	rt.Metadata().Module = moduleName
-	rt.Metadata().DependsOn = dependsOn
 	rt.Metadata().File = file
 
 	// set the id
@@ -450,6 +482,9 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		// set disabled
 		setDisabled(ctx, r, bdy, rt.Metadata().Disabled)
 
+		// depends on is a property of the embedded type we need to set this manually
+		setDependsOn(ctx, rt, b.Body, dependsOn)
+
 		c.addResource(r, ctx, bdy)
 	}
 
@@ -484,7 +519,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	}
 
 	rt.Metadata().Module = moduleName
-	rt.Metadata().DependsOn = dependsOn
 	rt.Metadata().File = file
 
 	// set the id
@@ -495,7 +529,11 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		return fmt.Errorf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
 	}
 
+	// disabled is a property of the embedded type we need to add this manually
 	setDisabled(ctx, rt, b.Body, disabled)
+
+	// depends on is a property of the embedded type we need to set this manually
+	setDependsOn(ctx, rt, b.Body, dependsOn)
 
 	err = c.addResource(rt, ctx, b.Body)
 	if err != nil {

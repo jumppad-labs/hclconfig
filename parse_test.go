@@ -406,7 +406,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.Callback = func(r types.Resource) error {
+	o.ParseCallback = func(r types.Resource) error {
 		callSync.Lock()
 
 		calls = append(calls, types.ResourceFQDN{
@@ -433,6 +433,12 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	// -- -- -- -- module.consul_1.resource.output.container_name
 	// -- -- -- -- module.consul_1.resource.output.container_resources_cpu
 	// -- -- -- -- -- resource.output.module_1_container_resources_cpu
+	// -- -- -- -- -- -- resource.module.consul_3
+	// -- -- -- -- -- -- -- module.consul_3.resource.network.onprem
+	// -- -- -- -- -- -- -- -- module.consul_3.resource.container.consul
+	// -- -- -- -- -- -- -- -- -- module.consul_3.resource.output.container_name
+	// -- -- -- -- -- -- -- -- -- module.consul_3.resource.output.container_resources_cpu
+	// -- -- -- -- -- -- -- -- -- -- resource.output.module_1_container_resources_cpu
 	// resource.module.consul_2
 	// -- module.consul_2.resource.network.onprem
 	// -- -- module.consul_2.resource.container.consul
@@ -440,11 +446,28 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	// -- -- -- module.consul_2.resource.output.container_resources_cpu
 	// -- -- -- -- resource.output.module_2_container_resources_cpu
 
+	// module1 depends on an attribute of resource.container.base, all resources in module1 should only
+	// be processed after container.base has been created
 	requireBefore(t, "resource.container.base", "resource.module.consul_1", calls)
+
+	// resource.network.onprem in module.consul_2 should be created after the top level module is created
 	requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
+
+	// resource.container.consul in module consul_2 depends on resource.network.onprem in module2 it should always
+	// be created after the network
 	requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
+
+	// the output module_1_container_resources_cpu depends on an output defined in module consul_1, it should always be created
+	// after all resources in module consul_1
 	requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
+
+	// the output module_2_container_resources_cpu depends on an output defined in module consul_2, it should always be created
+	// after all resources in module consul_2
 	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
+
+	// the module consul_3 has a hard coded dependency on module_1, it should only be created after all
+	// resources in module_1 have been created
+	requireBefore(t, "module.consul_1.output.container_resources_cpu", "resource.module.consul_3", calls)
 }
 
 func TestParserDesrializesJSONCorrectly(t *testing.T) {
