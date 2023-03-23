@@ -1,5 +1,7 @@
 package types
 
+var TypeResource = "resource"
+
 // Processable defines an optional interface that allows a resource to define a callback
 // that is executed when the resources is processed by the DAG.
 type Processable interface {

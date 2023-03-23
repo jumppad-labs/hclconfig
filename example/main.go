@@ -15,6 +15,7 @@ func main() {
 	p := hclconfig.NewParser(o)
 	// register the types
 	p.RegisterType("config", &Config{})
+	p.RegisterType("config", &Config{})
 	p.RegisterType("postgres", &PostgreSQL{})
 
 	// register a custom function

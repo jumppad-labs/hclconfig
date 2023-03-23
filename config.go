@@ -186,6 +186,7 @@ func (c *Config) ResourceCount() int {
 func (c *Config) AppendResourcesFromConfig(new *Config) error {
 	for _, r := range new.Resources {
 		fqdn := types.FQDNFromResource(r).String()
+
 		// does the resource already exist?
 		if _, err := c.FindResource(fqdn); err == nil {
 			return ResourceExistsError{Name: fqdn}

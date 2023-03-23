@@ -321,23 +321,25 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			)
 		}
 
-		name := b.Labels[0]
-
 		// create the registered type if not a variable or output
 		// variables and outputs are processed in a separate run
 		switch b.Type {
 		case types.TypeVariable:
 			continue
 		case types.TypeModule:
-			err := p.parseModule(ctx, c, name, file, b, moduleName, dependsOn)
+			err := p.parseModule(ctx, c, file, b, moduleName, dependsOn)
 			if err != nil {
 				return fmt.Errorf("unable to process module: %s", err)
 			}
-		default:
-			err := p.parseResource(ctx, c, name, file, b, moduleName, dependsOn, disabled)
+		case types.TypeOutput:
+			fallthrough
+		case types.TypeResource:
+			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn, disabled)
 			if err != nil {
 				return fmt.Errorf("unable to process resource: %s", err)
 			}
+		default:
+			return fmt.Errorf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
 		}
 	}
 
@@ -363,8 +365,15 @@ func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, pare
 	return nil
 }
 
-func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
-	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), name)
+func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
+	// check the module has a name
+	if len(b.Labels) != 1 {
+		return fmt.Errorf(`error in file %s at position %d,%d, invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`, file, b.Range().Start.Line, b.TypeRange.Start.Column)
+	}
+
+	name := b.Labels[0]
+
+	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), b.Labels[0])
 
 	rt.Metadata().Module = moduleName
 	rt.Metadata().DependsOn = dependsOn
@@ -447,10 +456,31 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, name, file string,
 	return nil
 }
 
-func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) error {
-	rt, err := p.registeredTypes.CreateResource(b.Type, name)
-	if err != nil {
-		return fmt.Errorf("error in file '%s': unable to create resource '%s' %s", file, b.Type, err)
+func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) error {
+
+	var rt types.Resource
+	var err error
+
+	switch b.Type {
+	case types.TypeResource:
+		// if the type is resource there should be two labels, one for the type and one for the name
+		if len(b.Labels) != 2 {
+			return fmt.Errorf(`error in file %s at position %d,%d, invalid formatting for 'resource' stanza, resources should have a name and a type, i.e. 'resource "type" "name" {}'`, file, b.Range().Start.Line, b.Range().Start.Column)
+		}
+		rt, err = p.registeredTypes.CreateResource(b.Labels[0], b.Labels[1])
+		if err != nil {
+			return fmt.Errorf("error in file '%s': unable to create resource '%s' %s", file, b.Type, err)
+		}
+	case types.TypeOutput:
+		// if the type is output check there is one label
+		if len(b.Labels) != 1 {
+			return fmt.Errorf(`error in file %s at position %d,%d, invalid formatting for 'output' stanza, resources should have a name and a type, i.e. 'output "name" {}'`, file, b.Range().Start.Line, b.Range().Start.Column)
+		}
+
+		rt, err = p.registeredTypes.CreateResource(types.TypeOutput, b.Labels[0])
+		if err != nil {
+			return fmt.Errorf("error in file '%s': unable to create output '%s' %s", file, b.Type, err)
+		}
 	}
 
 	rt.Metadata().Module = moduleName
@@ -462,7 +492,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 
 	err = decodeBody(ctx, file, b, rt)
 	if err != nil {
-		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
+		return fmt.Errorf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
 	}
 
 	setDisabled(ctx, rt, b.Body, disabled)
@@ -471,8 +501,8 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 	if err != nil {
 		return fmt.Errorf(
 			"Unable to add resource %s.%s in file %s: %s",
-			b.Type,
 			b.Labels[0],
+			b.Labels[1],
 			file,
 			err,
 		)
@@ -485,7 +515,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, name, file strin
 }
 
 func setContextVariableIfMissing(ctx *hcl.EvalContext, key string, value cty.Value) {
-	if m, ok := ctx.Variables["var"]; ok {
+	if m, ok := ctx.Variables["variable"]; ok {
 		if _, ok := m.AsValueMap()[key]; ok {
 			return
 		}
@@ -498,13 +528,13 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 	valMap := map[string]cty.Value{}
 
 	// get the existing map
-	if m, ok := ctx.Variables["var"]; ok {
+	if m, ok := ctx.Variables["variable"]; ok {
 		valMap = m.AsValueMap()
 	}
 
 	valMap[key] = value
 
-	ctx.Variables["var"] = cty.ObjectVal(valMap)
+	ctx.Variables["variable"] = cty.ObjectVal(valMap)
 }
 
 // setContextVariableFromPath sets a context variable using a nested structure based
@@ -763,7 +793,7 @@ func addEmptyValueToContext(ctx *hcl.EvalContext, path string, resource interfac
 // e.g path "volume[1].source" is string
 func findTypeFromInterface(path string, s interface{}) string {
 	// strip the indexes as we are doing the lookup on a empty struct
-	re, _ := regexp.Compile("\\[[0-9]+\\]")
+	re, _ := regexp.Compile(`\[[0-9]+\]`)
 	stripped := re.ReplaceAllString(path, "")
 
 	value := reflect.ValueOf(s).Type()

@@ -6,7 +6,7 @@ variable "db_password" {
   default = "password"
 }
 
-config "myapp" {
+resource "config" "myapp" {
   // Custom functions can be created to enable functionality like generating random numbers
   id = "myapp_${random_number()}"
 
@@ -23,22 +23,43 @@ config "myapp" {
   }
 }
 
-postgres "mydb" {
+resource "postgres" "mydb" {
   location = "localhost"
-  port = 5432
-  name = "mydatabase"
+  port     = 5432
+  name     = "mydatabase"
 
   // Varaibles can be used to set values, the default values for these variables will be overidden
   // by values set by the environment variables HCL_db_username and HCL_db_password
-  username = var.db_username
-  password = var.db_password
+  username = variable.db_username
+  password = variable.db_password
 }
 
-module "mymodule" {
+// modules can use a git ref to be remotely downloaded from the source
+resource "module" "mymodule_1" {
   source = "github.com/shipyard-run/hclconfig/example/modules//db"
 
   variables = {
-    db_username = "root"
+    db_username = var.db_username
     db_password = "topsecret"
   }
+}
+
+// modules can also use 
+resource "module" "mymodule_2" {
+  source = "../example/modules/db"
+
+  variables = {
+    db_username = "root"
+    db_password = "password"
+  }
+}
+
+// outputs allow you to specify values that can be consumed from other 
+// modules
+output "module1_connection_string" {
+  value = module.mymodule_1.output.connection_string
+}
+
+output "module2_connection_string" {
+  value = module.mymodule_2.output.connection_string
 }

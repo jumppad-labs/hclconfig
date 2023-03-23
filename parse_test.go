@@ -200,7 +200,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	require.NoError(t, err)
 
 	// count the resources, should create 4
-	require.Len(t, c.Resources, 13)
+	require.Len(t, c.Resources, 19)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -211,6 +211,12 @@ func TestParseModuleCreatesResources(t *testing.T) {
 
 	// check resource has been created
 	cont, err = c.FindResource("module.consul_2.resource.container.consul")
+	require.NoError(t, err)
+
+	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
+
+	// check resource has been created
+	cont, err = c.FindResource("module.consul_3.resource.container.consul")
 	require.NoError(t, err)
 
 	// check interpolation value
@@ -224,6 +230,12 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	require.Equal(t, "4096", cont.(*types.Output).Value)
 
 	cont, err = c.FindResource("resource.output.module2_container_resources_cpu")
+	require.NoError(t, err)
+
+	// check interpolation value
+	require.Equal(t, "512", cont.(*types.Output).Value)
+
+	cont, err = c.FindResource("resource.output.module3_container_resources_cpu")
 	require.NoError(t, err)
 
 	// check interpolation value
@@ -249,8 +261,32 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 	require.Equal(t, 2048, cont.Resources.CPU)
 }
 
-func TestParseContainerWithNoLabelReturnsError(t *testing.T) {
+func TestParseContainerWithNoNameReturnsError(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_name.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err)
+}
+
+func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_type.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err)
+}
+
+func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_resource.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
