@@ -13,8 +13,8 @@ resource "postgres" "mydb" {
 
   // Varaibles can be used to set values, the default values for these variables will be overidden
   // by values set by the environment variables HCL_db_username and HCL_db_password
-  username = var.db_username
-  password = var.db_password
+  username = variable.db_username
+  password = variable.db_password
 }
 
 // outputs can be specified to allow values to be passed to config
