@@ -1,5 +1,7 @@
 # HCL Configuration Parser
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/shipyard-run/hclconfig.svg)](https://pkg.go.dev/github.com/shipyard-run/hclconfig)
+
 This package allows you to process configuration files written using the HashiCorp Configuration Language (HCL).
 It has full resource linking where a parameter in one configuration stanza can reference a parameter in another stanza.
 Variable support, and Modules allowing configuration to be loaded from local or remote sources.
