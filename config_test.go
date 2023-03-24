@@ -46,7 +46,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	out1, _ := typs.CreateResource(types.TypeOutput, "fqdn")
 	out1.Metadata().Module = "module1.module2"
 
-	c := newConfig()
+	c := NewConfig()
 	err := c.addResource(net1, nil, nil)
 	require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestAppendResourcesMerges(t *testing.T) {
 
 	c, _ := testSetupConfig(t)
 
-	c2 := newConfig()
+	c2 := NewConfig()
 	net1, err := typs.CreateResource(structs.TypeNetwork, "cloud2")
 	require.NoError(t, err)
 	c2.addResource(net1, nil, nil)
@@ -245,7 +245,7 @@ func TestAppendResourcesWhenExistsReturnsError(t *testing.T) {
 
 	c, _ := testSetupConfig(t)
 
-	c2 := newConfig()
+	c2 := NewConfig()
 	net1, err := typs.CreateResource(structs.TypeNetwork, "cloud")
 	require.NoError(t, err)
 	c2.addResource(net1, nil, nil)

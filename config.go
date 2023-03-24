@@ -37,7 +37,7 @@ func (e ResourceExistsError) Error() string {
 }
 
 // New creates a new Config
-func newConfig() *Config {
+func NewConfig() *Config {
 	c := &Config{
 		Resources: []types.Resource{},
 		contexts:  map[types.Resource]*hcl.EvalContext{},
@@ -200,15 +200,16 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 	return nil
 }
 
-// AddResource adds a given resource to the resource list
+// AppendResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
-func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
-	rn := fmt.Sprintf("resource.%s.%s", r.Metadata().Type, r.Metadata().Name)
-	if r.Metadata().Module != "" {
-		rn = fmt.Sprintf("module.%s.resource.%s.%s", r.Metadata().Module, r.Metadata().Type, r.Metadata().Name)
-	}
+func (c *Config) AppendResource(r types.Resource) error {
+	return c.addResource(r, nil, nil)
+}
 
-	rf, err := c.FindResource(rn)
+func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
+	fqdn := types.FQDNFromResource(r)
+
+	rf, err := c.FindResource(fqdn.String())
 	if err == nil && rf != nil {
 		return ResourceExistsError{r.Metadata().Name}
 	}

@@ -114,7 +114,7 @@ func (p *Parser) RegisterFunction(name string, f interface{}) error {
 }
 
 func (p *Parser) ParseFile(file string) (*Config, error) {
-	c := newConfig()
+	c := NewConfig()
 	rootContext = buildContext(file, p.registeredFunctions)
 
 	err := p.parseFile(rootContext, file, c, p.options.Variables, p.options.VariablesFiles)
@@ -129,7 +129,7 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 // ParseDirectory parses all resource and variable files in the given directory
 // note: this method does not recurse into sub folders
 func (p *Parser) ParseDirectory(dir string) (*Config, error) {
-	c := newConfig()
+	c := NewConfig()
 	rootContext = buildContext(dir, p.registeredFunctions)
 
 	err := p.parseDirectory(rootContext, dir, c)
@@ -448,7 +448,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	}
 
 	// create a new config and add the resources later
-	moduleConfig := newConfig()
+	moduleConfig := NewConfig()
 
 	// modules should have their own context so that variables are not globally scoped
 	subContext := buildContext(moduleSrc, p.registeredFunctions)
@@ -875,7 +875,7 @@ func ensureAbsolute(path, file string) string {
 // UnmarshalJSON parses a JSON string from a serialized Config and returns a
 // valid Config.
 func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
-	conf := newConfig()
+	conf := NewConfig()
 
 	var objMap map[string]*json.RawMessage
 	err := json.Unmarshal(d, &objMap)
