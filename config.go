@@ -223,7 +223,7 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	return nil
 }
 
-func (c *Config) removeResource(rf types.Resource) error {
+func (c *Config) RemoveResource(rf types.Resource) error {
 	pos := -1
 	for i, r := range c.Resources {
 		if rf == r {
@@ -246,22 +246,6 @@ func (c *Config) removeResource(rf types.Resource) error {
 	return ResourceNotFoundError{}
 }
 
-func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
-	if ctx, ok := c.contexts[rf]; ok {
-		return ctx, nil
-	}
-
-	return nil, ResourceNotFoundError{}
-}
-
-func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
-	if b, ok := c.bodies[rf]; ok {
-		return b, nil
-	}
-
-	return nil, ResourceNotFoundError{}
-}
-
 // ToJSON converts the config to a serializable json string
 // to unmarshal the output of this method back into a config you can use
 // the Parser.UnmarshalJSON method
@@ -276,4 +260,20 @@ func (c *Config) ToJSON() ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
+	if ctx, ok := c.contexts[rf]; ok {
+		return ctx, nil
+	}
+
+	return nil, ResourceNotFoundError{}
+}
+
+func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
+	if b, ok := c.bodies[rf]; ok {
+		return b, nil
+	}
+
+	return nil, ResourceNotFoundError{}
 }

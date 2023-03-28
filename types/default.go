@@ -5,7 +5,17 @@ import (
 	"reflect"
 )
 
-var ErrTypeNotRegistered = fmt.Errorf("type not registered")
+type ErrTypeNotRegistered struct {
+	Type string
+}
+
+func (e *ErrTypeNotRegistered) Error() string {
+	return fmt.Sprintf("type %s, not registered", e.Type)
+}
+
+func NewTypeNotRegisteredError(t string) *ErrTypeNotRegistered {
+	return &ErrTypeNotRegistered{Type: t}
+}
 
 type RegisteredTypes map[string]Resource
 
@@ -32,5 +42,5 @@ func (r RegisteredTypes) CreateResource(resourceType, resourceName string) (Reso
 		return res, nil
 	}
 
-	return nil, ErrTypeNotRegistered
+	return nil, fmt.Errorf("unable to create resource: %s", NewTypeNotRegisteredError(resourceType))
 }

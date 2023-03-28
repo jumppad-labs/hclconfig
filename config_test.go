@@ -193,7 +193,7 @@ func TestFindRelativeModuleResourcesFindsResources(t *testing.T) {
 func TestRemoveResourceRemoves(t *testing.T) {
 	c, _ := testSetupConfig(t)
 
-	err := c.removeResource(c.Resources[0])
+	err := c.RemoveResource(c.Resources[0])
 	require.NoError(t, err)
 	require.Len(t, c.Resources, 7)
 }
@@ -205,7 +205,7 @@ func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
 	c, _ := testSetupConfig(t)
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "notfound")
 
-	err := c.removeResource(net1)
+	err := c.RemoveResource(net1)
 	require.Error(t, err)
 	require.Len(t, c.Resources, 8)
 }
