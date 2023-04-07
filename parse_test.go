@@ -471,6 +471,43 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	requireBefore(t, "module.consul_1.output.container_resources_cpu", "resource.module.consul_3", calls)
 }
 
+func TestParserStopsParseOnCallbackError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o := DefaultOptions()
+	calls := []string{}
+	callSync := sync.Mutex{}
+	o.ParseCallback = func(r types.Resource) error {
+		callSync.Lock()
+
+		calls = append(calls, types.ResourceFQDN{
+			Module:   r.Metadata().Module,
+			Resource: r.Metadata().Name,
+			Type:     r.Metadata().Type,
+		}.String())
+
+		callSync.Unlock()
+
+		if r.Metadata().Name == "base" {
+			return fmt.Errorf("container base error")
+		}
+
+		return nil
+	}
+
+	p := setupParser(t, o)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err)
+
+	// only 7 of the resources should be created, none of the descendants of base
+	require.Len(t, calls, 7)
+	require.NotContains(t, "resource.module.consul_1", calls)
+}
+
 func TestParserDesrializesJSONCorrectly(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {

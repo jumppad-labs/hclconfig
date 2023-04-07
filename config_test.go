@@ -1,6 +1,7 @@
 package hclconfig
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -309,4 +310,38 @@ func TestProcsessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 	// resource.container.test_dev depends on module.module1 so the call back for test_dev
 	// should happen before the module when process is reversed
 	requireBefore(t, "resource.container.test_dev", "resource.module.module1", calls)
+}
+
+func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
+	c, _ := testSetupConfig(t)
+
+	calls := []string{}
+	callSync := sync.Mutex{}
+	err := c.Process(
+		func(r types.Resource) error {
+			callSync.Lock()
+
+			calls = append(calls, types.ResourceFQDN{
+				Module:   r.Metadata().Module,
+				Resource: r.Metadata().Name,
+				Type:     r.Metadata().Type,
+			}.String())
+
+			callSync.Unlock()
+
+			if r.Metadata().Name == "cloud" {
+				return fmt.Errorf("boom")
+			}
+
+			return nil
+		},
+		true,
+	)
+
+	// we should get an error from process
+	require.Error(t, err)
+
+	// process should stop the callbacks, there may be either one or two callbacks as there are
+	// two nodes that will be executed first
+	require.LessOrEqual(t,len(calls), 2)
 }

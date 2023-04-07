@@ -6,6 +6,7 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"sync/atomic"
 
 	"github.com/hashicorp/hcl2/gohcl"
 	"github.com/hashicorp/hcl2/hcl"
@@ -118,11 +119,19 @@ type ProcessCallback func(r types.Resource) error
 
 // Process creates a Directed Acyclic Graph for the configuration resources depending on their
 // links and references. All the resources defined in the graph are traversed and
-// the provided callback is executed for every resource.
-// graph.
+// the provided callback is executed for every resource in the graph.
+//
+// Any error returned from the ProcessCallback function halts execution of any other 
+// callback for resources in the graph.
+//
 // Specifying the reverse option to 'true' causes the graph to be traversed in reverse
 // order.
 func (c *Config) Process(wf ProcessCallback, reverse bool) error {
+	// We need to ensure that Process does not execute the callback when
+	// any other callback returns an error.
+	// Unfortunately returning an error with tfdiags does not stop the walk
+	hasError := atomic.Bool{}
+
 	return c.process(
 		func(v dag.Vertex) (diags tfdiags.Diagnostics) {
 
@@ -137,10 +146,17 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 				return nil
 			}
 
-			// call the callback
+			// call the callback only if a previous error has not occurred
+			if hasError.Load() {
+				return nil
+			}
+
 			err := wf(r)
 			if err != nil {
-				diags.Append(err)
+				// set the global error mutex to stop further processing
+				hasError.Store(true)
+
+				return diags.Append(err)
 			}
 
 			return nil
