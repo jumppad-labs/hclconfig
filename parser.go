@@ -411,9 +411,6 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt.Metadata().Module = moduleName
 	rt.Metadata().File = file
 
-	// set the id
-	rt.Metadata().ID = types.FQDNFromResource(rt).String()
-
 	err := decodeBody(ctx, file, b, rt)
 	if err != nil {
 		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
@@ -428,7 +425,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		return fmt.Errorf("unable to read source from module: %s", diags.Error())
 	}
 
-	// src could be a github module or a realative folder
+	// src could be a github module or a relative folder
 	// first check if it is a folder, we need to make it absolute relative to the current file
 	dir := path.Dir(file)
 	moduleSrc := path.Join(dir, src.AsString())
@@ -521,9 +518,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	rt.Metadata().Module = moduleName
 	rt.Metadata().File = file
 
-	// set the id
-	rt.Metadata().ID = types.FQDNFromResource(rt).String()
-
 	err = decodeBody(ctx, file, b, rt)
 	if err != nil {
 		return fmt.Errorf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
@@ -540,7 +534,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	if p, ok := rt.(types.Parsable); ok {
 		err := p.Parse()
 		if err != nil {
-			return fmt.Errorf("error calling Parse for resource: %s, %s", rt.Metadata().ID, err)
+			return fmt.Errorf("error calling Parse for resource: %s, %s", types.FQDNFromResource(rt).String(), err)
 		}
 	}
 
@@ -578,7 +572,7 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 
 	valMap[key] = value
 
-	ctx.Variables["variable"] = cty.ObjectVal(valMap)
+	ctx.Variables["variable"] = cty.MapVal(valMap)
 }
 
 // setContextVariableFromPath sets a context variable using a nested structure based
@@ -631,13 +625,13 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 
 			// need to set default values or the parser will panic
 			for i, _ := range vals {
-				vals[i] = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+				vals[i] = cty.MapVal(map[string]cty.Value{".keep": cty.StringVal("true")})
 			}
 
 			val = cty.ListVal(vals)
 		} else {
 			// create a map node
-			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.StringVal("true")})
 		}
 	}
 
@@ -656,17 +650,16 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 func setListVariableFromPath(root []cty.Value, path []string, index int, value cty.Value) []cty.Value {
 	// we have a node but do we need to expand it in size?
 	if index >= len(root) {
-		fmt.Println("expand", index+1-len(root))
 		root = append(root, make([]cty.Value, index+1-len(root))...)
 	}
 
 	val := root[index]
 	if val == cty.NilVal {
-		val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+		val = cty.MapVal(map[string]cty.Value{".keep": cty.StringVal("true")})
 	}
 
 	updated := setMapVariableFromPath(val.AsValueMap(), path, value)
-	root[index] = cty.ObjectVal(updated)
+	root[index] = cty.MapVal(updated)
 
 	return root
 }
@@ -688,13 +681,6 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	}
 
 	return ctx
-}
-
-func copyContext(path string, ctx *hcl.EvalContext) *hcl.EvalContext {
-	newCtx := buildContext(path, ctx.Functions)
-	newCtx.Variables = ctx.Variables
-
-	return newCtx
 }
 
 func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interface{}) error {

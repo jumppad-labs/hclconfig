@@ -209,6 +209,9 @@ func (c *Config) AppendResource(r types.Resource) error {
 func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
 	fqdn := types.FQDNFromResource(r)
 
+	// set the ID
+	r.Metadata().ID = fqdn.String()
+
 	rf, err := c.FindResource(fqdn.String())
 	if err == nil && rf != nil {
 		return ResourceExistsError{r.Metadata().Name}

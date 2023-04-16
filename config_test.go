@@ -321,6 +321,7 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 		func(r types.Resource) error {
 			callSync.Lock()
 
+			fmt.Println(r.Metadata().ID)
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,
 				Resource: r.Metadata().Name,
@@ -343,5 +344,5 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 
 	// process should stop the callbacks, there may be either one or two callbacks as there are
 	// two nodes that will be executed first
-	require.LessOrEqual(t,len(calls), 2)
+	require.LessOrEqual(t, len(calls), 2)
 }
