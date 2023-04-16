@@ -535,6 +535,15 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	// depends on is a property of the embedded type we need to set this manually
 	setDependsOn(ctx, rt, b.Body, dependsOn)
 
+	// call the resources Parse function if set
+	// if the config implements the processable interface call the resource process method
+	if p, ok := rt.(types.Parsable); ok {
+		err := p.Parse()
+		if err != nil {
+			return fmt.Errorf("error calling Parse for resource: %s, %s", rt.Metadata().ID, err)
+		}
+	}
+
 	err = c.addResource(rt, ctx, b.Body)
 	if err != nil {
 		return fmt.Errorf(
@@ -545,9 +554,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			err,
 		)
 	}
-
-	// add a reference to the config so that resources can find out about their
-	// world
 
 	return nil
 }
@@ -599,17 +605,68 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 		return root
 	}
 
+	name := path[0]
+	index := -1
+
+	// is the path an array
+	rg, _ := regexp.Compile(`(.*)\[([0-9])+\]`)
+	if sm := rg.FindStringSubmatch(path[0]); len(sm) == 3 {
+		name = sm[1]
+
+		var convErr error
+		index, convErr = strconv.Atoi(sm[2])
+		if convErr != nil {
+			panic(fmt.Sprintf("Index %s is not a number", sm[2]))
+		}
+	}
+
 	// if not we need to create a map node if it does not exist
 	// and recurse
-	val, ok := root[path[0]]
+	val, ok := root[name]
 	if !ok {
-		// if not we need to create a map node
-		// set a map and recurse
+		// do we have an array if so create a list
+		if index >= 0 {
+			// create a list with the correct length
+			vals := make([]cty.Value, index+1)
+
+			// need to set default values or the parser will panic
+			for i, _ := range vals {
+				vals[i] = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+			}
+
+			val = cty.ListVal(vals)
+		} else {
+			// create a map node
+			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+		}
+	}
+
+	if index >= 0 {
+
+		updated := setListVariableFromPath(val.AsValueSlice(), path[1:], index, value)
+		root[name] = cty.ListVal(updated)
+	} else {
+		updated := setMapVariableFromPath(val.AsValueMap(), path[1:], value)
+		root[name] = cty.ObjectVal(updated)
+	}
+
+	return root
+}
+
+func setListVariableFromPath(root []cty.Value, path []string, index int, value cty.Value) []cty.Value {
+	// we have a node but do we need to expand it in size?
+	if index >= len(root) {
+		fmt.Println("expand", index+1-len(root))
+		root = append(root, make([]cty.Value, index+1-len(root))...)
+	}
+
+	val := root[index]
+	if val == cty.NilVal {
 		val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
 	}
 
-	updated := setMapVariableFromPath(val.AsValueMap(), path[1:], value)
-	root[path[0]] = cty.ObjectVal(updated)
+	updated := setMapVariableFromPath(val.AsValueMap(), path, value)
+	root[index] = cty.ObjectVal(updated)
 
 	return root
 }
@@ -724,6 +781,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 // attributes
 // examples:
 // something = resource.mine.attr
+// something = resource.mine.array.0.attr
 // something = env(resource.mine.attr)
 // something = "testing/${resource.mine.attr}"
 // something = "testing/${env(resource.mine.attr)}"
@@ -789,7 +847,12 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			}
 		} else {
 			// does this exist in the context
-			strExpression += "." + t.(hcl.TraverseAttr).Name
+			switch t.(type) {
+			case hcl.TraverseAttr:
+				strExpression += "." + t.(hcl.TraverseAttr).Name
+			case hcl.TraverseIndex:
+				strExpression += "[" + t.(hcl.TraverseIndex).Key.AsBigFloat().String() + "]"
+			}
 		}
 	}
 

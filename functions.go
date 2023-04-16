@@ -272,7 +272,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 			return cty.StringVal(filepath.Dir(s)), err
 		},
 	})
-	
+
 	var TrimFunc = function.New(&function.Spec{
 		Params: []function.Parameter{
 			{
@@ -287,6 +287,32 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 		},
 	})
 
+	// TODO: need to implement, however first need to be able to serialize
+	// structs and arrays to cty Types
+	//var IndexFunc = function.New(&function.Spec{
+	//	Params: []function.Parameter{
+	//		{
+	//			Name:             "list",
+	//			Type:             cty.Map(cty.String),
+	//			AllowDynamicType: true,
+	//		},
+	//		{
+	//			Name:             "parameter",
+	//			Type:             cty.String,
+	//			AllowDynamicType: true,
+	//		},
+	//		{
+	//			Name:             "value",
+	//			Type:             cty.String,
+	//			AllowDynamicType: true,
+	//		},
+	//	},
+	//	Type: function.StaticReturnType(cty.Number),
+	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+	//		return cty.NumberIntVal(-1), nil
+	//	},
+	//})
+
 	funcs := map[string]function.Function{}
 
 	funcs["len"] = LenFunc
@@ -295,6 +321,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 	funcs["file"] = ReadFileFunc
 	funcs["dir"] = DirFunc
 	funcs["trim"] = TrimFunc
+	//funcs["index"] = IndexFunc
 
 	return funcs
 }

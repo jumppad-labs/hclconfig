@@ -2,6 +2,19 @@ package types
 
 var TypeResource = "resource"
 
+// Parsable defines an optional interface that allows a resource to be
+// modified directly after it has been loaded from a file
+type Parsable interface {
+	// Parse is called when the resource is created from a file
+	//
+	// Note: it is not possible to set resource properties from parse
+	// as all properties are overwritten when the resource is processed
+	// by the dag and any dependencies are resolved.
+	// ResourceMetadata can be set by this method as this is not overridden
+	// when processed.
+	Parse() error
+}
+
 // Processable defines an optional interface that allows a resource to define a callback
 // that is executed when the resources is processed by the DAG.
 type Processable interface {

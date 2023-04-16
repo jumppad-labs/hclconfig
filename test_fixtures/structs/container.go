@@ -12,16 +12,14 @@ type Container struct {
 	// embedded type holding name, etc
 	types.ResourceMetadata `hcl:",remain"`
 
-	Depends []string `hcl:"depends_on,optional" json:"depends,omitempty"`
-
 	Networks []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"` // Attach to the correct network // only when Image is specified
 
-	Build      *Build            `hcl:"build,block" json:"build"`                             // Enables containers to be built on the fly
-	Entrypoint []string          `hcl:"entrypoint,optional" json:"entrypoint,omitempty"`      // entrypoint to use when starting the container
-	Command    []string          `hcl:"command,optional" json:"command,omitempty"`            // command to use when starting the container
-	Env        map[string]string `hcl:"env,optional" json:"env,omitempty" mapstructure:"env"` // environment variables to set when starting the container
-	Volumes    []Volume          `hcl:"volume,block" json:"volumes,omitempty"`                // volumes to attach to the container
-	DNS        []string          `hcl:"dns,optional" json:"dns,omitempty"`                    // Add custom DNS servers to the container
+	Build      *Build            `hcl:"build,block" json:"build"`                        // Enables containers to be built on the fly
+	Entrypoint []string          `hcl:"entrypoint,optional" json:"entrypoint,omitempty"` // entrypoint to use when starting the container
+	Command    []string          `hcl:"command,optional" json:"command,omitempty"`       // command to use when starting the container
+	Env        map[string]string `hcl:"env,optional" json:"env,omitempty"`               // environment variables to set when starting the container
+	Volumes    []Volume          `hcl:"volume,block" json:"volumes,omitempty"`           // volumes to attach to the container
+	DNS        []string          `hcl:"dns,optional" json:"dns,omitempty"`               // Add custom DNS servers to the container
 
 	Privileged bool `hcl:"privileged,optional" json:"privileged,omitempty"` // run the container in privileged mode?
 
@@ -78,6 +76,17 @@ type Build struct {
 	Tag     string `hcl:"tag,optional" json:"tag,omitempty"`   // Image tag, defaults to latest
 }
 
+// Called when resource is read from the file, can be used to validate resource but
+// you can not set any resource properties
+// here as they are overwritten when the resource is processed by the dag
+// ResourceMetadata properties can be set
+func (c *Container) Parse() error {
+	c.Properties["status"] = "something"
+
+	return nil
+}
+
+// Called when resources is processed by the Graph
 func (c *Container) Process() error {
 	return nil
 }

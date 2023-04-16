@@ -121,7 +121,7 @@ type ProcessCallback func(r types.Resource) error
 // links and references. All the resources defined in the graph are traversed and
 // the provided callback is executed for every resource in the graph.
 //
-// Any error returned from the ProcessCallback function halts execution of any other 
+// Any error returned from the ProcessCallback function halts execution of any other
 // callback for resources in the graph.
 //
 // Specifying the reverse option to 'true' causes the graph to be traversed in reverse
@@ -300,7 +300,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			setContextVariableFromPath(ctx, v, val)
 		}
 
-		// Process the raw resouce now we have the context from the linked
+		// Process the raw resource now we have the context from the linked
 		// resources
 		ul := getContextLock(ctx)
 		defer ul()
@@ -314,14 +314,9 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		if p, ok := r.(types.Processable); ok {
 			err := p.Process()
 			if err != nil {
-				fqdn := &types.ResourceFQDN{Module: r.Metadata().Module, Type: r.Metadata().Type, Resource: r.Metadata().Name}
-				return diags.Append(fmt.Errorf("error calling process for resource: %s, %s", fqdn, err))
+				return diags.Append(fmt.Errorf("error calling process for resource: %s, %s", r.Metadata().ID, err))
 			}
 		}
-		//err := r.Process()
-		//if err != nil {
-		//	return diags.Append(fmt.Errorf("error calling process for resource: %s", err))
-		//}
 
 		// call the callbacks
 		if wf != nil {

@@ -71,6 +71,11 @@ resource "container" "consul" {
     ip_address = "10.6.0.200"
   }
 
+  network {
+    name       = "second"
+    ip_address = "10.7.0.201"
+  }
+
   dns = resource.container.base.dns
 
   resources {
@@ -103,4 +108,12 @@ resource "container" "consul" {
     source      = "."
     destination = "/test2/${env(resource.template.consul_config.name)}"
   }
+}
+
+output "ip_address_1" {
+  value = resource.container.consul.network.0.ip_address
+}
+
+output "ip_address_2" {
+  value = resource.container.consul.network.1.ip_address
 }

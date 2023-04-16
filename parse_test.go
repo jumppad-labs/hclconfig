@@ -80,6 +80,26 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.NotNil(t, r)
 }
 
+func TestParseFileCallsParseFunction(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// check variable has been interpolated
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	cont := r.(*structs.Container)
+	require.Equal(t, "something", cont.Properties["status"])
+}
+
 func TestParseFileSetsLinks(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
@@ -109,6 +129,34 @@ func TestParseFileSetsLinks(t *testing.T) {
 	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.memory")
 	require.Contains(t, cont.ResourceLinks, "resource.template.consul_config.destination")
 	require.Contains(t, cont.ResourceLinks, "resource.template.consul_config.name")
+}
+
+func TestParseResolvesArrayReferences(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// check variable has been interpolated
+	r, err := c.FindResource("resource.output.ip_address_1")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	out := r.(*types.Output)
+	require.Equal(t, "10.6.0.200", out.Value)
+
+	// check variable has been interpolated
+	r, err = c.FindResource("resource.output.ip_address_2")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	out = r.(*types.Output)
+	require.Equal(t, "10.7.0.201", out.Value)
 }
 
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {

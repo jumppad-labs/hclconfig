@@ -39,9 +39,10 @@ func LookupStringI(i interface{}, path string, tags []string) (reflect.Value, er
 }
 
 // Lookup performs a lookup into a value, using a path of keys. The key should
-// match with a Field or a MapIndex. For slice you can use the syntax key[index]
-// to access a specific index. If one key owns to a slice and an index is not
-// specificied the rest of the path will be apllied to evaley value of the
+// match with a Field or a MapIndex.
+// For slice you can use the syntax key[index] to access a specific index.
+// If one key owns to a slice and an index is not
+// specified the rest of the path will be applied to eval value of the
 // slice, and the value will be merged into a slice.
 func Lookup(i interface{}, path []string, tags []string) (reflect.Value, error) {
 	return lookup(i, false, path, tags)
@@ -102,10 +103,15 @@ func lookup(i interface{}, caseInsensitive bool, path []string, tags []string) (
 			break
 		}
 
-		// if aggreable and path contains index
+		// if iterable and path contains index
 		pp := path[i-1]
 		if hasIndex(pp) {
 			_, ind, _ := parseIndex(pp)
+			parentLen := parent.Len()
+			if ind >= parentLen {
+				return reflect.Value{}, fmt.Errorf("requested index %d, is greater than object length %d", ind, parentLen)
+			}
+
 			value = parent.Index(ind)
 			value, err = getValueByName(value, part, caseInsensitive, tags)
 			break

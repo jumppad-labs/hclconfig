@@ -1,3 +1,14 @@
+resource "container" "with_networks" {
+  network {
+    name       = "one"
+    ip_address = "127.0.0.1"
+  }
+
+  network {
+    name       = "two"
+    ip_address = "127.0.0.2"
+  }
+}
 
 resource "container" "base" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
