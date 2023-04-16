@@ -51,8 +51,15 @@ resource "container" "base" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
+    id         = 1
     name       = resource.network.onprem.name
     ip_address = "10.6.0.200"
+  }
+
+  network {
+    id         = 2
+    name       = resource.network.onprem.name
+    ip_address = "10.6.0.201"
   }
 
   dns = ["a", "b", "c"]
@@ -60,6 +67,7 @@ resource "container" "base" {
   resources {
     memory  = 1024
     cpu_pin = [1]
+    user    = "nic"
   }
 }
 
@@ -69,10 +77,11 @@ resource "container" "consul" {
   network {
     name       = resource.network.onprem.name
     ip_address = "10.6.0.200"
+    id         = resource.container.base.network[0].id
   }
 
   network {
-    name       = "second"
+    name       = resource.container.base.network[1].name
     ip_address = "10.7.0.201"
   }
 
@@ -85,6 +94,7 @@ resource "container" "consul" {
     cpu_pin = resource.container.base.resources.cpu_pin
     # max memory in MB to consume, default unlimited
     memory = resource.container.base.resources.memory
+    user   = resource.container.base.resources.user
   }
 
   volume {

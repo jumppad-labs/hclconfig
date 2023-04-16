@@ -121,12 +121,15 @@ func TestParseFileSetsLinks(t *testing.T) {
 	// this enables us to build a graph of objects and later set these fields to the correct
 	// reference values
 	cont := r.(*structs.Container)
-	require.Len(t, cont.ResourceLinks, 6)
+	require.Len(t, cont.ResourceLinks, 9)
 
 	require.Contains(t, cont.ResourceLinks, "resource.network.onprem.name")
 	require.Contains(t, cont.ResourceLinks, "resource.container.base.dns")
 	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.cpu_pin")
 	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.memory")
+	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.user")
+	require.Contains(t, cont.ResourceLinks, "resource.container.base.network[0].id")
+	require.Contains(t, cont.ResourceLinks, "resource.container.base.network[1].name")
 	require.Contains(t, cont.ResourceLinks, "resource.template.consul_config.destination")
 	require.Contains(t, cont.ResourceLinks, "resource.template.consul_config.name")
 }

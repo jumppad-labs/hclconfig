@@ -572,7 +572,7 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 
 	valMap[key] = value
 
-	ctx.Variables["variable"] = cty.MapVal(valMap)
+	ctx.Variables["variable"] = cty.ObjectVal(valMap)
 }
 
 // setContextVariableFromPath sets a context variable using a nested structure based
@@ -625,13 +625,13 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 
 			// need to set default values or the parser will panic
 			for i, _ := range vals {
-				vals[i] = cty.MapVal(map[string]cty.Value{".keep": cty.StringVal("true")})
+				vals[i] = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
 			}
 
 			val = cty.ListVal(vals)
 		} else {
 			// create a map node
-			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.StringVal("true")})
+			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
 		}
 	}
 
@@ -655,11 +655,30 @@ func setListVariableFromPath(root []cty.Value, path []string, index int, value c
 
 	val := root[index]
 	if val == cty.NilVal {
-		val = cty.MapVal(map[string]cty.Value{".keep": cty.StringVal("true")})
+		val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
 	}
 
 	updated := setMapVariableFromPath(val.AsValueMap(), path, value)
-	root[index] = cty.MapVal(updated)
+	root[index] = cty.ObjectVal(updated)
+
+	// build a unique list of keys and types
+	ul := map[string]cty.Type{}
+	for _, m := range root {
+		for k, v := range m.AsValueMap() {
+			ul[k] = v.Type()
+		}
+	}
+
+	// we need to normalize the map collection as cty does not allow inconsistent map keys
+	for k, v := range ul {
+		for i, m := range root {
+			if _, ok := m.AsValueMap()[k]; !ok {
+				val := root[i].AsValueMap()
+				val[k] = cty.NullVal(v)
+				root[i] = cty.ObjectVal(val)
+			}
+		}
+	}
 
 	return root
 }

@@ -40,6 +40,7 @@ type User struct {
 }
 
 type NetworkAttachment struct {
+	ID        int      `hcl:"id,optional" json:"id,optional"`
 	Name      string   `hcl:"name" json:"name"`
 	IPAddress string   `hcl:"ip_address,optional" json:"ip_address,omitempty" mapstructure:"ip_address"`
 	Aliases   []string `hcl:"aliases,optional" json:"aliases,omitempty"` // Network aliases for the resource
@@ -47,9 +48,10 @@ type NetworkAttachment struct {
 
 // Resources allows the setting of resource constraints for the Container
 type Resources struct {
-	CPU    int   `hcl:"cpu,optional" json:"cpu,omitempty"`                                // cpu limit for the container where 1 CPU = 1000
-	CPUPin []int `hcl:"cpu_pin,optional" json:"cpu_pin,omitempty" mapstructure:"cpu_pin"` // pin the container to one or more cpu cores
-	Memory int   `hcl:"memory,optional" json:"memory,omitempty"`                          // max memory the container can consume in MB
+	CPU    int    `hcl:"cpu,optional" json:"cpu,omitempty"`                                // cpu limit for the container where 1 CPU = 1000
+	CPUPin []int  `hcl:"cpu_pin,optional" json:"cpu_pin,omitempty" mapstructure:"cpu_pin"` // pin the container to one or more cpu cores
+	Memory int    `hcl:"memory,optional" json:"memory,omitempty"`                          // max memory the container can consume in MB
+	User   string `hcl:"user,optional" json:"user,omitempty"`
 }
 
 // Volume defines a folder, Docker volume, or temp folder to mount to the Container
