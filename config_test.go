@@ -17,25 +17,27 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	typs[structs.TypeTemplate] = &structs.Template{}
 
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
-	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 
 	mod1, _ := typs.CreateResource(types.TypeModule, "module1")
+	mod1.Metadata().DependsOn = []string{"resource.network.cloud"}
+
 	mod2, _ := typs.CreateResource(types.TypeModule, "module2")
 	mod2.Metadata().Module = "module1"
 
 	// depending on a module should return all resources and
 	// all child resources
+	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con1.Metadata().DependsOn = []string{"module.module1"}
 
-	// onc 2 is embedded in module1
+	// con2 is embedded in module1
 	con2, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con2.Metadata().Module = "module1"
 
-	// con 3 is loaded from a module inside module1
+	// con3 is loaded from a module inside module2
 	con3, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con3.Metadata().Module = "module1.module2"
 
-	// con 3 is loaded from a module inside module1
+	// con4 is loaded from a module inside module2
 	con4, _ := typs.CreateResource(structs.TypeContainer, "test_dev2")
 	con4.Metadata().Module = "module1.module2"
 
@@ -255,7 +257,7 @@ func TestAppendResourcesWhenExistsReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestProcsessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
+func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 	c, _ := testSetupConfig(t)
 
 	calls := []string{}
@@ -263,6 +265,7 @@ func TestProcsessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 	err := c.Process(
 		func(r types.Resource) error {
 			callSync.Lock()
+			fmt.Println(r.Metadata().ID)
 
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,
@@ -279,11 +282,15 @@ func TestProcsessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// resource.container.test_dev depends on module 1 so the module 1 callback should happen first
-	requireBefore(t, "resource.module.module1", "resource.container.test_dev", calls)
+	// test_dev depends on cloud so should always be called after it
+	requireBefore(t, "resource.network.cloud", "module.module1.resource.container.test_dev", calls)
+
+	// resource.container.test_dev depends on module 1 so the container should be called last
+	// after all resources in module 1 have been created
+	require.Equal(t, "resource.container.test_dev", calls[7])
 }
 
-func TestProcsessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
+func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 	c, _ := testSetupConfig(t)
 
 	calls := []string{}
@@ -291,6 +298,7 @@ func TestProcsessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 	err := c.Process(
 		func(r types.Resource) error {
 			callSync.Lock()
+			fmt.Println(r.Metadata().ID)
 
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,
@@ -308,7 +316,8 @@ func TestProcsessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	// resource.container.test_dev depends on module.module1 so the call back for test_dev
-	// should happen before the module when process is reversed
+	// should happen first before anything else
+	require.Equal(t, "resource.container.test_dev", calls[0])
 	requireBefore(t, "resource.container.test_dev", "resource.module.module1", calls)
 }
 
@@ -322,6 +331,7 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 			callSync.Lock()
 
 			fmt.Println(r.Metadata().ID)
+
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,
 				Resource: r.Metadata().Name,
@@ -336,13 +346,13 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 
 			return nil
 		},
-		true,
+		false,
 	)
 
 	// we should get an error from process
 	require.Error(t, err)
 
-	// process should stop the callbacks, there may be either one or two callbacks as there are
-	// two nodes that will be executed first
-	require.LessOrEqual(t, len(calls), 2)
+	// process should stop the callbacks, there should only
+	// be one callback as module 1 depends on network
+	require.Equal(t, len(calls), 1)
 }
