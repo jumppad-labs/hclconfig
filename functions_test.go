@@ -2,8 +2,11 @@ package hclconfig
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -157,4 +160,88 @@ func TestCreateFunctionHandlesInputParams(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions/default.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MYENV", "myvalue")
+	t.Cleanup(func() {
+		os.Unsetenv("MYENV")
+	})
+
+	home, _ := os.UserHomeDir()
+
+	p := setupParser(t)
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.default")
+	require.NoError(t, err)
+
+	cont := r.(*structs.Container)
+
+	require.Equal(t, "3", cont.Env["len_string"])
+	require.Equal(t, "2", cont.Env["len_collection"])
+	require.Equal(t, "myvalue", cont.Env["env"])
+	require.Equal(t, home, cont.Env["home"])
+	require.Contains(t, cont.Env["file"], "container")
+	require.Contains(t, cont.Env["dir"], filepath.Dir(absoluteFolderPath))
+	require.Contains(t, cont.Env["trim"], "foo bar")
+}
+
+func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MYENV", "myvalue")
+	t.Cleanup(func() {
+		os.Unsetenv("MYENV")
+	})
+
+	home, _ := os.UserHomeDir()
+
+	p := setupParser(t)
+	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
+
+	c, err := p.ParseDirectory(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.default")
+	require.NoError(t, err)
+
+	cont := r.(*structs.Container)
+
+	require.Equal(t, "3", cont.Env["len_string"])
+	require.Equal(t, "2", cont.Env["len_collection"])
+	require.Equal(t, "myvalue", cont.Env["env"])
+	require.Equal(t, home, cont.Env["home"])
+	require.Contains(t, cont.Env["file"], "container")
+	require.Contains(t, cont.Env["dir"], absoluteFolderPath)
+	require.Contains(t, cont.Env["trim"], "foo bar")
+}
+
+func TestParseProcessesCustomFunctions(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions/custom.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.custom")
+	require.NoError(t, err)
+
+	cont := r.(*structs.Container)
+
+	require.Equal(t, "42", cont.Env["len"])
 }

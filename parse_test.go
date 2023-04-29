@@ -385,57 +385,6 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	require.True(t, r.Metadata().Disabled)
 }
 
-func TestParseProcessesDefaultFunctions(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions/default.hcl")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	os.Setenv("MYENV", "myvalue")
-	t.Cleanup(func() {
-		os.Unsetenv("MYENV")
-	})
-
-	home, _ := os.UserHomeDir()
-
-	p := setupParser(t)
-	c, err := p.ParseFile(absoluteFolderPath)
-	require.NoError(t, err)
-
-	r, err := c.FindResource("resource.container.base")
-	require.NoError(t, err)
-
-	cont := r.(*structs.Container)
-
-	require.Equal(t, "3", cont.Env["len_string"])
-	require.Equal(t, "2", cont.Env["len_collection"])
-	require.Equal(t, "myvalue", cont.Env["env"])
-	require.Equal(t, home, cont.Env["home"])
-	require.Contains(t, cont.Env["file"], "container")
-	require.Contains(t, cont.Env["dir"], filepath.Dir(absoluteFolderPath))
-	require.Contains(t, cont.Env["trim"], "foo bar")
-}
-
-func TestParseProcessesCustomFunctions(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions/custom.hcl")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p := setupParser(t)
-	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
-
-	c, err := p.ParseFile(absoluteFolderPath)
-	require.NoError(t, err)
-
-	r, err := c.FindResource("resource.container.base")
-	require.NoError(t, err)
-
-	cont := r.(*structs.Container)
-
-	require.Equal(t, "42", cont.Env["len"])
-}
-
 func TestSetContextVariableFromPath(t *testing.T) {
 	ctx := &hcl.EvalContext{}
 	ctx.Variables = map[string]cty.Value{"resource": cty.ObjectVal(map[string]cty.Value{})}

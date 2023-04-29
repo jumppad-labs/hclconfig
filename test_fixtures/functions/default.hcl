@@ -10,7 +10,7 @@ resource "container" "with_networks" {
   }
 }
 
-resource "container" "base" {
+resource "container" "default" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   env = {

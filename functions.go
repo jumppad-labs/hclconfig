@@ -269,6 +269,11 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
 			s, err := filepath.Abs(filePath)
 
+			// check if filepath is already a directory
+			if stat, err := os.Stat(s); err == nil && stat.IsDir() {
+				return cty.StringVal(s), err
+			}
+
 			return cty.StringVal(filepath.Dir(s)), err
 		},
 	})
