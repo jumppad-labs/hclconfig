@@ -56,6 +56,14 @@ type ResourceMetadata struct {
 	// this is an internal property that can not be set with hcl
 	File string `json:"file"`
 
+	// Line is the starting line number where the resource is located in the
+	// file from where it was originally parsed
+	Line int `json:"line"`
+
+	// Column is the starting column number where the resource is located in the
+	// file from where it was originally parsed
+	Column int `json:"column"`
+
 	// ParentConfig allows the location of other resources in the config
 	// this is an internal property that can not be set with hcl
 	ParentConfig Findable `json:"-"`

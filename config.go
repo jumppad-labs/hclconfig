@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/hcl2/hcl"
 	"github.com/hashicorp/hcl2/hcl/hclsyntax"
@@ -16,6 +17,7 @@ type Config struct {
 	Resources []types.Resource `json:"resources"`
 	contexts  map[types.Resource]*hcl.EvalContext
 	bodies    map[types.Resource]*hclsyntax.Body
+	sync      sync.Mutex
 }
 
 // ResourceNotFoundError is thrown when a resource could not be found
@@ -42,6 +44,7 @@ func NewConfig() *Config {
 		Resources: []types.Resource{},
 		contexts:  map[types.Resource]*hcl.EvalContext{},
 		bodies:    map[types.Resource]*hclsyntax.Body{},
+		sync:      sync.Mutex{},
 	}
 
 	return c
@@ -184,6 +187,9 @@ func (c *Config) ResourceCount() int {
 // this config. If a resources all ready exists a ResourceExistsError
 // error is returned
 func (c *Config) AppendResourcesFromConfig(new *Config) error {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
 	for _, r := range new.Resources {
 		fqdn := types.FQDNFromResource(r).String()
 
@@ -203,6 +209,9 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 // AppendResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
 func (c *Config) AppendResource(r types.Resource) error {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
 	return c.addResource(r, nil, nil)
 }
 
@@ -227,6 +236,9 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 }
 
 func (c *Config) RemoveResource(rf types.Resource) error {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
 	pos := -1
 	for i, r := range c.Resources {
 		if rf == r {

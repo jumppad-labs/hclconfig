@@ -265,7 +265,6 @@ func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 	err := c.Process(
 		func(r types.Resource) error {
 			callSync.Lock()
-			fmt.Println(r.Metadata().ID)
 
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,
@@ -298,7 +297,6 @@ func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 	err := c.Process(
 		func(r types.Resource) error {
 			callSync.Lock()
-			fmt.Println(r.Metadata().ID)
 
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,
@@ -329,8 +327,6 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 	err := c.Process(
 		func(r types.Resource) error {
 			callSync.Lock()
-
-			fmt.Println(r.Metadata().ID)
 
 			calls = append(calls, types.ResourceFQDN{
 				Module:   r.Metadata().Module,

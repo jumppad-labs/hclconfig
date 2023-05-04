@@ -181,7 +181,7 @@ func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	// validate the dependency graph is ok
 	err = d.Validate()
 	if err != nil {
-		return fmt.Errorf("Unable to validate dependency graph: %w", err)
+		return fmt.Errorf("unable to validate dependency graph: %w", err)
 	}
 
 	// define the walker callback that will be called for every node in the graph
@@ -232,13 +232,25 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		for _, v := range r.Metadata().ResourceLinks {
 			fqdn, err := types.ParseFQDN(v)
 			if err != nil {
-				return diags.Append(fmt.Errorf("error parsing resource link error:%s", err))
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf("error parsing resource link %s", err)
+
+				return diags.Append(pe)
 			}
 
 			// get the value from the linked resource
 			l, err := c.FindRelativeResource(v, r.Metadata().Module)
 			if err != nil {
-				return diags.Append(fmt.Errorf("unable to find dependent resource %s, %s\n", v, err))
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
+
+				return diags.Append(pe)
 			}
 
 			var src reflect.Value
@@ -250,7 +262,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			if paramType == "" {
 				paramType = findTypeFromInterface(fqdn.Attribute, l.Metadata())
 				if paramType == "" {
-					return diags.Append(fmt.Errorf("type not found %v\n", fqdn.Attribute))
+					pe := ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`type not found "%v"`, fqdn.Attribute)
+
+					return diags.Append(pe)
 				}
 			}
 
@@ -264,7 +282,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 
 				// still not found return an error
 				if err != nil {
-					return diags.Append(fmt.Errorf("value not found %s, %s\n", fqdn.Attribute, err))
+					pe := ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`value not found "%s" %s`, fqdn.Attribute, err)
+
+					return diags.Append(pe)
 				}
 			}
 
@@ -278,7 +302,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			case "bool":
 				val = cty.BoolVal(src.Bool())
 			case "ptr":
-				return diags.Append(fmt.Errorf("pointer values are not implemented %v", src))
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`pointer values are not implemented "%v"`, src)
+
+				return diags.Append(pe)
 			case "[]string":
 				vals := []cty.Value{}
 				for i := 0; i < src.Len(); i++ {
@@ -294,7 +324,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 
 				val = cty.SetVal(vals)
 			default:
-				return diags.Append(fmt.Errorf("unable to link resource %s as it references an unsupported type %s", v, paramType))
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to link resource "%s" as it references an unsupported type "%s"`, v, paramType)
+
+				return diags.Append(pe)
 			}
 
 			setContextVariableFromPath(ctx, v, val)
@@ -314,7 +350,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		if p, ok := r.(types.Processable); ok {
 			err := p.Process()
 			if err != nil {
-				return diags.Append(fmt.Errorf("error calling process for resource: %s, %s", r.Metadata().ID, err))
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
+
+				return diags.Append(pe)
 			}
 		}
 
@@ -322,7 +364,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		if wf != nil {
 			err := wf(r)
 			if err != nil {
-				return diags.Append(fmt.Errorf("error processing graph node: %s", err))
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
+
+				return diags.Append(pe)
 			}
 		}
 
