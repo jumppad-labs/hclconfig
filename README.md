@@ -15,12 +15,6 @@ that a parameter from one configuration has been set before the value is interpo
 Parsing is a two step approach, first the parser reads the HCL configuration from the supplied files, at this stage a 
 graph is computed based on any references inside the configuration. For example given the following two resources.
 
-Step 1:  
-When the first pass of the parser runs it will read `mydb_2` before `mydb_1`, marshaling each resource into a struct and
-calling the optional `Parse` method on that struct. At this point none of the interpolated properties like 
-`resource.postgres.mydb_1.password` have a value as it is assumed that the referenced resources does not yet exist. At
-this point the parser replaces the interpolated value with a default value for the field.  
-
 ```javascript
 resource "postgres" "mydb_2" {
   location = "localhost"
@@ -41,7 +35,13 @@ resource "postgres" "mydb_1" {
 }
 ```
 
-Step 2:
+#### Step 1:
+When the first pass of the parser runs it will read `mydb_2` before `mydb_1`, marshaling each resource into a struct and
+calling the optional `Parse` method on that struct. At this point none of the interpolated properties like 
+`resource.postgres.mydb_1.password` have a value as it is assumed that the referenced resources does not yet exist. At
+this point the parser replaces the interpolated value with a default value for the field.  
+
+#### Step 2:
 After resources have been processed from the HCL configuration a graph of dependent resources
 is calculated. Given the previous example where resource `mydb_2` references a property from 
 `mydb_1`, the resultant graph would look like the following.
