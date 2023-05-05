@@ -49,6 +49,9 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	out1, _ := typs.CreateResource(types.TypeOutput, "fqdn")
 	out1.Metadata().Module = "module1.module2"
 
+	out2, _ := typs.CreateResource(types.TypeOutput, "out")
+	out2.Metadata().DependsOn = []string{"resource.network.cloud.id", "resource.container.test_dev"}
+
 	c := NewConfig()
 	err := c.addResource(net1, nil, nil)
 	require.NoError(t, err)
@@ -75,6 +78,9 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	err = c.addResource(out1, nil, nil)
 	require.NoError(t, err)
 
+	err = c.addResource(out2, nil, nil)
+	require.NoError(t, err)
+
 	// ensure the config reference is set
 	require.Equal(t, c, net1.Metadata().ParentConfig)
 
@@ -87,6 +93,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 		con3,
 		con4,
 		out1,
+		out2,
 	}
 }
 
@@ -98,7 +105,7 @@ func TestResourceCount(t *testing.T) {
 func TestAddResourceExistsReturnsError(t *testing.T) {
 	c, r := testSetupConfig(t)
 
-	err := c.addResource(r[3], nil, nil)
+	err := c.AppendResource(r[3])
 	require.Error(t, err)
 }
 
@@ -108,6 +115,20 @@ func TestFindResourceFindsContainer(t *testing.T) {
 	cl, err := c.FindResource("resource.container.test_dev")
 	require.NoError(t, err)
 	require.Equal(t, r[1], cl)
+}
+
+func TestFindOutputFindsOutput(t *testing.T) {
+	c, _ := testSetupConfig(t)
+
+	_, err := c.FindResource("output.out")
+	require.NoError(t, err)
+}
+
+func TestFindOutputFindsModule(t *testing.T) {
+	c, _ := testSetupConfig(t)
+
+	_, err := c.FindResource("module.module1")
+	require.NoError(t, err)
 }
 
 func TestFindResourceFindsModuleOutput(t *testing.T) {
@@ -185,20 +206,12 @@ func TestFindModuleResourcesFindsResourcesWithChildren(t *testing.T) {
 	require.Len(t, cl, 5)
 }
 
-func TestFindRelativeModuleResourcesFindsResources(t *testing.T) {
-	c, _ := testSetupConfig(t)
-
-	cl, err := c.FindRelativeModuleResources("module.module2", "module1", false)
-	require.NoError(t, err)
-	require.Len(t, cl, 3)
-}
-
 func TestRemoveResourceRemoves(t *testing.T) {
 	c, _ := testSetupConfig(t)
 
 	err := c.RemoveResource(c.Resources[0])
 	require.NoError(t, err)
-	require.Len(t, c.Resources, 7)
+	require.Len(t, c.Resources, 8)
 }
 
 func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
@@ -210,7 +223,7 @@ func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
 
 	err := c.RemoveResource(net1)
 	require.Error(t, err)
-	require.Len(t, c.Resources, 8)
+	require.Len(t, c.Resources, 9)
 }
 
 func TestToJSONSerializesJSON(t *testing.T) {
@@ -266,7 +279,7 @@ func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 		func(r types.Resource) error {
 			callSync.Lock()
 
-			calls = append(calls, types.ResourceFQDN{
+			calls = append(calls, types.ResourceFQRN{
 				Module:   r.Metadata().Module,
 				Resource: r.Metadata().Name,
 				Type:     r.Metadata().Type,
@@ -284,9 +297,9 @@ func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 	// test_dev depends on cloud so should always be called after it
 	requireBefore(t, "resource.network.cloud", "module.module1.resource.container.test_dev", calls)
 
-	// resource.container.test_dev depends on module 1 so the container should be called last
+	// out.out depends on resource.container.test_dev depends on module 1 so the container should be called last
 	// after all resources in module 1 have been created
-	require.Equal(t, "resource.container.test_dev", calls[7])
+	require.Equal(t, "output.out", calls[6])
 }
 
 func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
@@ -298,7 +311,7 @@ func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 		func(r types.Resource) error {
 			callSync.Lock()
 
-			calls = append(calls, types.ResourceFQDN{
+			calls = append(calls, types.ResourceFQRN{
 				Module:   r.Metadata().Module,
 				Resource: r.Metadata().Name,
 				Type:     r.Metadata().Type,
@@ -315,8 +328,8 @@ func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 
 	// resource.container.test_dev depends on module.module1 so the call back for test_dev
 	// should happen first before anything else
-	require.Equal(t, "resource.container.test_dev", calls[0])
-	requireBefore(t, "resource.container.test_dev", "resource.module.module1", calls)
+	require.Equal(t, "output.out", calls[0])
+	requireBefore(t, "resource.container.test_dev", "module.module1.module2.output.fqdn", calls)
 }
 
 func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
@@ -327,8 +340,7 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 	err := c.Process(
 		func(r types.Resource) error {
 			callSync.Lock()
-
-			calls = append(calls, types.ResourceFQDN{
+			calls = append(calls, types.ResourceFQRN{
 				Module:   r.Metadata().Module,
 				Resource: r.Metadata().Name,
 				Type:     r.Metadata().Type,
@@ -349,6 +361,6 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 	require.Error(t, err)
 
 	// process should stop the callbacks, there should only
-	// be one callback as module 1 depends on network
-	require.Equal(t, len(calls), 1)
+	// be one callback network cloud
+	require.Equal(t, 1, len(calls))
 }

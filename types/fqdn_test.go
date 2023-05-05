@@ -13,82 +13,185 @@ type testContainer struct {
 	ResourceMetadata `hcl:",remain"`
 }
 
-func TestParseFQDNParsesComponents(t *testing.T) {
-	fqdn, err := ParseFQDN("module.module1.module2.resource.container.mine.attr")
+func TestParseFQRNParsesComponents(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1.module2.resource.container.mine.attr.other")
 	require.NoError(t, err)
 
-	require.Equal(t, "module1.module2", fqdn.Module)
-	require.Equal(t, typeTestContainer, fqdn.Type)
-	require.Equal(t, "mine", fqdn.Resource)
-	require.Equal(t, "attr", fqdn.Attribute)
+	require.Equal(t, "module1.module2", fqrn.Module)
+	require.Equal(t, typeTestContainer, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "attr.other", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.module1.module2.resource.container.mine.attr.other", sfrqn)
+}
+
+func TestParseFQRNParsesComponents2(t *testing.T) {
+	fqrn, err := ParseFQRN("module.consul_1.resource.network.onprem.name")
+	require.NoError(t, err)
+
+	require.Equal(t, "consul_1", fqrn.Module)
+	require.Equal(t, "network", fqrn.Type)
+	require.Equal(t, "onprem", fqrn.Resource)
+	require.Equal(t, "name", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.consul_1.resource.network.onprem.name", sfrqn)
+}
+
+func TestParseFQRNParsesModule(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeModule, fqrn.Type)
+	require.Equal(t, "module1", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
+
+	// should also reverse
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.module1", sfrqn)
+}
+
+func TestParseFQRNParsesModuleInModule(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1.container")
+	require.NoError(t, err)
+
+	require.Equal(t, "module1", fqrn.Module)
+	require.Equal(t, TypeModule, fqrn.Type)
+	require.Equal(t, "container", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
+
+	// should also reverse
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.module1.container", sfrqn)
 }
 
 func TestParseFQDNReturnsErrorOnMissingType(t *testing.T) {
-	_, err := ParseFQDN("module.module1.module2.resource.mine")
+	_, err := ParseFQRN("module.module1.module2.resource.mine")
 	require.Error(t, err)
 }
 
-func TestParseFQDNReturnsErrorOnNoModuleOrResource(t *testing.T) {
-	_, err := ParseFQDN("module1.module2")
-	require.Error(t, err)
-}
-
-func TestParseFQDNReturnsModuleWhenNoResource(t *testing.T) {
-	fqdn, err := ParseFQDN("module.module1.module2")
+func TestParseFQRNReturnsOutputWhenInNestedModule(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1.module2.output.mine")
 	require.NoError(t, err)
 
-	require.Equal(t, "module1.module2", fqdn.Module)
+	require.Equal(t, "module1.module2", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
+
+	// should also reverse
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.module1.module2.output.mine", sfrqn)
 }
 
-func TestParseFQDNReturnsModuleWhenOutput(t *testing.T) {
-	fqdn, err := ParseFQDN("module.module1.module2.output.mine")
+func TestParseFQRNReturnsOutputWhenInModule(t *testing.T) {
+	fqrn, err := ParseFQRN("module.consul_1.output.container_resources_cpu")
 	require.NoError(t, err)
 
-	require.Equal(t, "module1.module2", fqdn.Module)
-	require.Equal(t, TypeOutput, fqdn.Type)
-	require.Equal(t, "mine", fqdn.Resource)
-	require.Equal(t, "value", fqdn.Attribute)
+	require.Equal(t, "consul_1", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "container_resources_cpu", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
+
+	// should also reverse
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.consul_1.output.container_resources_cpu", sfrqn)
 }
 
-func TestFQDNStringWithoutModuleReturnsCorrectly(t *testing.T) {
-	fqdn, err := ParseFQDN("resource.container.mine")
+func TestParseFQRNReturnsResource(t *testing.T) {
+	fqrn, err := ParseFQRN("resource.container.mine")
 	require.NoError(t, err)
 
-	fqdnStr := fqdn.String()
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, "container", fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
 
-	require.Equal(t, "resource.container.mine", fqdnStr)
+	// should also reverse
+	sfrqn := fqrn.String()
+	require.Equal(t, "resource.container.mine", sfrqn)
 }
 
-func TestFQDNStringWithModuleOutputReturnsCorrectly(t *testing.T) {
-	fqdn, err := ParseFQDN("module.module1.module2.output.mine")
+func TestParseFQRNReturnsResourceWithAttr(t *testing.T) {
+	fqrn, err := ParseFQRN("resource.container.mine.my.stuff")
 	require.NoError(t, err)
 
-	fqdnStr := fqdn.String()
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, "container", fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "my.stuff", fqrn.Attribute)
 
-	require.Equal(t, "module.module1.module2.output.mine", fqdnStr)
+	sfrqn := fqrn.String()
+	require.Equal(t, "resource.container.mine.my.stuff", sfrqn)
 }
 
-func TestFQDNStringWithModuleResourceReturnsCorrectly(t *testing.T) {
-	fqdn, err := ParseFQDN("module.module1.module2.resource.container.mine")
+func TestParseFQRNReturnsOutputInModule(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1.output.mine")
 	require.NoError(t, err)
 
-	fqdnStr := fqdn.String()
+	require.Equal(t, "module1", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
 
-	require.Equal(t, "module.module1.module2.resource.container.mine", fqdnStr)
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.module1.output.mine", sfrqn)
 }
 
-func TestFQDNFromResouceReturnsCorrectData(t *testing.T) {
+func TestParseFQRNReturnsOutput(t *testing.T) {
+	fqrn, err := ParseFQRN("output.mine")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "output.mine", sfrqn)
+}
+
+func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 	dt := DefaultTypes()
 	dt[typeTestContainer] = &testContainer{}
 
-	r,err := dt.CreateResource(typeTestContainer, "mytest")
-	require.NoError(t,err)
+	r, err := dt.CreateResource(typeTestContainer, "mytest")
+	require.NoError(t, err)
 
 	r.Metadata().Module = "mymodule"
-	
-	fqdn := FQDNFromResource(r)
-	
-	require.Equal(t, "mymodule", fqdn.Module)
-	require.Equal(t, "mytest", fqdn.Resource)
-	require.Equal(t, typeTestContainer, fqdn.Type)
+
+	fqrn := FQDNFromResource(r)
+
+	require.Equal(t, "mymodule", fqrn.Module)
+	require.Equal(t, typeTestContainer, fqrn.Type)
+	require.Equal(t, "mytest", fqrn.Resource)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.mymodule.resource.container.mytest", sfrqn)
+}
+
+func TestFQRNAppendsParentCorrectlyWhenNoModule(t *testing.T) {
+	fqrn, err := ParseFQRN("output.mine")
+	require.NoError(t, err)
+
+	new := fqrn.AppendParentModule("parent")
+	require.Equal(t, "module.parent.output.mine", new.String())
+}
+
+func TestFQRNAppendsParentCorrectlyWhenExistingModule(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1.output.mine")
+	require.NoError(t, err)
+
+	new := fqrn.AppendParentModule("parent")
+	require.Equal(t, "module.parent.module1.output.mine", new.String())
+}
+
+func TestFQRNAppedDoesNothingWhenNoParent(t *testing.T) {
+	fqrn, err := ParseFQRN("module.module1.output.mine")
+	require.NoError(t, err)
+
+	new := fqrn.AppendParentModule("")
+	require.Equal(t, "module.module1.output.mine", new.String())
 }

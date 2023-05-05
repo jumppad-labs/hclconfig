@@ -444,15 +444,19 @@ func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dep
 	r.Metadata().DependsOn = dependsOn
 
 	if attr, ok := b.Attributes["depends_on"]; ok {
-
 		dependsOnVal, diags := attr.Expr.Value(ctx)
 		if diags.HasErrors() {
-			return fmt.Errorf("unable to read source from module: %s", diags.Error())
+			return fmt.Errorf("unable to read depends_on attribute: %s", diags.Error())
 		}
 
 		// depends on is a slice of string
 		dependsOnSlice := dependsOnVal.AsValueSlice()
 		for _, d := range dependsOnSlice {
+			_, err := types.ParseFQRN(d.AsString())
+			if err != nil {
+				return fmt.Errorf("invalid dependency %s, %s", d.AsString(), err)
+			}
+
 			r.Metadata().DependsOn = append(r.Metadata().DependsOn, d.AsString())
 		}
 	}
@@ -467,6 +471,15 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	}
 
 	name := b.Labels[0]
+	if name == "resource" || name == "module" || name == "output" {
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf(`invalid resource name "%s", resource, name, and output are reserved resource names`, name)
+
+		return de
+	}
 
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), b.Labels[0])
 
@@ -481,6 +494,17 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	}
 
 	setDisabled(ctx, rt, b.Body, false)
+
+	err = setDependsOn(ctx, rt, b.Body, dependsOn)
+	if err != nil {
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = err.Error()
+
+		return de
+	}
 
 	// we need to fetch the source so that we can process the child resources
 	// "source" is the attribute but we need to read this manually
@@ -576,7 +600,18 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(b.Labels[0], b.Labels[1])
+		name := b.Labels[1]
+		if name == "resource" || name == "module" || name == "output" {
+			de := ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = fmt.Sprintf(`invalid resource name "%s", resource, name, and output are reserved resource names`, name)
+
+			return de
+		}
+
+		rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
 		if err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
@@ -598,7 +633,18 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(types.TypeOutput, b.Labels[0])
+		name := b.Labels[0]
+		if name == "resource" || name == "module" || name == "output" {
+			de := ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = fmt.Sprintf(`invalid resource name "%s", resource, name, and output are reserved resource names`, name)
+
+			return de
+		}
+
+		rt, err = p.registeredTypes.CreateResource(types.TypeOutput, name)
 		if err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
@@ -624,7 +670,16 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	setDisabled(ctx, rt, b.Body, disabled)
 
 	// depends on is a property of the embedded type we need to set this manually
-	setDependsOn(ctx, rt, b.Body, dependsOn)
+	err = setDependsOn(ctx, rt, b.Body, dependsOn)
+	if err != nil {
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf(`unable to set depends_on, %s`, err)
+
+		return de
+	}
 
 	// call the resources Parse function if set
 	// if the config implements the processable interface call the resource process method

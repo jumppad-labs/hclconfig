@@ -21,12 +21,14 @@ import (
 // https://www.youtube.com/watch?v=ZXILzUpVx7A&t=0s
 func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	// create root node
-	root, _ := types.DefaultTypes().CreateResource(types.TypeModule, "root")
 
 	graph := &dag.AcyclicGraph{}
+
+	// add a root node for the graph
+	root, _ := types.DefaultTypes().CreateResource(types.TypeRoot, "root")
 	graph.Add(root)
 
-	// Loop over all resources and add to dag
+	// Loop over all resources and add to graph
 	for _, resource := range c.Resources {
 		graph.Add(resource)
 	}
@@ -38,75 +40,107 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		// if disabled ignore any dependencies
 		if resource.Metadata().Disabled {
 			// add all disabled resources to the root
+			//fmt.Println("connect", "root", "to", resource.Metadata().ID)
+
 			graph.Connect(dag.BasicEdge(root, resource))
 			continue
 		}
 
-		// add links to dependencies
-		// this is here for now as we might need to process these two
-		// lists separately
-		resource.Metadata().DependsOn = append(resource.Metadata().DependsOn, resource.Metadata().ResourceLinks...)
-
 		// use a map to keep a unique list
 		dependencies := map[types.Resource]bool{}
+
+		// add links to dependencies
+		// this is here for now as we might need to process these two lists separately
+		resource.Metadata().DependsOn = append(resource.Metadata().DependsOn, resource.Metadata().ResourceLinks...)
+
 		for _, d := range resource.Metadata().DependsOn {
 			var err error
-			fqdn, err := types.ParseFQDN(d)
+			fqdn, err := types.ParseFQRN(d)
 			if err != nil {
-				return nil, fmt.Errorf("invalid dependency: %s, error: %s", d, err)
+				pe := ParserError{}
+				pe.Line = resource.Metadata().Line
+				pe.Column = resource.Metadata().Column
+				pe.Filename = resource.Metadata().File
+				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
+
+				return nil, pe
 			}
 
-			// only search for module dependencies when has a module path and
-			// is not a resource or output
-			if fqdn.Module != "" && fqdn.Resource == "" {
-				deps, err := c.FindRelativeModuleResources(d, resource.Metadata().Module, true)
+			// when the dependency is a module, depend on all resources in the module
+			if fqdn.Type == types.TypeModule {
+				// assume that all dependencies references have been written with no
+				// knowledge of their parent module. Therefore if the parent module is
+				// "module1" and the reference is "module.module2.resource.container.mine.id"
+				// then the reference should be modified to include the parent reference
+				// "module.module1.module2.resource.container.mine.id"
+				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
+				deps, err := c.FindModuleResources(relFQDN.String(), true)
 				if err != nil {
-					return nil, fmt.Errorf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
+					pe := ParserError{}
+					pe.Line = resource.Metadata().Line
+					pe.Column = resource.Metadata().Column
+					pe.Filename = resource.Metadata().File
+					pe.Message = fmt.Sprintf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
+
+					return nil, pe
 				}
 
-				for _, d := range deps {
-					dependencies[d] = true
+				for _, dep := range deps {
+					dependencies[dep] = true
 				}
 			}
 
-			if fqdn.Resource != "" {
-				dep, err := c.FindRelativeResource(d, resource.Metadata().Module)
+			// when the dependency is a resource, depend on the resource
+			if fqdn.Type != types.TypeModule {
+				// assume that all dependencies references have been written with no
+				// knowledge of their parent module. Therefore if the parent module is
+				// "module1" and the reference is "module.module2.resource.container.mine.id"
+				// then the reference should be modified to include the parent reference
+				// "module.module1.module2.resource.container.mine.id"
+				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
+				dep, err := c.FindResource(relFQDN.String())
 				if err != nil {
-					return nil, fmt.Errorf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
+					pe := ParserError{}
+					pe.Line = resource.Metadata().Line
+					pe.Column = resource.Metadata().Column
+					pe.Filename = resource.Metadata().File
+					pe.Message = fmt.Sprintf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
+
+					return nil, pe
 				}
 
 				dependencies[dep] = true
 			}
 		}
 
-		for d := range dependencies {
-			hasDeps = true
-			graph.Connect(dag.BasicEdge(d, resource))
-		}
-
 		// if this resource is part of a module make it depend on that module
 		if resource.Metadata().Module != "" {
-			parts := strings.Split(resource.Metadata().Module, ".")
-			myModule := parts[(len(parts) - 1)]
-			parentModule := parts[:len(parts)-1]
+			fqdnString := fmt.Sprintf("module.%s", resource.Metadata().Module)
 
-			fqdn := &types.ResourceFQDN{
-				Module:   strings.Join(parentModule, "."),
-				Resource: myModule,
-				Type:     types.TypeModule,
-			}
-
-			d, err := c.FindResource(fqdn.String())
+			d, err := c.FindResource(fqdnString)
 			if err != nil {
-				return nil, fmt.Errorf("unable to find resources parent module: '%s, error: %s", fqdn.String(), err)
+				pe := ParserError{}
+				pe.Line = resource.Metadata().Line
+				pe.Column = resource.Metadata().Column
+				pe.Filename = resource.Metadata().File
+				pe.Message = fmt.Sprintf("unable to find resources parent module: '%s, error: %s", fqdnString, err)
+
+				return nil, pe
 			}
 
 			hasDeps = true
+			dependencies[d] = true
+		}
+
+		for d := range dependencies {
+			hasDeps = true
+			//fmt.Println("connect", resource.Metadata().ID, "to", d.Metadata().ID)
 			graph.Connect(dag.BasicEdge(d, resource))
 		}
 
 		// if no deps add to root node
 		if !hasDeps {
+			//fmt.Println("connect", resource.Metadata().ID, "to root")
 			graph.Connect(dag.BasicEdge(root, resource))
 		}
 	}
@@ -142,7 +176,7 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 			}
 
 			// if this is the root module or is disabled skip
-			if (r.Metadata().Name == "root" && r.Metadata().Module == "" && r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
+			if (r.Metadata().Type == types.TypeRoot || r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
 				return nil
 			}
 
@@ -172,7 +206,7 @@ func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	// build the graph
 	d, err := doYaLikeDAGs(c)
 	if err != nil {
-		return fmt.Errorf("unable to create graph: %s", err)
+		return err
 	}
 
 	// reduce the graph nodes to unique instances
@@ -212,13 +246,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		}
 
 		// if this is the root module or is disabled skip
-		if (r.Metadata().Name == "root" && r.Metadata().Module == "" && r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
+		if (r.Metadata().Type == types.TypeRoot) || r.Metadata().Disabled {
 			return nil
 		}
 
 		bdy, err := c.getBody(r)
 		if err != nil {
-			panic("no body found for resource")
+			panic(fmt.Sprintf(`no body found for resource "%s"`, r.Metadata().ID))
 		}
 
 		ctx, err := c.getContext(r)
@@ -230,7 +264,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		// all linked values should now have been processed as the graph
 		// will have handled them first
 		for _, v := range r.Metadata().ResourceLinks {
-			fqdn, err := types.ParseFQDN(v)
+			fqdn, err := types.ParseFQRN(v)
 			if err != nil {
 				pe := ParserError{}
 				pe.Filename = r.Metadata().File
@@ -251,6 +285,11 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
 
 				return diags.Append(pe)
+			}
+
+			// if the type is output always look for value
+			if fqdn.Type == types.TypeOutput {
+				fqdn.Attribute = "value"
 			}
 
 			var src reflect.Value

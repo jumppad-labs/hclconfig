@@ -2,10 +2,12 @@ package types
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
-type ResourceFQDN struct {
+// ResourceFQRN is the fully qualified resource name
+type ResourceFQRN struct {
 	// Name of the module
 	Module string
 	// Type of the resource
@@ -16,59 +18,91 @@ type ResourceFQDN struct {
 	Attribute string
 }
 
-// ParseFQDN parses a resource fqdn and returns the individual components
+// ParseFQRN parses a "resource" fqrn and returns the individual components
 // e.g:
-// module.module1.resource.container.mine
-// module.module1.module2.resource.container.mine
-// module.module1.module2
-// module.module1.module2.output.mine
-func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
-	noResource := false
+//
+// get the "resource" container called mine that is in the root "module"
+// which also has "attributes"
+// // resource.container.mine.property.value
+//
+// get the "resource" container called mine that is in the root "module"
+// // resource.container.mine
+//
+// get the "output" called mine that is in the root "module"
+// // output.mine
+//
+// get the container "resource" called mine in the "module" module2 that
+// is in the "module" module1
+// // module1.module2.resource.container.mine
+//
+// get the "output" called mine in the "module" module2 that is in the
+// "module" module1
+// // module1.module2.output.mine
+//
+// get the "module" resource called module2 in the "module" module1
+// // module1.module2
+//
+// get the "module" resource called module1 in the root "module"
+// // module1
+func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 	moduleName := ""
 	typeName := ""
 	resourceName := ""
 	attribute := ""
 
-	// first split on the resource
-	parts := strings.Split(fqdn, "resource.")
-	if len(parts) < 2 {
-		noResource = true
+	// first split on the resource, module, or output
+	r := regexp.MustCompile(`^(module.(?P<modules>.*)\.)?(?:(?P<resource>(resource|output))\.(?P<attributes>(.*)))|(?P<onlymodules>.*)`)
+	match := r.FindStringSubmatch(fqdn)
+	results := map[string]string{}
+	for i, name := range match {
+		results[r.SubexpNames()[i]] = name
 	}
 
-	if !noResource {
-		// then split into type and name
-		resourceParts := strings.Split(parts[1], ".")
+	if len(results) < 2 {
+		return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+	}
+
+	switch results["resource"] {
+	case "resource":
+		resourceParts := strings.Split(results["attributes"], ".")
 		if len(resourceParts) < 2 {
-			return nil, fmt.Errorf("ParseFQDN expects the fqdn to be formatted as resource.type.name or module.name.resource.type.name. The fqdn: %s, does not contain a resource type", fqdn)
+			return nil, fmt.Errorf("ParseFQRN expects the fqrn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
 		}
 
 		typeName = resourceParts[0]
 		resourceName = resourceParts[1]
 		attribute = strings.Join(resourceParts[2:], ".")
-	}
+		moduleName = results["modules"]
 
-	// now attempt to parse the module
-	moduleParts := strings.Split(parts[0], "module.")
-	if len(moduleParts) > 1 {
-
-		// if we have a module does it reference an output
-		outputParts := strings.Split(moduleParts[1], "output.")
-		if len(outputParts) > 1 {
-			moduleName = strings.TrimSuffix(outputParts[0], ".")
-			resourceName = outputParts[1]
-			typeName = TypeOutput
-			attribute = "value"
-		} else {
-			// return only the module name
-			moduleName = strings.TrimSuffix(moduleParts[1], ".")
+	case "output":
+		outputParts := strings.Split(results["attributes"], ".")
+		if len(outputParts) != 1 {
+			return nil, fmt.Errorf("ParseFQRN expects the fqrn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
 		}
+
+		typeName = TypeOutput
+		resourceName = outputParts[0]
+		moduleName = results["modules"]
+
+	default:
+		if results["onlymodules"] == "" || !strings.HasPrefix(results["onlymodules"], "module.") {
+			return nil, fmt.Errorf("ParseFQRN expects the fqrn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+		}
+
+		//module1.module2
+		modules := strings.Split(results["onlymodules"], ".")
+
+		if len(modules) == 2 {
+			resourceName = modules[1]
+		} else {
+			moduleName = strings.Join(modules[1:len(modules)-1], ".")
+			resourceName = modules[len(modules)-1]
+		}
+
+		typeName = TypeModule
 	}
 
-	if moduleName == "" && noResource {
-		return nil, fmt.Errorf("ParseFQDN expects the fqdn to be formatted as resource.type.name or module.name.resource.type.name. The fqdn: %s, does not contain a module or resource identifier", fqdn)
-	}
-
-	return &ResourceFQDN{
+	return &ResourceFQRN{
 		Module:    moduleName,
 		Type:      typeName,
 		Resource:  resourceName,
@@ -76,24 +110,55 @@ func ParseFQDN(fqdn string) (*ResourceFQDN, error) {
 	}, nil
 }
 
+// AppendParentModule creates a new FQRN by adding the parent module
+// to the reference.
+func (f *ResourceFQRN) AppendParentModule(parent string) ResourceFQRN {
+	newFQRN := ResourceFQRN{}
+
+	newFQRN.Module = f.Module
+	if parent != "" {
+		newFQRN.Module = fmt.Sprintf("%s.%s", parent, f.Module)
+		newFQRN.Module = strings.TrimSuffix(newFQRN.Module, ".")
+	}
+
+	newFQRN.Resource = f.Resource
+	newFQRN.Type = f.Type
+	newFQRN.Attribute = f.Attribute
+
+	return newFQRN
+}
+
 // FQDNFromResource returns the ResourceFQDN for the given Resource
-func FQDNFromResource(r Resource) *ResourceFQDN {
-	return &ResourceFQDN{
+func FQDNFromResource(r Resource) *ResourceFQRN {
+	return &ResourceFQRN{
 		Module:   r.Metadata().Module,
 		Resource: r.Metadata().Name,
 		Type:     r.Metadata().Type,
 	}
 }
 
-func (f ResourceFQDN) String() string {
+func (f ResourceFQRN) String() string {
 	modulePart := ""
 	if f.Module != "" {
 		modulePart = fmt.Sprintf("module.%s.", f.Module)
+	}
+
+	attrPart := ""
+	if f.Attribute != "" {
+		attrPart = fmt.Sprintf(".%s", f.Attribute)
 	}
 
 	if f.Type == TypeOutput {
 		return fmt.Sprintf("%s%s.%s", modulePart, f.Type, f.Resource)
 	}
 
-	return fmt.Sprintf("%sresource.%s.%s", modulePart, f.Type, f.Resource)
+	if f.Type == TypeModule {
+		if f.Module == "" {
+			return fmt.Sprintf("module.%s", f.Resource)
+		}
+
+		return fmt.Sprintf("%s%s", modulePart, f.Resource)
+	}
+
+	return fmt.Sprintf("%sresource.%s.%s%s", modulePart, f.Type, f.Resource, attrPart)
 }

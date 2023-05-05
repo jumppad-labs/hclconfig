@@ -68,7 +68,7 @@ func NewConfig() *Config {
 // e.g. to find a cluster named k3s in the module module1
 // r, err := c.FindResource("module.module1.resource.cluster.k3s")
 func (c *Config) FindResource(path string) (types.Resource, error) {
-	fqdn, err := types.ParseFQDN(path)
+	fqdn, err := types.ParseFQRN(path)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (c *Config) FindResource(path string) (types.Resource, error) {
 }
 
 func (c *Config) FindRelativeResource(path string, parentModule string) (types.Resource, error) {
-	fqdn, err := types.ParseFQDN(path)
+	fqdn, err := types.ParseFQRN(path)
 	if err != nil {
 		return nil, err
 	}
@@ -129,40 +129,32 @@ func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 	return nil, ResourceNotFoundError{t}
 }
 
-func (c *Config) FindRelativeModuleResources(module string, parent string, includeSubModules bool) ([]types.Resource, error) {
-	fqdn, err := types.ParseFQDN(module)
-	if err != nil {
-		return nil, err
-	}
-
-	modulePath := module
-
-	if parent != "" {
-		modulePath = fmt.Sprintf("module.%s.%s", parent, fqdn.Module)
-	}
-
-	return c.FindModuleResources(modulePath, includeSubModules)
-}
-
 // FindModuleResources returns an array of resources for the given module
-// if includeSubModules is true then all resources that may be included in a submodule
+// if includeSubModules is true then resources in any submodules
 // are also returned
 // if includeSubModules is false only the resources defined in the given module are returned
 func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]types.Resource, error) {
-	fqdn, err := types.ParseFQDN(module)
+	fqdn, err := types.ParseFQRN(module)
 	if err != nil {
 		return nil, err
 	}
+
+	if fqdn.Type != types.TypeModule {
+		return nil, fmt.Errorf("resource %s is not a module reference", module)
+	}
+
+	moduleString := fmt.Sprintf("%s.%s", fqdn.Module, fqdn.Resource)
+	moduleString = strings.TrimPrefix(moduleString, ".")
 
 	resources := []types.Resource{}
 
 	for _, r := range c.Resources {
 		match := false
-		if includeSubModules && strings.HasPrefix(r.Metadata().Module, fqdn.Module) {
+		if includeSubModules && strings.HasPrefix(r.Metadata().Module, moduleString) {
 			match = true
 		}
 
-		if !includeSubModules && r.Metadata().Module == fqdn.Module {
+		if !includeSubModules && r.Metadata().Module == moduleString {
 			match = true
 		}
 

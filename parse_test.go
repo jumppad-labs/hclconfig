@@ -146,7 +146,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 	require.NoError(t, err)
 
 	// check variable has been interpolated
-	r, err := c.FindResource("resource.output.ip_address_1")
+	r, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
@@ -154,7 +154,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 	require.Equal(t, "10.6.0.200", out.Value)
 
 	// check variable has been interpolated
-	r, err = c.FindResource("resource.output.ip_address_2")
+	r, err = c.FindResource("output.ip_address_2")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
@@ -274,19 +274,19 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
 
 	// check outputs
-	cont, err = c.FindResource("resource.output.module1_container_resources_cpu")
+	cont, err = c.FindResource("output.module1_container_resources_cpu")
 	require.NoError(t, err)
 
 	// check interpolation value is overriden in the module stanza
 	require.Equal(t, "4096", cont.(*types.Output).Value)
 
-	cont, err = c.FindResource("resource.output.module2_container_resources_cpu")
+	cont, err = c.FindResource("output.module2_container_resources_cpu")
 	require.NoError(t, err)
 
 	// check interpolation value
 	require.Equal(t, "512", cont.(*types.Output).Value)
 
-	cont, err = c.FindResource("resource.output.module3_container_resources_cpu")
+	cont, err = c.FindResource("output.module3_container_resources_cpu")
 	require.NoError(t, err)
 
 	// check interpolation value
@@ -410,11 +410,8 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o.ParseCallback = func(r types.Resource) error {
 		callSync.Lock()
 
-		calls = append(calls, types.ResourceFQDN{
-			Module:   r.Metadata().Module,
-			Resource: r.Metadata().Name,
-			Type:     r.Metadata().Type,
-		}.String())
+		//fmt.Println(r.Metadata().ID, r.Metadata().DependsOn)
+		calls = append(calls, r.Metadata().ID)
 
 		callSync.Unlock()
 
@@ -428,7 +425,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	// check the order, should be ...
 	// resource.container.base
-	// -- resource.module.consul_1
+	// -- module.consul_1
 	// -- -- module.consul_1.resource.network.onprem
 	// -- -- -- module.consul_1.resource.container.consul
 	// -- -- -- -- module.consul_1.resource.output.container_name
@@ -440,7 +437,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	// -- -- -- -- -- -- -- -- -- module.consul_3.resource.output.container_name
 	// -- -- -- -- -- -- -- -- -- module.consul_3.resource.output.container_resources_cpu
 	// -- -- -- -- -- -- -- -- -- -- resource.output.module_1_container_resources_cpu
-	// resource.module.consul_2
+	// module.consul_2
 	// -- module.consul_2.resource.network.onprem
 	// -- -- module.consul_2.resource.container.consul
 	// -- -- -- module.consul_2.resource.output.container_name
@@ -449,7 +446,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	// module1 depends on an attribute of resource.container.base, all resources in module1 should only
 	// be processed after container.base has been created
-	requireBefore(t, "resource.container.base", "resource.module.consul_1", calls)
+	requireBefore(t, "resource.container.base", "module.consul_1", calls)
 
 	// resource.network.onprem in module.consul_2 should be created after the top level module is created
 	requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
@@ -462,13 +459,18 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	// after all resources in module consul_1
 	requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
 
+	// the module should always be created before its resources
+	requireBefore(t, "module.consul_1", "module.consul_1.resource.container.consul", calls)
+
 	// the output module_2_container_resources_cpu depends on an output defined in module consul_2, it should always be created
 	// after all resources in module consul_2
 	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
 
 	// the module consul_3 has a hard coded dependency on module_1, it should only be created after all
 	// resources in module_1 have been created
-	requireBefore(t, "module.consul_1.output.container_resources_cpu", "resource.module.consul_3", calls)
+	requireBefore(t, "module.consul_1", "module.consul_3", calls)
+	requireBefore(t, "module.consul_1", "module.consul_1.output.container_resources_cpu", calls)
+	requireBefore(t, "module.consul_1.output.container_resources_cpu", "module.consul_3", calls)
 }
 
 func TestParserStopsParseOnCallbackError(t *testing.T) {
@@ -483,7 +485,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	o.ParseCallback = func(r types.Resource) error {
 		callSync.Lock()
 
-		calls = append(calls, types.ResourceFQDN{
+		calls = append(calls, types.ResourceFQRN{
 			Module:   r.Metadata().Module,
 			Resource: r.Metadata().Name,
 			Type:     r.Metadata().Type,
