@@ -233,7 +233,9 @@ func (c *Config) RemoveResource(rf types.Resource) error {
 
 	pos := -1
 	for i, r := range c.Resources {
-		if rf == r {
+		if rf.Metadata().Name == r.Metadata().Name &&
+			rf.Metadata().Type == r.Metadata().Type &&
+			rf.Metadata().Module == r.Metadata().Module {
 			pos = i
 			break
 		}
