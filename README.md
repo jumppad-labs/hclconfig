@@ -6,11 +6,59 @@ This package allows you to process configuration files written using the HashiCo
 It has full resource linking where a parameter in one configuration stanza can reference a parameter in another stanza.
 Variable support, and Modules allowing configuration to be loaded from local or remote sources.
 
-HCLConfig also has a full AcyclicGraph that allows you to process configuration with strict dependencies. This ensures
-that a parameter from one configuration has been set before the value is interpolated in a dependent resource.
-
 The project aims to provide a simple API allowing you to define resources as Go structs without needing to fully understand
 the HashiCorp HCL2 library. 
+
+HCLConfig has a full AcyclicGraph that allows you to process configuration with strict dependencies. This ensures
+that a parameter from one configuration has been set before the value is interpolated in a dependent resource.
+
+Parsing is a two step approach, first the parser reads the HCL configuration from the supplied files, at this stage a 
+graph is computed based on any references inside the configuration. For example given the following two resources.
+
+Step 1:  
+When the first pass of the parser runs it will read `mydb_2` before `mydb_1`, marshaling each resource into a struct and
+calling the optional `Parse` method on that struct. At this point none of the interpolated properties like 
+`resource.postgres.mydb_1.password` have a value as it is assumed that the referenced resources does not yet exist. At
+this point the parser replaces the interpolated value with a default value for the field.  
+
+```javascript
+resource "postgres" "mydb_2" {
+  location = "localhost"
+  port = 5432
+  name = "mydatabase"
+
+  username = "db2"
+  password = resource.postgres.mydb_1.password
+}
+
+resource "postgres" "mydb_1" {
+  location = "localhost"
+  port = 5432
+  name = "mydatabase"
+  
+  username = "db1"
+  password = random_password()
+}
+```
+
+Step 2:
+After resources have been processed from the HCL configuration a graph of dependent resources
+is calculated. Given the previous example where resource `mydb_2` references a property from 
+`mydb_1`, the resultant graph would look like the following.
+
+```
+| -- resource.postgres.mydb_2
+     |  -- resource.postgres.mydb_1
+```
+
+This graph is then walked, as each resource is processed, any referenced properties are resolved and assigned
+to the struct. For example, when `resource.postgres.mydb_2` is processed the `password` field that contains
+a reference to `resource.postgres.mydb_1` will be assigned the actual value from the linked resource.
+
+The optional `Process` method on the struct is also called, where a resource may contain computed fields the
+user can implement these computations in `Process` as this will make their value available to the next
+node in graph.
+
 
 ## Example
 

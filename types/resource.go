@@ -4,21 +4,40 @@ var TypeResource = "resource"
 
 // Parsable defines an optional interface that allows a resource to be
 // modified directly after it has been loaded from a file
+// 
+// Parsable should be implemented when you want to do basic validation of
+// resources before they are processed by the graph.
+//
+// Parse is called sequentially for each resource as it is loaded from the 
+// config file. This occurs before the graph of dependent resources has been
+// built.
 type Parsable interface {
 	// Parse is called when the resource is created from a file
 	//
 	// Note: it is not possible to set resource properties from parse
 	// as all properties are overwritten when the resource is processed
 	// by the dag and any dependencies are resolved.
+	//
 	// ResourceMetadata can be set by this method as this is not overridden
 	// when processed.
+	//
+	// Returning an error stops the execution of Parse for other resources
+	// in the configuration
 	Parse() error
 }
 
 // Processable defines an optional interface that allows a resource to define a callback
-// that is executed when the resources is processed by the DAG.
+// that is executed when the resources is processed by the graph.
+// 
+// Unlike Parsable, Process for a resource is called in strict order based upon
+// its dependency to other resources. You can set calculated fields and perform
+// operations in Process and this information will be available to dependent
+// resources.
 type Processable interface {
-	// Process is called by the parser when the DAG is resolved
+	// Process is called by the parser when when the graph of resources is walked.
+	//
+	// Returning an error from Process stops the processing of other resources
+	// and terminates all parsing.
 	Process() error
 }
 
