@@ -354,15 +354,32 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	o := DefaultOptions()
+	calls := []string{}
+	callSync := sync.Mutex{}
+	o.ParseCallback = func(r types.Resource) error {
+		callSync.Lock()
+		calls = append(calls, r.Metadata().ID)
+		callSync.Unlock()
+
+		return nil
+	}
+
+	p := setupParser(t, o)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-	require.Equal(t, 1, c.ResourceCount())
+	require.Equal(t, 2, c.ResourceCount())
 
-	r, err := c.FindResource("resource.container.disabled")
+	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
 	require.True(t, r.Metadata().Disabled)
+
+	r, err = c.FindResource("resource.container.disabled_variable")
+	require.NoError(t, err)
+	require.True(t, r.Metadata().Disabled)
+
+	require.Len(t, calls, 0)
 }
 
 func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
@@ -371,7 +388,19 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	o := DefaultOptions()
+	calls := []string{}
+	callSync := sync.Mutex{}
+	o.ParseCallback = func(r types.Resource) error {
+		fmt.Println(r.Metadata().ID)
+		callSync.Lock()
+		calls = append(calls, r.Metadata().ID)
+		callSync.Unlock()
+
+		return nil
+	}
+
+	p := setupParser(t, o)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -383,6 +412,8 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	r, err = c.FindResource("module.disabled.sub.resource.container.enabled")
 	require.NoError(t, err)
 	require.True(t, r.Metadata().Disabled)
+
+	require.Len(t, calls, 0)
 }
 
 func TestSetContextVariableFromPath(t *testing.T) {
@@ -446,7 +477,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	// module1 depends on an attribute of resource.container.base, all resources in module1 should only
 	// be processed after container.base has been created
-	requireBefore(t, "resource.container.base", "module.consul_1", calls)
+	requireBefore(t, "resource.container.base", "module.consul_1.resource.network.onprem", calls)
 
 	// resource.network.onprem in module.consul_2 should be created after the top level module is created
 	requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
@@ -468,9 +499,8 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	// the module consul_3 has a hard coded dependency on module_1, it should only be created after all
 	// resources in module_1 have been created
-	requireBefore(t, "module.consul_1", "module.consul_3", calls)
-	requireBefore(t, "module.consul_1", "module.consul_1.output.container_resources_cpu", calls)
-	requireBefore(t, "module.consul_1.output.container_resources_cpu", "module.consul_3", calls)
+	requireBefore(t, "module.consul_1.resource.container.consul", "module.consul_3.resource.container.consul", calls)
+	requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
 }
 
 func TestParserStopsParseOnCallbackError(t *testing.T) {
@@ -506,7 +536,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	require.Error(t, err)
 
 	// only 7 of the resources should be created, none of the descendants of base
-	require.Len(t, calls, 7)
+	require.Len(t, calls, 6)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 

@@ -1,4 +1,15 @@
+variable "disable_resources" {
+  default = false
+}
+
+resource "network" "onprem" {
+  disabled = variable.disable_resources
+  subnet = "0.0.0.0/24"
+}
+
 resource "container" "enabled" {
+  disabled = variable.disable_resources
+
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
@@ -15,5 +26,7 @@ resource "container" "enabled" {
 }
 
 module "sub" {
+  disabled = variable.disable_resources
+
   source = "./sub-modules"
 }

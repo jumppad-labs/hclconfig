@@ -1,3 +1,7 @@
+resource "network" "onprem" {
+  subnet = "0.0.0.0/24"
+}
+
 resource "container" "enabled" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 

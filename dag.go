@@ -37,6 +37,9 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	for _, resource := range c.Resources {
 		hasDeps := false
 
+		// we might not yet know if the resource is disabled, this could be due
+		// to the value being set from a variable or an interpolated value
+
 		// if disabled ignore any dependencies
 		if resource.Metadata().Disabled {
 			// add all disabled resources to the root
@@ -385,31 +388,60 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			return appendDiagnostic(diags, diag)
 		}
 
-		// if the config implements the processable interface call the resource process method
-		if p, ok := r.(types.Processable); ok {
-			err := p.Process()
+		// if the type is a module the potentially we only just found out that we should be
+		// disabled
+		// as an additional check, set all module resources to disabled if the module is disabled
+		if r.Metadata().Disabled && r.Metadata().Type == types.TypeModule {
+			// find all dependent resources
+			dr, err := c.FindModuleResources(r.Metadata().ID, true)
 			if err != nil {
+				// should not be here unless an internal error
 				pe := ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
+				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
 
 				return diags.Append(pe)
 			}
+
+			// set all the dependents to disabled
+			for _, d := range dr {
+				d.Metadata().Disabled = true
+			}
 		}
 
-		// call the callbacks
-		if wf != nil {
-			err := wf(r)
-			if err != nil {
-				pe := ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
+		// if the config implements the processable interface call the resource process method
+		// and the resource is not disabled
+		//
+		// if disabled was set through interpolation, the value has only been set here
+		// we need to handle an additional check
+		if !r.Metadata().Disabled && r.Metadata().Type != types.TypeModule {
+			if p, ok := r.(types.Processable); ok {
+				err := p.Process()
+				if err != nil {
+					pe := ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
 
-				return diags.Append(pe)
+					return diags.Append(pe)
+				}
+			}
+
+			// call the callbacks
+			if wf != nil {
+				err := wf(r)
+				if err != nil {
+					pe := ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
+
+					return diags.Append(pe)
+				}
 			}
 		}
 
