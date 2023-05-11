@@ -362,6 +362,9 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				return err
 			}
 
+			// add the variable to the context
+			c.AppendResource(v)
+
 			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
 			setContextVariableIfMissing(ctx, v.Name, val)
 		}
@@ -422,6 +425,10 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 }
 
 func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, parentDisabled bool) error {
+	if b == nil {
+		return nil
+	}
+
 	if parentDisabled {
 		r.Metadata().Disabled = true
 		return nil

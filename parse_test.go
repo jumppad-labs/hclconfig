@@ -251,7 +251,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	require.NoError(t, err)
 
 	// count the resources, should create 4
-	require.Len(t, c.Resources, 19)
+	require.Len(t, c.Resources, 23)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -369,7 +369,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-	require.Equal(t, 2, c.ResourceCount())
+	require.Equal(t, 3, c.ResourceCount())
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)

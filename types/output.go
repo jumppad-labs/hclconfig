@@ -6,5 +6,6 @@ const TypeOutput = "output"
 type Output struct {
 	ResourceMetadata `hcl:",remain"`
 
-	Value string `hcl:"value,optional" json:"value,omitempty"` // command to use when starting the container
+	Value       string `hcl:"value,optional" json:"value,omitempty"`             // value of the output
+	Description string `hcl:"description,optional" json:"description,omitempty"` // description for the output
 }

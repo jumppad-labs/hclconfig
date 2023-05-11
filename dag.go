@@ -30,12 +30,20 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 	// Loop over all resources and add to graph
 	for _, resource := range c.Resources {
-		graph.Add(resource)
+		// ignore variables
+		if resource.Metadata().Type != types.TypeVariable {
+			graph.Add(resource)
+		}
 	}
 
 	// Add dependencies for all resources
 	for _, resource := range c.Resources {
 		hasDeps := false
+
+		// do nothing with variables
+		if resource.Metadata().Type == types.TypeVariable {
+			continue
+		}
 
 		// we might not yet know if the resource is disabled, this could be due
 		// to the value being set from a variable or an interpolated value
@@ -248,8 +256,8 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			panic("an item has been added to the graph that is not a resource")
 		}
 
-		// if this is the root module or is disabled skip
-		if (r.Metadata().Type == types.TypeRoot) || r.Metadata().Disabled {
+		// if this is the root module or is disabled skip or is a variable
+		if (r.Metadata().Type == types.TypeRoot) || r.Metadata().Disabled || r.Metadata().Type == types.TypeVariable {
 			return nil
 		}
 
