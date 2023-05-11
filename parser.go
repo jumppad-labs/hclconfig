@@ -478,12 +478,12 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	}
 
 	name := b.Labels[0]
-	if name == "resource" || name == "module" || name == "output" {
+	if err := validateResourceName(name); err != nil {
 		de := ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Message = fmt.Sprintf(`invalid resource name "%s", resource, name, and output are reserved resource names`, name)
+		de.Message = err.Error()
 
 		return de
 	}
@@ -608,12 +608,12 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		}
 
 		name := b.Labels[1]
-		if name == "resource" || name == "module" || name == "output" {
+		if err := validateResourceName(name); err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = fmt.Sprintf(`invalid resource name "%s", resource, name, and output are reserved resource names`, name)
+			de.Message = de.Error()
 
 			return de
 		}
@@ -641,12 +641,12 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		}
 
 		name := b.Labels[0]
-		if name == "resource" || name == "module" || name == "output" {
+		if err := validateResourceName(name); err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = fmt.Sprintf(`invalid resource name "%s", resource, name, and output are reserved resource names`, name)
+			de.Message = err.Error()
 
 			return de
 		}
@@ -1112,4 +1112,24 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 	}
 
 	return conf, nil
+}
+
+func validateResourceName(name string) error {
+	if name == "resource" || name == "module" || name == "output" || name == "variable" {
+		return fmt.Errorf("invalid resource name %s, resources can not use the reserved names [resource, module, output, variable]", name)
+	}
+
+	invalidChars := `^[0-9]*$`
+	r, _ := regexp.Compile(invalidChars)
+	if r.MatchString(name) {
+		return fmt.Errorf("invalid resource name %s, resources can not be given a numeric identifier", name)
+	}
+
+	invalidChars = `[^0-9a-zA-Z_-]`
+	r, _ = regexp.Compile(invalidChars)
+	if r.MatchString(name) {
+		return fmt.Errorf("invalid resource name %s, resources can only contain the characters 0-9 a-z A-Z _ -", name)
+	}
+
+	return nil
 }

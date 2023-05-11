@@ -51,7 +51,7 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 	attribute := ""
 
 	// first split on the resource, module, or output
-	r := regexp.MustCompile(`^(module.(?P<modules>.*)\.)?(?:(?P<resource>(resource|output))\.(?P<attributes>(.*)))|(?P<onlymodules>.*)`)
+	r := regexp.MustCompile(`^(module.(?P<modules>.*)\.)?(?:(?P<resource>(resource|output|variable))\.(?P<attributes>(.*)))|(?P<onlymodules>.*)`)
 	match := r.FindStringSubmatch(fqdn)
 	results := map[string]string{}
 	for i, name := range match {
@@ -59,14 +59,14 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 	}
 
 	if len(results) < 2 {
-		return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+		return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as variable.name, output.name, resource.type.name, module.module1.module2, or module.module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
 	}
 
 	switch results["resource"] {
 	case "resource":
 		resourceParts := strings.Split(results["attributes"], ".")
 		if len(resourceParts) < 2 {
-			return nil, fmt.Errorf("ParseFQRN expects the fqrn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+			return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as variable.name, output.name, resource.type.name, module.module1.module2, or module.module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
 		}
 
 		typeName = resourceParts[0]
@@ -77,16 +77,26 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 	case "output":
 		outputParts := strings.Split(results["attributes"], ".")
 		if len(outputParts) != 1 {
-			return nil, fmt.Errorf("ParseFQRN expects the fqrn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+			return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as variable.name, output.name, resource.type.name, module.module1.module2, or module.module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
 		}
 
 		typeName = TypeOutput
 		resourceName = outputParts[0]
 		moduleName = results["modules"]
 
+	case "variable":
+		varParts := strings.Split(results["attributes"], ".")
+		if len(varParts) != 1 {
+			return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as variable.name, output.name, resource.type.name, module.module1.module2, or module.module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+		}
+
+		typeName = TypeVariable
+		resourceName = varParts[0]
+		moduleName = results["modules"]
+
 	default:
 		if results["onlymodules"] == "" || !strings.HasPrefix(results["onlymodules"], "module.") {
-			return nil, fmt.Errorf("ParseFQRN expects the fqrn to be formatted as output.name, resource.type.name, module1.module2, or module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
+			return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as variable.name, output.name, resource.type.name, module.module1.module2, or module.module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
 		}
 
 		//module1.module2

@@ -65,6 +65,10 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
+	v, err := c.FindResource("variable.cpu_resources")
+	require.NoError(t, err)
+	require.NotNil(t, v)
+
 	cont := r.(*structs.Container)
 
 	require.Equal(t, "resource.container.consul", cont.Metadata().ID)
@@ -608,4 +612,40 @@ func TestParserErrorOutputsString(t *testing.T) {
 
 	require.Contains(t, err.Error(), "Error:")
 	require.Contains(t, err.Error(), "80")
+}
+
+func TestParserRejectsInvalidResourceName(t *testing.T) {
+	// should reject names starting with a number
+	err := validateResourceName("0")
+	require.Error(t, err)
+	
+	// should reject names containing invalid characters
+	err = validateResourceName("my resource")
+	require.Error(t, err)
+	
+	err = validateResourceName("my*resource")
+	require.Error(t, err)
+
+	// should reject reserved names
+	err = validateResourceName("variable")
+	require.Error(t, err)
+	
+	err = validateResourceName("output")
+	require.Error(t, err)
+	
+	err = validateResourceName("resource")
+	require.Error(t, err)
+	
+	err = validateResourceName("module")
+	require.Error(t, err)
+
+	// should be valid
+	err = validateResourceName("0232module")
+	require.NoError(t, err)
+	
+	err = validateResourceName("0232m_od-ule")
+	require.NoError(t, err)
+	
+	err = validateResourceName("my_Module")
+	require.NoError(t, err)
 }
