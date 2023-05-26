@@ -36,7 +36,7 @@ resource "postgres" "mydb" {
 
 // modules can use a git ref to be remotely downloaded from the source
 module "mymodule_1" {
-  source = "github.com/shipyard-run/hclconfig?ref=9173050/example/modules//db"
+  source = "github.com/jumppad-labs/hclconfig?ref=9173050/example/modules//db"
 
   variables = {
     db_username = variable.db_username

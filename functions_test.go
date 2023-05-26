@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
+	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )

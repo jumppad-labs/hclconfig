@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"os"
 
-	"github.com/shipyard-run/hclconfig"
-	"github.com/shipyard-run/hclconfig/types"
+	"github.com/jumppad-labs/hclconfig"
+	"github.com/jumppad-labs/hclconfig/types"
 )
 
 func main() {

@@ -18,9 +18,9 @@ import (
 	"github.com/hashicorp/hcl2/hcl"
 	"github.com/hashicorp/hcl2/hcl/hclsyntax"
 	"github.com/hashicorp/hcl2/hclparse"
+	"github.com/jumppad-labs/hclconfig/lookup"
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/mitchellh/go-wordwrap"
-	"github.com/shipyard-run/hclconfig/lookup"
-	"github.com/shipyard-run/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )

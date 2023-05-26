@@ -36,7 +36,7 @@
    "name": "mymodule_1",
    "type": "module",
    "file": "./config.hcl",
-   "source": "github.com/shipyard-run/hclconfig?ref=9173050/example/modules//db",
+   "source": "github.com/jumppad-labs/hclconfig?ref=9173050/example/modules//db",
    "variables": {
     "Name": "variables",
     "Expr": {
@@ -273,7 +273,7 @@
    "name": "mydb",
    "type": "postgres",
    "module": "mymodule_1",
-   "file": "/home/nicj/.hclconfig/cache/github.com_shipyard-run_hclconfig_ref=9173050_example_modules_db/db.hcl",
+   "file": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
    "Location": "localhost",
    "Port": 5432,
    "DBName": "mydatabase",
@@ -289,7 +289,7 @@
    "resource_links": [
     "resource.postgres.mydb.connection_string"
    ],
-   "file": "/home/nicj/.hclconfig/cache/github.com_shipyard-run_hclconfig_ref=9173050_example_modules_db/db.hcl",
+   "file": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
    "depends_on": [
     "resource.postgres.mydb.connection_string"
    ],

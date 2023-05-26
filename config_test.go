@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/shipyard-run/hclconfig/test_fixtures/structs"
-	"github.com/shipyard-run/hclconfig/types"
+	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 

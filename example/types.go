@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/shipyard-run/hclconfig/types"
+	"github.com/jumppad-labs/hclconfig/types"
 )
 
 // Timeouts is not a resource but a block and does not need `ResourceInfo` embedded or the `Resource`

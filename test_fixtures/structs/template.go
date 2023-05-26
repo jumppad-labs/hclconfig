@@ -1,6 +1,6 @@
 package structs
 
-import "github.com/shipyard-run/hclconfig/types"
+import "github.com/jumppad-labs/hclconfig/types"
 
 // TypeTemplate is the resource string for a Template resource
 const TypeTemplate = "template"

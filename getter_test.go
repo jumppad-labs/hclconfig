@@ -60,12 +60,12 @@ func TestGetterCallsGetWhenFolderExistsAndIgnoreCacheTrue(t *testing.T) {
 func TestGetterCallsGetWithURLEncodedOutputFolder(t *testing.T) {
 	g, calls := setupMockGetter(t, nil)
 
-	_, err := g.Get("github.com/shipyard-run/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", "/mycache", false)
+	_, err := g.Get("github.com/jumppad-labs/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", "/mycache", false)
 	require.NoError(t, err)
 
 	require.Len(t, *calls, 1)
 
-	require.Equal(t, "/mycache/github.com_shipyard-run_hclconfig_ref=7271da1cd14778d3762304954d7061cc753da204", (*calls)[0].dest)
+	require.Equal(t, "/mycache/github.com_jumppad-labs_hclconfig_ref=7271da1cd14778d3762304954d7061cc753da204", (*calls)[0].dest)
 }
 
 func TestGetterReturnsFullDownloadPath(t *testing.T) {
@@ -100,7 +100,7 @@ func TestGetterFunctionalTest(t *testing.T) {
 	}
 
 	g := NewGoGetter()
-	download, err := g.Get("github.com/shipyard-run/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", dest, false)
+	download, err := g.Get("github.com/jumppad-labs/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", dest, false)
 	require.NoError(t, err)
 
 	require.DirExists(t, download)

@@ -1,4 +1,4 @@
-module github.com/shipyard-run/hclconfig
+module github.com/jumppad-labs/hclconfig
 
 go 1.19
 

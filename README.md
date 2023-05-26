@@ -1,6 +1,6 @@
 # HCL Configuration Parser
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/shipyard-run/hclconfig.svg)](https://pkg.go.dev/github.com/shipyard-run/hclconfig)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jumppad-labs/hclconfig.svg)](https://pkg.go.dev/github.com/jumppad-labs/hclconfig)
 
 This package allows you to process configuration files written using the HashiCorp Configuration Language (HCL).
 It has full resource linking where a parameter in one configuration stanza can reference a parameter in another stanza.
@@ -383,7 +383,7 @@ a module the SHA of the commit can be used.
 
 ```javascript
 module "mymodule_1" {
-  source = "github.com/shipyard-run/hclconfig?ref=9173050/example/modules//db"
+  source = "github.com/jumppad-labs/hclconfig?ref=9173050/example/modules//db"
 
   variables = {
     db_username = variable.db_username
