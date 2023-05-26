@@ -224,6 +224,13 @@ func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
 	require.Contains(t, cont.Env["file"], "container")
 	require.Contains(t, cont.Env["dir"], absoluteFolderPath)
 	require.Contains(t, cont.Env["trim"], "foo bar")
+
+	// template
+	require.Contains(t, cont.Env["template_file"], "Hello Raymond")
+	require.Contains(t, cont.Env["template_file"], "43 is a number")
+	require.Contains(t, cont.Env["template_file"], "cheese\n  ham\n  pineapple")
+	require.Contains(t, cont.Env["template_file"], "foo = bar")
+	require.Contains(t, cont.Env["template_file"], "x = 1")
 }
 
 func TestParseProcessesCustomFunctions(t *testing.T) {

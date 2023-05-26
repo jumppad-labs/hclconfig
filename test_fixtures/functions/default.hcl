@@ -21,5 +21,14 @@ resource "container" "default" {
     "file"           = file("./default.hcl")
     "dir"            = dir()
     "trim"           = trim("  foo bar  ")
+    "template_file"  = template_file("template.tmpl", {
+      name = "Raymond"
+      number = 43
+      list = ["cheese", "ham", "pineapple"]
+      map = {
+        foo = "bar"
+        x = 1
+      }
+    })
   }
 }
