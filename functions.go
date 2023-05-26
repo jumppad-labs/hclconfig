@@ -2,12 +2,12 @@ package hclconfig
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 
+	"github.com/mailgun/raymond/v2"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
@@ -230,12 +230,67 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 			fp := ensureAbsolute(args[0].AsString(), filePath)
 
 			// read the contents of the file
-			d, err := ioutil.ReadFile(fp)
+			d, err := os.ReadFile(fp)
 			if err != nil {
 				return cty.StringVal(""), err
 			}
 
 			return cty.StringVal(string(d)), nil
+		},
+	})
+
+	var ReadTemplateFileFunc = function.New(&function.Spec{
+		Params: []function.Parameter{
+			{
+				Name:             "path",
+				Type:             cty.String,
+				AllowDynamicType: true,
+			},
+			{
+				Name:             "variables",
+				Type:             cty.DynamicPseudoType,
+				AllowUnknown:     true,
+				AllowDynamicType: true,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			// convert the file path to an absolute
+			fp := ensureAbsolute(args[0].AsString(), filePath)
+
+			// read the contents of the file
+			d, err := os.ReadFile(fp)
+			if err != nil {
+				return cty.StringVal(""), err
+			}
+
+			vars := args[1]
+			if vars.IsNull() || !vars.Type().IsObjectType() {
+				return cty.StringVal(""), fmt.Errorf(`variables is either empty or not correctly formatted, e.g. { foo = "bar" list = ["a", "b"] number = 3 }`)
+			}
+
+			variables := ParseVars(vars.AsValueMap())
+
+			tmpl, err := raymond.Parse(string(d))
+			if err != nil {
+				return cty.StringVal(""), fmt.Errorf("error parsing template: %s", err)
+			}
+
+			tmpl.RegisterHelpers(map[string]interface{}{
+				"quote": func(in string) string {
+					return fmt.Sprintf(`"%s"`, in)
+				},
+				"trim": func(in string) string {
+					return strings.TrimSpace(in)
+				},
+			})
+
+			result, err := tmpl.Exec(variables)
+			if err != nil {
+				return cty.StringVal(""), fmt.Errorf("error processing template: %s", err)
+			}
+
+			return cty.StringVal(result), nil
 		},
 	})
 
@@ -324,6 +379,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 	funcs["env"] = EnvFunc
 	funcs["home"] = HomeFunc
 	funcs["file"] = ReadFileFunc
+	funcs["template_file"] = ReadTemplateFileFunc
 	funcs["dir"] = DirFunc
 	funcs["trim"] = TrimFunc
 	//funcs["index"] = IndexFunc

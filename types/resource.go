@@ -4,11 +4,11 @@ var TypeResource = "resource"
 
 // Parsable defines an optional interface that allows a resource to be
 // modified directly after it has been loaded from a file
-// 
+//
 // Parsable should be implemented when you want to do basic validation of
 // resources before they are processed by the graph.
 //
-// Parse is called sequentially for each resource as it is loaded from the 
+// Parse is called sequentially for each resource as it is loaded from the
 // config file. This occurs before the graph of dependent resources has been
 // built.
 type Parsable interface {
@@ -28,7 +28,7 @@ type Parsable interface {
 
 // Processable defines an optional interface that allows a resource to define a callback
 // that is executed when the resources is processed by the graph.
-// 
+//
 // Unlike Parsable, Process for a resource is called in strict order based upon
 // its dependency to other resources. You can set calculated fields and perform
 // operations in Process and this information will be available to dependent
