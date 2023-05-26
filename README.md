@@ -512,6 +512,19 @@ mytype "test" {
 }
 ```
 
+#### template_file(path, variables)
+
+Returns the rendered contents of a template file at the given path with the given input variables.
+
+# given the file "./mytemplate.tmpl" with the contents "hello {{name}}"
+
+mytype "test" {
+  // my_file = "foobar"
+  my_file = template_file("./mytemplate.tmpl", {
+    name = "world"
+  })
+}
+
 #### dir()
 
 Returns the absolute path of the directory containing the current resource
