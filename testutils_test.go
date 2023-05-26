@@ -2,7 +2,6 @@ package hclconfig
 
 import (
 	"io/ioutil"
-	"math/big"
 	"os"
 	"testing"
 
@@ -29,7 +28,7 @@ func TestProcessesTypes(t *testing.T) {
 
 	require.Equal(t, "abc", output["string"])
 
-	num, _ := output["number"].(*big.Float).Int64()
+	num := int64(output["number"].(float64))
 	require.Equal(t, int64(23), num)
 
 	require.True(t, output["bool"].(bool))
