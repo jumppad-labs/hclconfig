@@ -905,8 +905,8 @@ func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interfa
 	return nil
 }
 
-// Recurively checks the fields and blocks on the resource to identify links to other resources
-// i.e. resource.container.network[0].name
+// Recursively checks the fields and blocks on the resource to identify links to other resources
+// i.e. resource.container.foo.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
 func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource interface{}, path string) ([]string, error) {
@@ -994,6 +994,15 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 	case *hclsyntax.ObjectConsExpr:
 		for _, v := range expr.(*hclsyntax.ObjectConsExpr).Items {
 			res, err := processExpr(v.ValueExpr)
+			if err != nil {
+				return nil, err
+			}
+
+			resources = append(resources, res...)
+		}
+	case *hclsyntax.TupleConsExpr:
+		for _, v := range expr.(*hclsyntax.TupleConsExpr).Exprs {
+			res, err := processExpr(v)
 			if err != nil {
 				return nil, err
 			}

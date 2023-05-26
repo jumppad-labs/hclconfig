@@ -7,6 +7,7 @@ resource "network" "onprem" {
 }
 
 resource "container" "consul" {
+
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {

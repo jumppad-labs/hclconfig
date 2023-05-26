@@ -48,6 +48,11 @@ resource "template" "consul_config_update" {
 }
 
 resource "container" "base" {
+  // ensure that arrays can also have interpolation
+  entrypoint = [
+    resource.network.onprem.id
+  ]
+
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
