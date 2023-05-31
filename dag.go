@@ -373,6 +373,9 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				}
 
 				val = cty.SetVal(vals)
+			case "cty.Value":
+				val = src.Interface().(cty.Value)
+
 			default:
 				pe := ParserError{}
 				pe.Filename = r.Metadata().File
@@ -383,7 +386,16 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				return diags.Append(pe)
 			}
 
-			setContextVariableFromPath(ctx, v, val)
+			err = setContextVariableFromPath(ctx, v, val)
+			if err != nil {
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
+
+				return diags.Append(pe)
+			}
 		}
 
 		// Process the raw resource now we have the context from the linked
@@ -466,6 +478,16 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				for k, v := range mapVars {
 					setContextVariable(mod.SubContext, k, v)
 				}
+			}
+		}
+
+		// if this is an output we need to convert the value into
+		// a go type
+		if r.Metadata().Type == types.TypeOutput {
+			o := r.(*types.Output)
+
+			if !o.CtyValue.IsNull() {
+				o.Value = castVar(o.CtyValue)
 			}
 		}
 

@@ -7,6 +7,7 @@ require (
 	github.com/hashicorp/go-getter v1.7.0
 	github.com/hashicorp/hcl2 v0.0.0-20191002203319-fb75b3253c80
 	github.com/hashicorp/terraform v0.12.29
+	github.com/kr/pretty v0.2.1
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/stretchr/testify v1.8.1
@@ -39,7 +40,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.3.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/text v0.1.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

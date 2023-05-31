@@ -76,13 +76,25 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 
 	case "output":
 		outputParts := strings.Split(results["attributes"], ".")
-		if len(outputParts) != 1 {
-			return nil, fmt.Errorf("ParseFQRN expects the fqdn to be formatted as variable.name, output.name, resource.type.name, module.module1.module2, or module.module1.module2.resource.type.name. The fqrn: %s, does not contain a resource type", fqdn)
-		}
 
 		typeName = TypeOutput
 		resourceName = outputParts[0]
 		moduleName = results["modules"]
+		attribute = strings.Join(outputParts[1:], ".")
+
+		// check if the fqdn is using parentheses based selectors []
+		indexR := regexp.MustCompile(`(?P<name>.*)\[(?P<index>\d+)\]`)
+		indexMatch := indexR.FindStringSubmatch(outputParts[0])
+		indexResults := map[string]string{}
+		for i, name := range indexMatch {
+			indexResults[indexR.SubexpNames()[i]] = name
+		}
+
+		if i := indexResults["index"]; i != "" {
+			attribute = fmt.Sprintf("%s.%s", i, attribute)
+			attribute = strings.Trim(attribute, ".")
+			resourceName = indexResults["name"]
+		}
 
 	case "variable":
 		varParts := strings.Split(results["attributes"], ".")
@@ -159,7 +171,7 @@ func (f ResourceFQRN) String() string {
 	}
 
 	if f.Type == TypeOutput {
-		return fmt.Sprintf("%s%s.%s", modulePart, f.Type, f.Resource)
+		return fmt.Sprintf("%s%s.%s%s", modulePart, f.Type, f.Resource, attrPart)
 	}
 
 	if f.Type == TypeModule {

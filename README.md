@@ -547,6 +547,32 @@ mytype "test" {
 }
 ```
 
+#### element(list | map, int | string)
+Returns a value from a map or list by the given index. 
+
+```javascript
+variable "property" {
+  default = "name"
+}
+
+mytype "test1" {
+  // trimmed = "abc 123"
+  item {
+    name = "nic"
+  }
+  
+  item {
+    name = "eric"
+  }
+}
+
+mytype "test2" {
+  item {
+    name = element(resource.mytype.test1.0, variable property)
+  }
+}
+```
+
 ### Custom Functions
 
 In addition to the default functions it is possible to register custom functions.

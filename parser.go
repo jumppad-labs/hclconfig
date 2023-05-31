@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/hcl2/hclparse"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/kr/pretty"
 	"github.com/mitchellh/go-wordwrap"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -744,54 +745,37 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 // on the given path. Will create any child maps needed to satisfy the path.
 // i.e "resources.foo.bar" set to "true" would return
 // ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True() = true
-func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) {
+func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) error {
 	ul := getContextLock(ctx)
 	defer ul()
 
 	pathParts := strings.Split(path, ".")
-	ctx.Variables = setMapVariableFromPath(ctx.Variables, pathParts, value)
+
+	var err error
+	ctx.Variables, err = setMapVariableFromPath(ctx.Variables, pathParts, value)
+
+	return err
 }
 
-func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.Value) map[string]cty.Value {
+func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.Value) (map[string]cty.Value, error) {
 	// it is possible for root to be nil, ensure this is set to an empty map
 	if root == nil {
 		root = map[string]cty.Value{}
 	}
 
-	// is this the last path so set the value and return
-	if len(path) == 1 {
-		root[path[0]] = value
-		return root
+	// gets the name and the index from the path
+	name, index, rPath, err := getNameAndIndex(path)
+	if err != nil {
+		return nil, err
 	}
 
-	name := path[0]
-	index := -1
-
-	// is the path an array
-	rg, _ := regexp.Compile(`(.*)\[([0-9])+\]`)
-	if sm := rg.FindStringSubmatch(path[0]); len(sm) == 3 {
-		name = sm[1]
-
-		var convErr error
-		index, convErr = strconv.Atoi(sm[2])
-		if convErr != nil {
-			panic(fmt.Sprintf("Index %s is not a number", sm[2]))
-		}
-	}
-
-	// if not we need to create a map node if it does not exist
-	// and recurse
+	// do we have a node at this path if not we need to create if it
+	// nodes can either be a map or a list of maps
 	val, ok := root[name]
 	if !ok {
-		// do we have an array if so create a list
 		if index >= 0 {
 			// create a list with the correct length
 			vals := make([]cty.Value, index+1)
-
-			// need to set default values or the parser will panic
-			for i, _ := range vals {
-				vals[i] = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
-			}
 
 			val = cty.ListVal(vals)
 		} else {
@@ -801,51 +785,133 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 	}
 
 	if index >= 0 {
+		// if we have an index we need to set the list variable for the map at that
+		// index and then recursively set the other elements in the map
+		updated, err := setListVariableFromPath(val.AsValueSlice(), rPath, index, value)
+		if err != nil {
+			return nil, err
+		}
 
-		updated := setListVariableFromPath(val.AsValueSlice(), path[1:], index, value)
 		root[name] = cty.ListVal(updated)
 	} else {
-		updated := setMapVariableFromPath(val.AsValueMap(), path[1:], value)
+		// check if the value is a list, it is possible that the user is
+		// trying to incorrectly access a list type using a string parameter
+		// if we do not check this it will panic
+		//if val.Type().IsTupleType() || val.Type().IsListType() {
+		//	err := fmt.Errorf(`the parameter is a list of items, you can not use the string index "%s" to access items, please use numeric indexes`, name)
+		//	return nil, err
+		//}
+
+		// if this is the end of the line set the value and return
+		if len(rPath) == 0 {
+			root[name] = value
+			return root, nil
+		}
+
+		// we are setting a map, recurse
+		updated, err := setMapVariableFromPath(val.AsValueMap(), rPath, value)
+		if err != nil {
+			return nil, err
+		}
+
 		root[name] = cty.ObjectVal(updated)
 	}
 
-	return root
+	return root, nil
 }
 
-func setListVariableFromPath(root []cty.Value, path []string, index int, value cty.Value) []cty.Value {
+func setListVariableFromPath(root []cty.Value, path []string, index int, value cty.Value) ([]cty.Value, error) {
+	var setVal cty.Value
+	if len(path) > 0 {
+		updated, err := setMapVariableFromPath(value.AsValueMap(), path, value)
+		if err != nil {
+			return nil, err
+		}
+
+		setVal = cty.ObjectVal(updated)
+	} else {
+		setVal = value
+	}
+
+	// check the type of the collection, if trying to set a type that is inconsistent
+	// from the other types in the collection, return an error
+	if len(root) > 0 {
+		if root[0].Type() != cty.NilType && root[0].Type() != setVal.Type() {
+			pretty.Println(root)
+			pretty.Println(value)
+			return nil, fmt.Errorf("lists must contain similar types, you have tried to set a %s, to a list of type %s", value.Type().FriendlyName(), root[0].Type().FriendlyName())
+		}
+	}
+
 	// we have a node but do we need to expand it in size?
 	if index >= len(root) {
 		root = append(root, make([]cty.Value, index+1-len(root))...)
 	}
 
-	val := root[index]
-	if val == cty.NilVal {
-		val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+	root[index] = setVal
+
+	// build a unique list of keys and types, if the
+	// node contains a list of maps
+	//ul := map[string]cty.Type{}
+	//for _, m := range root {
+	//	if m.Type().IsObjectType() || m.Type().IsMapType() {
+	//		for k, v := range m.AsValueMap() {
+	//			ul[k] = v.Type()
+	//		}
+	//	}
+	//}
+
+	//if len(ul) == 0 {
+	//	return root, nil
+	//}
+
+	//// we need to normalize the map collection as cty does not allow inconsistent map keys
+	//for k, v := range ul {
+	//	for i, m := range root {
+	//		if _, ok := m.AsValueMap()[k]; !ok {
+	//			val := root[i].AsValueMap()
+	//			val[k] = cty.NullVal(v)
+	//			root[i] = cty.ObjectVal(val)
+	//		}
+	//	}
+	//}
+
+	return root, nil
+}
+
+// gets the name of the path and the index
+// if path[0] == foo     and path[1] = bar[0] returns foo, -1, nil
+// if path[0] == bar[0]  and path[1] = biz    returns bar, 0, nil
+// if path[0] == foo     and path[1] = 0 returns foo, 0, nil
+// if path[0] == foo     and path[1] = bar returns foo, -1, nil
+// if path[0] == foo     and path[1] = nil returns foo, -1, nil
+func getNameAndIndex(path []string) (name string, index int, remainingPath []string, err error) {
+	index = -1
+
+	// is the path an array with parenthesis
+	rg, _ := regexp.Compile(`(.*)\[(.+)\]`)
+	if sm := rg.FindStringSubmatch(path[0]); len(sm) == 3 {
+		name = sm[1]
+
+		var convErr error
+		index, convErr = strconv.Atoi(sm[2])
+		if convErr != nil {
+			return "", -1, nil, fmt.Errorf("index %s is not a number", sm[2])
+		}
+
+		return name, index, path[1:], nil
 	}
 
-	updated := setMapVariableFromPath(val.AsValueMap(), path, value)
-	root[index] = cty.ObjectVal(updated)
-
-	// build a unique list of keys and types
-	ul := map[string]cty.Type{}
-	for _, m := range root {
-		for k, v := range m.AsValueMap() {
-			ul[k] = v.Type()
+	// is the path a number using the . notation for an index
+	if len(path) > 1 {
+		index, convErr := strconv.Atoi(path[1])
+		if convErr == nil {
+			return path[0], index, path[2:], nil
 		}
 	}
 
-	// we need to normalize the map collection as cty does not allow inconsistent map keys
-	for k, v := range ul {
-		for i, m := range root {
-			if _, ok := m.AsValueMap()[k]; !ok {
-				val := root[i].AsValueMap()
-				val[k] = cty.NullVal(v)
-				root[i] = cty.ObjectVal(val)
-			}
-		}
-	}
-
-	return root
+	// normal path item
+	return path[0], -1, path[1:], nil
 }
 
 func buildContext(filePath string, customFunctions map[string]function.Function) *hcl.EvalContext {
