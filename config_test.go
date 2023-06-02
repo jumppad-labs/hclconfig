@@ -139,6 +139,14 @@ func TestFindResourceFindsModuleOutput(t *testing.T) {
 	require.Equal(t, r[7], out)
 }
 
+func TestFindResourceFindsModuleOutputWithIndex(t *testing.T) {
+	c, r := testSetupConfig(t)
+
+	out, err := c.FindResource("module.module1.module2.output.fqdn.0")
+	require.NoError(t, err)
+	require.Equal(t, r[7], out)
+}
+
 func TestFindResourceFindsClusterInModule(t *testing.T) {
 	c, r := testSetupConfig(t)
 

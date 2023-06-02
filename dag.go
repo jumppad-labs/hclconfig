@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"log"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -371,8 +373,28 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				for i := 0; i < src.Len(); i++ {
 					vals = append(vals, cty.NumberIntVal(src.Index(i).Int()))
 				}
-
 				val = cty.SetVal(vals)
+			case "cty.Value":
+				val = src.Interface().(cty.Value)
+
+				if val.Type().IsTupleType() {
+					// if we have a tuple do we have an index
+					rg, _ := regexp.Compile(`(.*)\[(.+)\]`)
+					if sm := rg.FindStringSubmatch(v); len(sm) == 3 {
+						var convErr error
+						index, convErr := strconv.Atoi(sm[2])
+						if convErr != nil {
+							panic(fmt.Errorf("index %s is not a number", sm[2]))
+						}
+
+						// we have a tuple with an index, grab the right value
+						if index >= 0 {
+							val = val.Index(cty.NumberIntVal(int64(index)))
+						}
+
+					}
+				}
+
 			default:
 				pe := ParserError{}
 				pe.Filename = r.Metadata().File
@@ -383,7 +405,16 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				return diags.Append(pe)
 			}
 
-			setContextVariableFromPath(ctx, v, val)
+			err = setContextVariableFromPath(ctx, v, val)
+			if err != nil {
+				pe := ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
+
+				return diags.Append(pe)
+			}
 		}
 
 		// Process the raw resource now we have the context from the linked
@@ -466,6 +497,16 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				for k, v := range mapVars {
 					setContextVariable(mod.SubContext, k, v)
 				}
+			}
+		}
+
+		// if this is an output we need to convert the value into
+		// a go type
+		if r.Metadata().Type == types.TypeOutput {
+			o := r.(*types.Output)
+
+			if !o.CtyValue.IsNull() {
+				o.Value = castVar(o.CtyValue)
 			}
 		}
 

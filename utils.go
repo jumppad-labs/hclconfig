@@ -1,7 +1,11 @@
 package hclconfig
 
 import (
+	"fmt"
+
+	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
 )
 
 // ParseVars converts a map[string]cty.Value into map[string]interface
@@ -44,6 +48,13 @@ func castVar(v cty.Value) interface{} {
 		}
 
 		return vars
+	} else if v.Type() == cty.DynamicPseudoType {
+		v, err := convert.Convert(v, cty.String)
+		if err == nil {
+			pretty.Println(v)
+			fmt.Printf("dynamic %v %s\n", v.AsString(), err)
+			return v
+		}
 	}
 
 	return nil

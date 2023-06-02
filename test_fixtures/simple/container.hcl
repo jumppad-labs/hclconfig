@@ -132,3 +132,11 @@ output "ip_address_1" {
 output "ip_address_2" {
   value = resource.container.consul.network.1.ip_address
 }
+
+output "ip_addresses" {
+  value = [
+    resource.container.consul.network.0.ip_address,
+    resource.container.consul.network.1.ip_address,
+    12
+  ]
+}

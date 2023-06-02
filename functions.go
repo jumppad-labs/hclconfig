@@ -347,31 +347,46 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 		},
 	})
 
-	// TODO: need to implement, however first need to be able to serialize
-	// structs and arrays to cty Types
-	//var IndexFunc = function.New(&function.Spec{
-	//	Params: []function.Parameter{
-	//		{
-	//			Name:             "list",
-	//			Type:             cty.Map(cty.String),
-	//			AllowDynamicType: true,
-	//		},
-	//		{
-	//			Name:             "parameter",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//		{
-	//			Name:             "value",
-	//			Type:             cty.String,
-	//			AllowDynamicType: true,
-	//		},
-	//	},
-	//	Type: function.StaticReturnType(cty.Number),
-	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-	//		return cty.NumberIntVal(-1), nil
-	//	},
-	//})
+	var ElementFunc = function.New(&function.Spec{
+		Params: []function.Parameter{
+			{
+				Name:             "value",
+				Type:             cty.DynamicPseudoType,
+				AllowDynamicType: true,
+			},
+			{
+				Name:             "index",
+				Type:             cty.DynamicPseudoType,
+				AllowDynamicType: true,
+			},
+		},
+		Type: function.StaticReturnType(cty.DynamicPseudoType),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			if args[0].Type().IsTupleType() || args[0].Type().IsListType() {
+				i := args[0].ElementIterator()
+
+				for {
+					if !i.Next() {
+						break
+					}
+
+					index, e := i.Element()
+					if index.Equals(args[1]).True() {
+						return e, nil
+					}
+				}
+
+				return cty.NullVal(retType), nil
+			} else if args[1].Type() == cty.String && (args[0].Type().IsObjectType() || args[0].Type().IsMapType()) {
+				index := args[1].AsString()
+				m := args[0].AsValueMap()
+
+				return m[index], nil
+			}
+
+			return cty.NullVal(retType), nil
+		},
+	})
 
 	funcs := map[string]function.Function{}
 
@@ -382,7 +397,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 	funcs["template_file"] = ReadTemplateFileFunc
 	funcs["dir"] = DirFunc
 	funcs["trim"] = TrimFunc
-	//funcs["index"] = IndexFunc
+	funcs["element"] = ElementFunc
 
 	return funcs
 }

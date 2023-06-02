@@ -35,3 +35,17 @@ output "container_name" {
 output "container_resources_cpu" {
   value = resource.container.consul.resources.cpu
 }
+
+output "combined_list" {
+  value = [
+    resource.container.consul.resources.memory,
+    resource.container.consul.resources.cpu
+  ]
+}
+
+output "combined_map" {
+  value = {
+    name = resource.container.consul.name
+    cpu  = resource.container.consul.resources.cpu
+  }
+}

@@ -164,6 +164,15 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 
 	out = r.(*types.Output)
 	require.Equal(t, "10.7.0.201", out.Value)
+
+	r, err = c.FindResource("output.ip_addresses")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	out = r.(*types.Output)
+	require.Equal(t, "10.6.0.200", out.Value.([]interface{})[0].(string))
+	require.Equal(t, "10.7.0.201", out.Value.([]interface{})[1].(string))
+	require.Equal(t, float64(12), out.Value.([]interface{})[2].(float64))
 }
 
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
@@ -254,8 +263,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	// count the resources, should create 4
-	require.Len(t, c.Resources, 23)
+	require.Len(t, c.Resources, 35)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -277,24 +285,64 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	// check interpolation value
 	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
 
-	// check outputs
-	cont, err = c.FindResource("output.module1_container_resources_cpu")
+}
+
+func TestParseModuleCreatesOutputs(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	// check interpolation value is overriden in the module stanza
-	require.Equal(t, "4096", cont.(*types.Output).Value)
+	require.Len(t, c.Resources, 35)
+
+	cont, err := c.FindResource("output.module1_container_resources_cpu")
+	require.NoError(t, err)
+
+	// check output value from module is equal to the module variable
+	// which is set as an interpolated value of the container base
+	require.Equal(t, float64(4096), cont.(*types.Output).Value)
 
 	cont, err = c.FindResource("output.module2_container_resources_cpu")
 	require.NoError(t, err)
 
-	// check interpolation value
-	require.Equal(t, "512", cont.(*types.Output).Value)
+	// check output value from module is equal to the module variable
+	// which is set as the variable for the config
+	require.Equal(t, float64(512), cont.(*types.Output).Value)
 
 	cont, err = c.FindResource("output.module3_container_resources_cpu")
 	require.NoError(t, err)
 
-	// check interpolation value
-	require.Equal(t, "2048", cont.(*types.Output).Value)
+	// check the output variable is set to the default value for the module
+	require.Equal(t, float64(2048), cont.(*types.Output).Value)
+
+	cont, err = c.FindResource("output.module1_from_list_1")
+	require.NoError(t, err)
+
+	cont2, err := c.FindResource("output.module1_from_list_2")
+	require.NoError(t, err)
+
+	// check an element can be obtained from a list of values
+	// returned from a output
+	require.Equal(t, float64(0), cont.(*types.Output).Value)
+	require.Equal(t, float64(4096), cont2.(*types.Output).Value)
+
+	// check an element can be obtained from a map of values
+	// returned from a output
+	cont, err = c.FindResource("output.module1_from_map_1")
+	require.NoError(t, err)
+
+	cont2, err = c.FindResource("output.module1_from_map_2")
+	require.NoError(t, err)
+
+	// check element can be obtained from a map of values
+	// returned in the output
+	require.Equal(t, "consul", cont.(*types.Output).Value)
+	require.Equal(t, float64(4096), cont2.(*types.Output).Value)
 }
 
 func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
@@ -420,17 +468,102 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	require.Len(t, calls, 0)
 }
 
+func TestGetNameAndIndexReturnsCorrectDetails(t *testing.T) {
+	path := []string{"resource", "foo", "bar"}
+	n, i, rp, err := getNameAndIndex(path)
+	require.NoError(t, err)
+	require.Equal(t, "resource", n)
+	require.Equal(t, -1, i)
+	require.Equal(t, []string{"foo", "bar"}, rp)
+
+	path = []string{"resource", "foo[0]", "bar"}
+	n, i, rp, err = getNameAndIndex(path)
+	require.NoError(t, err)
+	require.Equal(t, "resource", n)
+	require.Equal(t, -1, i)
+	require.Equal(t, []string{"foo[0]", "bar"}, rp)
+
+	path = []string{"foo[0]", "bar"}
+	n, i, rp, err = getNameAndIndex(path)
+	require.NoError(t, err)
+	require.Equal(t, "foo", n)
+	require.Equal(t, 0, i)
+	require.Equal(t, []string{"bar"}, rp)
+
+	path = []string{"foo[nic]", "bar"}
+	_, _, _, err = getNameAndIndex(path)
+	require.Error(t, err)
+
+	path = []string{"foo", "0", "bar"}
+	n, i, rp, err = getNameAndIndex(path)
+	require.NoError(t, err)
+	require.Equal(t, "foo", n)
+	require.Equal(t, 0, i)
+	require.Equal(t, []string{"bar"}, rp)
+
+	path = []string{"bar[0]"}
+	n, i, rp, err = getNameAndIndex(path)
+	require.NoError(t, err)
+	require.Equal(t, "bar", n)
+	require.Equal(t, 0, i)
+	require.Equal(t, []string{}, rp)
+}
+
 func TestSetContextVariableFromPath(t *testing.T) {
 	ctx := &hcl.EvalContext{}
 	ctx.Variables = map[string]cty.Value{"resource": cty.ObjectVal(map[string]cty.Value{})}
 
-	setContextVariableFromPath(ctx, "resource.foo.bar", cty.BoolVal(true))
-	setContextVariableFromPath(ctx, "resource.foo.bear", cty.StringVal("Hello World"))
-	setContextVariableFromPath(ctx, "resource.poo", cty.StringVal("Meh"))
+	err := setContextVariableFromPath(ctx, "resource.foo.bar", cty.BoolVal(true))
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.foo.biz", cty.StringVal("Hello World"))
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.foo.bear.grr", cty.StringVal("Grrrr"))
+
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.poo", cty.StringVal("Meh"))
+	require.NoError(t, err)
 
 	require.True(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bar"].True())
-	require.Equal(t, "Hello World", ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bear"].AsString())
+	require.Equal(t, "Hello World", ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["biz"].AsString())
+	require.Equal(t, "Grrrr", ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bear"].AsValueMap()["grr"].AsString())
 	require.Equal(t, "Meh", ctx.Variables["resource"].AsValueMap()["poo"].AsString())
+}
+
+func TestSetContextVariableFromPathWithEndingIndex(t *testing.T) {
+	ctx := &hcl.EvalContext{}
+	ctx.Variables = map[string]cty.Value{"resource": cty.ObjectVal(map[string]cty.Value{})}
+
+	err := setContextVariableFromPath(ctx, "resource.foo.bar", cty.ListVal([]cty.Value{cty.BoolVal(false), cty.BoolVal(false)}))
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.foo.bar[0]", cty.BoolVal(true))
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.foo.bar[1]", cty.BoolVal(false))
+
+	require.NoError(t, err)
+
+	require.True(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bar"].AsValueSlice()[0].True())
+	require.False(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueMap()["bar"].AsValueSlice()[1].True())
+}
+
+func TestSetContextVariableFromPathWithIndex(t *testing.T) {
+	ctx := &hcl.EvalContext{}
+	ctx.Variables = map[string]cty.Value{"resource": cty.ObjectVal(map[string]cty.Value{})}
+
+	err := setContextVariableFromPath(ctx, "resource.foo[0].bar", cty.BoolVal(true))
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.foo.1.biz", cty.StringVal("Hello World"))
+
+	require.NoError(t, err)
+
+	fmt.Println(ctx.Variables["resource"].AsValueMap()["foo"].Type().FriendlyName())
+	require.True(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueSlice()[0].AsValueMap()["bar"].True())
+	require.Equal(t, "Hello World", ctx.Variables["resource"].AsValueMap()["foo"].AsValueSlice()[1].AsValueMap()["biz"].AsString())
 }
 
 func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
@@ -540,7 +673,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	require.Error(t, err)
 
 	// only 7 of the resources should be created, none of the descendants of base
-	require.Len(t, calls, 6)
+	require.Len(t, calls, 8)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 

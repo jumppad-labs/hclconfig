@@ -153,6 +153,71 @@ func TestParseFQRNReturnsOutput(t *testing.T) {
 	require.Equal(t, "output.mine", sfrqn)
 }
 
+func TestParseResourceFQRNWithIndexReturnsCorrectData(t *testing.T) {
+	fqrn, err := ParseFQRN("resource.container.mine.property.0")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, typeTestContainer, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "property.0", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "resource.container.mine.property.0", sfrqn)
+}
+
+func TestParseFQRNWithIndexReturnsCorrectData(t *testing.T) {
+	fqrn, err := ParseFQRN("output.mine.0")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "0", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "output.mine.0", sfrqn)
+}
+
+func TestParseFQRNWithParenthesesIndexReturnsCorrectData(t *testing.T) {
+	fqrn, err := ParseFQRN("output.mine[0]")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "0", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "output.mine.0", sfrqn)
+}
+
+func TestParseFQRNWithParenthesesIndexAndAttributeReturnsCorrectData(t *testing.T) {
+	fqrn, err := ParseFQRN("output.mine[0].nic")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "0.nic", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "output.mine.0.nic", sfrqn)
+}
+
+func TestParseFQRNWithIndexAndModuleReturnsCorrectData(t *testing.T) {
+	fqrn, err := ParseFQRN("module.mine.output.mine.name")
+	require.NoError(t, err)
+
+	require.Equal(t, "mine", fqrn.Module)
+	require.Equal(t, TypeOutput, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "name", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.mine.output.mine.name", sfrqn)
+}
+
 func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 	dt := DefaultTypes()
 	dt[typeTestContainer] = &testContainer{}
