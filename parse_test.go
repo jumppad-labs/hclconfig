@@ -263,7 +263,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 33)
+	require.Len(t, c.Resources, 35)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -536,7 +536,10 @@ func TestSetContextVariableFromPathWithEndingIndex(t *testing.T) {
 	ctx := &hcl.EvalContext{}
 	ctx.Variables = map[string]cty.Value{"resource": cty.ObjectVal(map[string]cty.Value{})}
 
-	err := setContextVariableFromPath(ctx, "resource.foo.bar[0]", cty.BoolVal(true))
+	err := setContextVariableFromPath(ctx, "resource.foo.bar", cty.ListVal([]cty.Value{cty.BoolVal(false), cty.BoolVal(false)}))
+	require.NoError(t, err)
+
+	err = setContextVariableFromPath(ctx, "resource.foo.bar[0]", cty.BoolVal(true))
 	require.NoError(t, err)
 
 	err = setContextVariableFromPath(ctx, "resource.foo.bar[1]", cty.BoolVal(false))

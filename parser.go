@@ -20,7 +20,6 @@ import (
 	"github.com/hashicorp/hcl2/hclparse"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
-	"github.com/kr/pretty"
 	"github.com/mitchellh/go-wordwrap"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -785,6 +784,7 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 	}
 
 	if index >= 0 {
+		fmt.Println(path)
 		// if we have an index we need to set the list variable for the map at that
 		// index and then recursively set the other elements in the map
 		updated, err := setListVariableFromPath(val.AsValueSlice(), rPath, index, value)
@@ -821,7 +821,6 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 }
 
 func setListVariableFromPath(root []cty.Value, path []string, index int, value cty.Value) ([]cty.Value, error) {
-
 	// we have a node but do we need to expand it in size?
 	if index >= len(root) {
 		root = append(root, make([]cty.Value, index+1-len(root))...)
@@ -849,12 +848,6 @@ func setListVariableFromPath(root []cty.Value, path []string, index int, value c
 	// from the other types in the collection, return an error
 	if len(root) > 0 {
 		if root[0].Type() != cty.NilType && root[0].Type().FriendlyName() != setVal.Type().FriendlyName() {
-			pretty.Println(path)
-			pretty.Println(root)
-			
-			fmt.Println("value")
-			pretty.Println(value)
-
 			return nil, fmt.Errorf("lists must contain similar types, you have tried to set a %s, to a list of type %s", value.Type().FriendlyName(), root[0].Type().FriendlyName())
 		}
 	}
@@ -879,13 +872,12 @@ func setListVariableFromPath(root []cty.Value, path []string, index int, value c
 	// we need to normalize the map collection as cty does not allow inconsistent map keys
 	for k, v := range ul {
 		for i, m := range root {
-			var val map[string]cty.Value
 			if m.IsNull() {
-				val = map[string]cty.Value{".keep": cty.BoolVal(true)}
+				m = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
 			}
 
 			if _, ok := m.AsValueMap()[k]; !ok {
-				val = root[i].AsValueMap()
+				val := m.AsValueMap()
 				val[k] = cty.NullVal(v)
 				root[i] = cty.ObjectVal(val)
 			}

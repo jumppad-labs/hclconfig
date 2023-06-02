@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"log"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -14,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
-	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -344,6 +345,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			}
 
 			// we need to set src in the context
+			fmt.Printf("%s, %s\n", v, paramType)
 			var val cty.Value
 			switch paramType {
 			case "string":
@@ -372,12 +374,27 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				for i := 0; i < src.Len(); i++ {
 					vals = append(vals, cty.NumberIntVal(src.Index(i).Int()))
 				}
-
 				val = cty.SetVal(vals)
 			case "cty.Value":
-				fmt.Println("p",path)
-				pretty.Println(src)
 				val = src.Interface().(cty.Value)
+
+				if val.Type().IsTupleType() {
+					// if we have a tuple do we have an index
+					rg, _ := regexp.Compile(`(.*)\[(.+)\]`)
+					if sm := rg.FindStringSubmatch(v); len(sm) == 3 {
+						var convErr error
+						index, convErr := strconv.Atoi(sm[2])
+						if convErr != nil {
+							panic(fmt.Errorf("index %s is not a number", sm[2]))
+						}
+
+						// we have a tuple with an index, grab the right value
+						if index >= 0 {
+							val = val.Index(cty.NumberIntVal(int64(index)))
+						}
+
+					}
+				}
 
 			default:
 				pe := ParserError{}
@@ -389,7 +406,6 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				return diags.Append(pe)
 			}
 
-			fmt.Println(v)
 			err = setContextVariableFromPath(ctx, v, val)
 			if err != nil {
 				pe := ParserError{}
