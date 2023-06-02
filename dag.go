@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -374,6 +375,8 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 
 				val = cty.SetVal(vals)
 			case "cty.Value":
+				fmt.Println("p",path)
+				pretty.Println(src)
 				val = src.Interface().(cty.Value)
 
 			default:
@@ -386,6 +389,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				return diags.Append(pe)
 			}
 
+			fmt.Println(v)
 			err = setContextVariableFromPath(ctx, v, val)
 			if err != nil {
 				pe := ParserError{}

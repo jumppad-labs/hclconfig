@@ -779,7 +779,7 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 
 			val = cty.ListVal(vals)
 		} else {
-			// create a map node
+			// create a map nodej
 			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
 		}
 	}
@@ -821,9 +821,21 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 }
 
 func setListVariableFromPath(root []cty.Value, path []string, index int, value cty.Value) ([]cty.Value, error) {
+
+	// we have a node but do we need to expand it in size?
+	if index >= len(root) {
+		root = append(root, make([]cty.Value, index+1-len(root))...)
+	}
+
 	var setVal cty.Value
 	if len(path) > 0 {
-		updated, err := setMapVariableFromPath(value.AsValueMap(), path, value)
+
+		val := root[index]
+		if val.IsNull() {
+			val = cty.ObjectVal(map[string]cty.Value{".keep": cty.BoolVal(true)})
+		}
+
+		updated, err := setMapVariableFromPath(val.AsValueMap(), path, value)
 		if err != nil {
 			return nil, err
 		}
@@ -836,45 +848,49 @@ func setListVariableFromPath(root []cty.Value, path []string, index int, value c
 	// check the type of the collection, if trying to set a type that is inconsistent
 	// from the other types in the collection, return an error
 	if len(root) > 0 {
-		if root[0].Type() != cty.NilType && root[0].Type() != setVal.Type() {
+		if root[0].Type() != cty.NilType && root[0].Type().FriendlyName() != setVal.Type().FriendlyName() {
+			pretty.Println(path)
 			pretty.Println(root)
+			
+			fmt.Println("value")
 			pretty.Println(value)
+
 			return nil, fmt.Errorf("lists must contain similar types, you have tried to set a %s, to a list of type %s", value.Type().FriendlyName(), root[0].Type().FriendlyName())
 		}
-	}
-
-	// we have a node but do we need to expand it in size?
-	if index >= len(root) {
-		root = append(root, make([]cty.Value, index+1-len(root))...)
 	}
 
 	root[index] = setVal
 
 	// build a unique list of keys and types, if the
 	// node contains a list of maps
-	//ul := map[string]cty.Type{}
-	//for _, m := range root {
-	//	if m.Type().IsObjectType() || m.Type().IsMapType() {
-	//		for k, v := range m.AsValueMap() {
-	//			ul[k] = v.Type()
-	//		}
-	//	}
-	//}
+	ul := map[string]cty.Type{}
+	for _, m := range root {
+		if m.Type().IsObjectType() || m.Type().IsMapType() {
+			for k, v := range m.AsValueMap() {
+				ul[k] = v.Type()
+			}
+		}
+	}
 
-	//if len(ul) == 0 {
-	//	return root, nil
-	//}
+	if len(ul) == 0 {
+		return root, nil
+	}
 
-	//// we need to normalize the map collection as cty does not allow inconsistent map keys
-	//for k, v := range ul {
-	//	for i, m := range root {
-	//		if _, ok := m.AsValueMap()[k]; !ok {
-	//			val := root[i].AsValueMap()
-	//			val[k] = cty.NullVal(v)
-	//			root[i] = cty.ObjectVal(val)
-	//		}
-	//	}
-	//}
+	// we need to normalize the map collection as cty does not allow inconsistent map keys
+	for k, v := range ul {
+		for i, m := range root {
+			var val map[string]cty.Value
+			if m.IsNull() {
+				val = map[string]cty.Value{".keep": cty.BoolVal(true)}
+			}
+
+			if _, ok := m.AsValueMap()[k]; !ok {
+				val = root[i].AsValueMap()
+				val[k] = cty.NullVal(v)
+				root[i] = cty.ObjectVal(val)
+			}
+		}
+	}
 
 	return root, nil
 }
