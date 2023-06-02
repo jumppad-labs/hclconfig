@@ -550,7 +550,13 @@ mytype "test" {
 
 Returns the rendered contents of a template file at the given path with the given input variables.
 
-# given the file "./mytemplate.tmpl" with the contents "hello {{name}}"
+Templates can leverage the Handlebars templating language, more details on Handlebars
+can be found at the following link:
+
+[https://handlebarsjs.com/](https://handlebarsjs.com/)
+
+```javascript
+#given a file "./mytemplate.tmpl" with the contents "hello {{name}}"
 
 mytype "test" {
   // my_file = "foobar"
@@ -558,6 +564,49 @@ mytype "test" {
     name = "world"
   })
 }
+```
+
+##### Template Helpers
+
+The template_file function provides helpers that can be used inside your 
+templates as shown in the example below.
+
+```javascript
+resource "template" "consul_config" {
+
+  source = <<-EOF
+
+  file_content = "{{ file "./myfile.txt" }}"
+  quote = {{quote something}} 
+  trim = {{quote (trim with_whitespace)}}
+
+  EOF
+
+  destination = "./consul_config/consul.hcl"
+}
+```
+
+###### quote [string]
+
+Returns the original string wrapped in quotations, quote can be used with 
+the Go template pipe modifier.
+
+```go
+// given the string abc
+
+quote "abc" // would return the value "abc"
+```
+
+###### trim [string]
+
+Removes whitespace such as carrige returns and spaces from the begining and 
+the end of the string, can be used with the Go template pipe modifier.
+
+```go
+// given the string abc
+
+trim " abc " // would return the value "abc"
+```
 
 #### dir()
 
