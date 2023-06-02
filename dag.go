@@ -345,7 +345,6 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			}
 
 			// we need to set src in the context
-			fmt.Printf("%s, %s\n", v, paramType)
 			var val cty.Value
 			switch paramType {
 			case "string":
