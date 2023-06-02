@@ -435,6 +435,40 @@ module "my_other_module" {
 }
 ```
 
+Outputs can also contain complex types like lists ...
+
+```javascript
+output "connection_string_list" {
+  value = [
+    resource.postgres.mydb1.connection_string,
+    resource.postgres.mydb2.connection_string
+  ]
+}
+```
+
+and maps ...
+
+```javascript
+output "connection_string_map" {
+  value = {
+    connection1 = resource.postgres.mydb1.connection_string
+    connection2 = resource.postgres.mydb2.connection_string
+  }
+}
+```
+
+It is possible to consume these values like so ...
+
+```javascript
+output "connection_string_list_1" {
+  value = output.connection_string_list.0
+}
+
+output "connection_string_map_1" {
+  value = output.connection_string_map.connection1
+}
+```
+
 ## Functions
 
 HCLConfig supports functions that can be used inside your configuration
