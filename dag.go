@@ -367,13 +367,26 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 					vals = append(vals, cty.StringVal(src.Index(i).String()))
 				}
 
-				val = cty.SetVal(vals)
+				// if vals is empty SetVal will panic
+				if len(vals) > 0 {
+					val = cty.SetVal(vals)
+				} else {
+					val = cty.SetValEmpty(cty.String)
+				}
+
 			case "[]int":
 				vals := []cty.Value{}
 				for i := 0; i < src.Len(); i++ {
 					vals = append(vals, cty.NumberIntVal(src.Index(i).Int()))
 				}
-				val = cty.SetVal(vals)
+
+				// if vals is empty SetVal will panic
+				if len(vals) > 0 {
+					val = cty.SetVal(vals)
+				} else {
+					val = cty.SetValEmpty(cty.Number)
+				}
+
 			case "cty.Value":
 				val = src.Interface().(cty.Value)
 
