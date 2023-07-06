@@ -782,3 +782,27 @@ func TestParserRejectsInvalidResourceName(t *testing.T) {
 	err = validateResourceName("my_Module")
 	require.NoError(t, err)
 }
+
+func TestParserGeneratesChecksums(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/simple/container.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(f)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.network.onprem")
+	require.NoError(t, err)
+	require.Equal(t, "cmVzb3VyY2UgIm5ldHdvcmsiICJvbnByZW0iIHsKICBzdWJuZXQgPSAiMTAuNi4wLjAvMTYiCn3UHYzZjwCyBOmACZjs+EJ+", r.Metadata().Checksum)
+
+	r, err = c.FindResource("variable.cpu_resources")
+	require.NoError(t, err)
+	require.Equal(t, "dmFyaWFibGUgImNwdV9yZXNvdXJjZXMiIHsKICBkZWZhdWx0ID0gMjA0OAp91B2M2Y8AsgTpgAmY7PhCfg==", r.Metadata().Checksum)
+
+	r, err = c.FindResource("output.ip_address_1")
+	require.NoError(t, err)
+	require.Equal(t, "b3V0cHV0ICJpcF9hZGRyZXNzXzEiIHsKICB2YWx1ZSA9IHJlc291cmNlLmNvbnRhaW5lci5jb25zdWwubmV0d29yay4wLmlwX2FkZHJlc3MKfdQdjNmPALIE6YAJmOz4Qn4=", r.Metadata().Checksum)
+}

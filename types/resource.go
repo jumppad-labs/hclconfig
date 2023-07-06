@@ -97,6 +97,9 @@ type ResourceMetadata struct {
 
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
+
+	// Checksum is the md5 hash of the resource
+	Checksum string `json:"checksum"`
 }
 
 // Metadata is a function that ensures the struct that embeds the ResourceMetadata

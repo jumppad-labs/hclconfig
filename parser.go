@@ -357,7 +357,15 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			r, _ := p.registeredTypes.CreateResource(types.TypeVariable, b.Labels[0])
 			v := r.(*types.Variable)
 
-			err := decodeBody(ctx, file, b, v)
+			// add the checksum for the resource
+			cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
+			if err != nil {
+				panic(err)
+			}
+
+			r.Metadata().Checksum = HashString(cs)
+
+			err = decodeBody(ctx, file, b, v)
 			if err != nil {
 				return err
 			}
@@ -628,6 +636,15 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 			return err
 		}
+
+		// add the checksum for the resource
+		cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
+		if err != nil {
+			panic(err)
+		}
+
+		rt.Metadata().Checksum = HashString(cs)
+
 	case types.TypeOutput:
 		// if the type is output check there is one label
 		if len(b.Labels) != 1 {
@@ -661,6 +678,14 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 			return de
 		}
+
+		// add the checksum for the resource
+		cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
+		if err != nil {
+			panic(err)
+		}
+
+		rt.Metadata().Checksum = HashString(cs)
 	}
 
 	rt.Metadata().Module = moduleName
