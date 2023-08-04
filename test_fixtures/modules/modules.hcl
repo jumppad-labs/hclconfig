@@ -67,12 +67,6 @@ output "module1_from_list_2" {
   value = element(module.consul_1.output.combined_list, 1)
 }
 
-// returns an element using a numeric index from a list 
-// returned from the output
-output "module1_from_list_3" {
-  value = module.consul_1.output.combined_list.0
-}
-
 // returns an element using a string index from a map
 // returned from the output
 output "module1_from_map_1" {

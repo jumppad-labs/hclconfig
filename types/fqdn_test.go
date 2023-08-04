@@ -153,6 +153,19 @@ func TestParseFQRNReturnsOutput(t *testing.T) {
 	require.Equal(t, "output.mine", sfrqn)
 }
 
+func TestParseFQRNReturnsLocal(t *testing.T) {
+	fqrn, err := ParseFQRN("local.mine")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeLocal, fqrn.Type)
+	require.Equal(t, "mine", fqrn.Resource)
+	require.Equal(t, "", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "local.mine", sfrqn)
+}
+
 func TestParseResourceFQRNWithIndexReturnsCorrectData(t *testing.T) {
 	fqrn, err := ParseFQRN("resource.container.mine.property.0")
 	require.NoError(t, err)

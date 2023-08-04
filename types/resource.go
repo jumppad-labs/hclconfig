@@ -53,35 +53,34 @@ type ResourceMetadata struct {
 	// ID is the unique id for the resource
 	// this follows the convention module_name.resource_name
 	// i.e module.module1.module2.resource.container.mine
-	ID string `json:"id"`
+	ID string `hcl:"id,optional" json:"id"`
 
 	// Name is the name of the resource
 	// this is an internal property that is set from the stanza label
-	Name string `json:"name"`
+	Name string `hcl:"name,optional" json:"name"`
 
 	// Type is the type of resource, this is the text representation of the golang type
 	// this is an internal property that can not be set with hcl
-	Type string `json:"type"`
+	Type string `hcl:"type,optional" json:"type"`
 
 	// Module is the name of the module if a resource has been loaded from a module
 	// this is an internal property that can not be set with hcl
-	Module string `json:"module,omitempty"`
-
-	// Linked resources which must be set before this config can be processed
-	// this is an internal property that can not be set with hcl
-	ResourceLinks []string `json:"resource_links,omitempty"`
+	Module string `hcl:"module,optional" json:"module,omitempty"`
 
 	// File is the absolute path of the file where the resource is defined
 	// this is an internal property that can not be set with hcl
-	File string `json:"file"`
+	File string `hcl:"file,optional" json:"file"`
 
 	// Line is the starting line number where the resource is located in the
 	// file from where it was originally parsed
-	Line int `json:"line"`
+	Line int `hcl:"line,optional" json:"line"`
 
 	// Column is the starting column number where the resource is located in the
 	// file from where it was originally parsed
-	Column int `json:"column"`
+	Column int `hcl:"column,optional" json:"column"`
+
+	// Checksum is the md5 hash of the resource
+	Checksum string `hcl:"checksum,optional" json:"checksum"`
 
 	// ParentConfig allows the location of other resources in the config
 	// this is an internal property that can not be set with hcl
@@ -90,6 +89,10 @@ type ResourceMetadata struct {
 	// Properties holds a collection that can be used to store adhoc data
 	Properties map[string]interface{} `json:"properties,omitempty"`
 
+	// Linked resources which must be set before this config can be processed
+	// this is an internal property that can not be set with hcl
+	ResourceLinks []string `json:"resource_links,omitempty"`
+
 	// # User configurable properties
 
 	// DependsOn is a user configurable list of dependencies for this resource
@@ -97,9 +100,6 @@ type ResourceMetadata struct {
 
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
-
-	// Checksum is the md5 hash of the resource
-	Checksum string `json:"checksum"`
 }
 
 // Metadata is a function that ensures the struct that embeds the ResourceMetadata

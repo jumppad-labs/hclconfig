@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -79,25 +80,11 @@ func printConfig(c *hclconfig.Config) {
 		switch r.Metadata().Type {
 		case "config":
 			t := r.(*Config)
-			fmt.Printf("  Config %s\n", t.Name)
-			fmt.Printf("  Module %s\n", t.Module)
-			fmt.Printf("  --- ID: %s\n", t.ID)
-			fmt.Printf("  --- DBConnectionString: %s\n", t.DBConnectionString)
-			fmt.Printf("  --- Timeouts\n")
-			fmt.Printf("  ------ Connection: %d\n", t.Timeouts.Connection)
-			fmt.Printf("  ------ KeepAlive: %d\n", t.Timeouts.KeepAlive)
-			fmt.Printf("  ------ TLSHandshake: %d\n", t.Timeouts.TLSHandshake)
+			fmt.Println(printConfigT(t, 2))
 
 		case "postgres":
 			t := r.(*PostgreSQL)
-			fmt.Printf("  Postgres %s\n", t.Name)
-			fmt.Printf("  Module %s\n", t.Module)
-			fmt.Printf("  --- Location: %s\n", t.Location)
-			fmt.Printf("  --- Port: %d\n", t.Port)
-			fmt.Printf("  --- DBName: %s\n", t.DBName)
-			fmt.Printf("  --- Username: %s\n", t.Username)
-			fmt.Printf("  --- Password: %s\n", t.Password)
-			fmt.Printf("  --- ConnectionString: %s\n", t.ConnectionString)
+			fmt.Println(printPostgres(t, 2))
 
 		case "output":
 			t := r.(*types.Output)
@@ -108,4 +95,50 @@ func printConfig(c *hclconfig.Config) {
 
 		fmt.Println("")
 	}
+}
+
+func printConfigT(t *Config, indent int) string {
+	str := bytes.NewBufferString("")
+	pad := ""
+	for i := 0; i < indent; i++ {
+		pad += " "
+	}
+
+	fmt.Fprintf(str, "%sConfig %s\n", pad, t.Name)
+	fmt.Fprintf(str, "%sModule %s\n", pad, t.Module)
+	fmt.Fprintf(str, "%s--- ID: %s\n", pad, t.ID)
+	fmt.Fprintf(str, "%s--- DBConnectionString: %s\n", pad, t.DBConnectionString)
+	fmt.Fprintf(str, "%s--- Timeouts\n", pad)
+	fmt.Fprintf(str, "%s------ Connection: %d\n", pad, t.Timeouts.Connection)
+	fmt.Fprintf(str, "%s------ KeepAlive: %d\n", pad, t.Timeouts.KeepAlive)
+	fmt.Fprintf(str, "%s------ TLSHandshake: %d\n", pad, t.Timeouts.TLSHandshake)
+	fmt.Fprintf(str, "%s--- MainDBConnection:\n", pad)
+
+	fmt.Fprintf(str, "%s", printPostgres(&t.MainDBConnection, 8))
+
+	for i, p := range t.OtherDBConnections {
+		fmt.Fprintf(str, "%s--- OtherDBConnections[%d]:\n", pad, i)
+		fmt.Fprintf(str, "%s", printPostgres(&p, 8))
+	}
+
+	return str.String()
+}
+
+func printPostgres(p *PostgreSQL, indent int) string {
+	str := bytes.NewBufferString("")
+	pad := ""
+	for i := 0; i < indent; i++ {
+		pad += " "
+	}
+
+	fmt.Fprintf(str, "%sPostgres %s\n", pad, p.Name)
+	fmt.Fprintf(str, "%sModule %s\n", pad, p.Module)
+	fmt.Fprintf(str, "%s--- Location: %s\n", pad, p.Location)
+	fmt.Fprintf(str, "%s--- Port: %d\n", pad, p.Port)
+	fmt.Fprintf(str, "%s--- DBName: %s\n", pad, p.DBName)
+	fmt.Fprintf(str, "%s--- Username: %s\n", pad, p.Username)
+	fmt.Fprintf(str, "%s--- Password: %s\n", pad, p.Password)
+	fmt.Fprintf(str, "%s--- ConnectionString: %s\n", pad, p.ConnectionString)
+
+	return str.String()
 }

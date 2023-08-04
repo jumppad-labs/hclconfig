@@ -24,6 +24,12 @@ type Config struct {
 
 	DBConnectionString string `hcl:"db_connection_string"`
 
+	// references a complete resource
+	MainDBConnection PostgreSQL `hcl:"main_db_connection"`
+
+	// references a list of resources
+	OtherDBConnections []PostgreSQL `hcl:"other_db_connections"`
+
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts

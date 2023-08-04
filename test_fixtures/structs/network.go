@@ -9,7 +9,7 @@ const TypeNetwork = "network"
 type Network struct {
 	types.ResourceMetadata `hcl:",remain"`
 
-	Subnet string `hcl:"subnet" json:"subnet"`
+	Subnet string `hcl:"subnet" cty:"subnet" json:"subnet"`
 }
 
 func (c *Network) Process() error {

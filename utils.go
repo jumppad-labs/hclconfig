@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -96,8 +95,6 @@ func castVar(v cty.Value) interface{} {
 	} else if v.Type() == cty.DynamicPseudoType {
 		v, err := convert.Convert(v, cty.String)
 		if err == nil {
-			pretty.Println(v)
-			fmt.Printf("dynamic %v %s\n", v.AsString(), err)
 			return v
 		}
 	}

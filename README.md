@@ -81,10 +81,20 @@ type Config struct {
 	Timeouts *Timeouts `hcl:"timeouts,block"`
 }
 
-func (t *Config) Process() error {
+// Parse is called when the resource is read from the file
+// you can use this method to fail the config parsing early
+// if the resource has validation problems.
+// 
+// Any references to other resources will not have been processed at this
+// point and will only have the default type value.
+func (t *Config) Parse() error {
 	// override default values
 	if t.Timeouts.TLSHandshake == 0 {
 		t.Timeouts.TLSHandshake = 5
+	}
+	
+  if t.Timeouts.TLSHandshake > 300 {
+    return fmt.Errorf("TLSHandshake timeout must be less than 300")
 	}
 
 	return nil
@@ -107,7 +117,8 @@ type PostgreSQL struct {
 }
 
 // Process is called using an order calculated from the dependency graph
-// this is where you can set any computed fields
+// any interpolation references to other resources will have been resolved
+// at this point. 
 func (t *PostgreSQL) Process() error {
 	t.ConnectionString = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", t.Username, t.Password, t.Location, t.Port, t.DBName)
 	return nil
@@ -353,6 +364,148 @@ resource "config" "myconfig" {
 Note: when parsing the configuration the order of the `Timeouts` field will correspond 
 to the order of the `timeouts` blocks as defined in the `config`.
 
+## References to other resources
+
+A resource can reference other resources that can be set through interpolation.
+
+The following structs define a `config` resource, and a `postgres_sql`
+resource.
+
+```go
+type Config struct {
+	types.ResourceMetadata `hcl:",remain"`
+
+  // Other structs can be referenced by defining the type
+  // to the other struct, the referenced type must implemented types.ResourceMetadata
+	MainDBConnection PostgreSQL `hcl:"main_db_connection"`
+  
+  // It is also possible to reference arrays of structs 
+	OtherDBConnections []PostgreSQL `hcl:"other_db_connections"`
+
+	// Fields that are of `struct` type must be marked using the `block`
+	// parameter in the tags. To make a `block` Field, types marked as block must be
+	// a reference i.e. *Timeouts
+	Timeouts []Timeouts `hcl:"timeouts,block"`
+}
+
+type PostgreSQL struct {
+	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
+	// add the methods from the `Resource` interface
+	types.ResourceMetadata `hcl:",remain"`
+
+	Location string `hcl:"location,optional"`
+}
+```
+
+These are represented as HCL using the following syntax, note: rather than
+referencing an individual attribute from the `postgres_sql` resource the entire
+struct is referenced. When the parser processes the `config` resource and the
+references are resolved the value of the referenced resources are copied to
+the `config`.
+
+```javascript
+resource "postgres_sql" "main" {
+  location = "main.mydomain.com"
+}
+
+resource "postgres_sql" "other_1" {
+  location = "1.mydomain.com"
+}
+
+resource "postgres_sql" "other_2" {
+  location = "2.mydomain.com"
+}
+
+resource "config" "default" {
+  main_db_connection = resource.postgres_sql.main
+  other_db_connections = [
+    resource.postgres_sql.other_1
+    resource.postgres_sql.other_2
+  ]
+}
+```
+
+You could then access the properties of the referenced `PostgreSQL` structs 
+in the normal go way.
+
+```go
+  r,err := c.FindResource("resource.config.default") 
+  if err != nil {
+    return err
+  }
+
+  conf := r.(*Config)
+
+  fmt.Println("loc main", conf.MainDBConnection.Location)
+  fmt.Println("loc other 1", conf.OtherDBConnections[0].Location)
+  fmt.Println("loc other 2", conf.OtherDBConnections[1].Location)
+```
+
+## Variables
+
+Variables allow dynamic values to be set in your configuration, they are defined
+using the `variable` resource stanza.
+
+```javascript
+variable "username" {
+  default = "root"
+}
+
+variable "connection_string" {
+  default = "root:password@localhost"
+}
+```
+
+Setting a default value for a variable will enable it to be used within
+resources.
+
+```javascript
+resource "config" "myconfig1" {
+  db_connection_string = variable.connection_string 
+}
+
+resource "config" "myconfig2" {
+  db_connection_string = "${variable.username}:password@localhost"
+}
+```
+
+Variables can also be overridden by setting the corresponding environment
+variable. For example to set the variable `username`, you prefix the environment
+variable with `HCL_VAR_`, so to set username you could do set the following:
+
+```shell
+export HCL_VAR_username="nic"
+```
+
+The prefix for environment variables can be changed in the `ParserOptions`.
+
+Note: variables can contain interpolated references for other resources as
+the are not parsed by the graph and are parsed before any other resource.
+
+For computed local variables use `local` resources.
+
+## Local
+
+Local resources allow you to create, temporary computed variables that can 
+be used within your config. For example, if you wanted to compute a value
+that was based on the attribute of another resource you could use a `local`.
+
+```javascript
+resource "config" "myconfig1" {
+  db_connection_string = variable.connection_string 
+}
+
+local "conn" {
+  value = resource.config.myconfig1.db_connection_string == "abc" ? "localhost" : resource.config.myconfig1.db_connection_string
+}
+
+resource "config" "myconfig2" {
+  db_connection_string = local.conn
+}
+```
+
+Unlike variables `local` variables are part of the graph and can contain references
+to other resources.
 
 ## Modules
 

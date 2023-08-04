@@ -17,6 +17,7 @@ func TestDefaultTypes(t *testing.T) {
 	dt := DefaultTypes()
 
 	require.Equal(t, reflect.TypeOf(dt["variable"]), reflect.TypeOf(&Variable{}))
+	require.Equal(t, reflect.TypeOf(dt["local"]), reflect.TypeOf(&Local{}))
 	require.Equal(t, reflect.TypeOf(dt["module"]), reflect.TypeOf(&Module{}))
 	require.Equal(t, reflect.TypeOf(dt["output"]), reflect.TypeOf(&Output{}))
 }

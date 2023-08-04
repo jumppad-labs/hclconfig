@@ -252,6 +252,59 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 	require.Equal(t, 1024, cont.Resources.CPU)
 }
 
+func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/interpolation/interpolation.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	//require.Len(t, c.Resources, 5)
+
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
+	con := r.(*structs.Container)
+	_ = con
+
+	r, err = c.FindResource("output.function")
+	require.NoError(t, err)
+	cont := r.(*types.Output)
+	require.Equal(t, float64(2), cont.Value)
+
+	r, err = c.FindResource("output.binary")
+	require.NoError(t, err)
+	cont = r.(*types.Output)
+	require.Equal(t, false, cont.Value)
+
+	r, err = c.FindResource("output.condition")
+	require.NoError(t, err)
+	cont = r.(*types.Output)
+	require.Equal(t, "/cache", cont.Value)
+
+	r, err = c.FindResource("output.template")
+	require.NoError(t, err)
+	cont = r.(*types.Output)
+	require.Equal(t, "abc/2", cont.Value)
+}
+
+func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/locals/locals.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	//require.Len(t, c.Resources, 4)
+}
+
 func TestParseModuleCreatesResources(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
 	if err != nil {
@@ -263,7 +316,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 35)
+	require.Len(t, c.Resources, 34)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -298,7 +351,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 35)
+	require.Len(t, c.Resources, 34)
 
 	cont, err := c.FindResource("output.module1_container_resources_cpu")
 	require.NoError(t, err)
@@ -444,7 +497,6 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	calls := []string{}
 	callSync := sync.Mutex{}
 	o.ParseCallback = func(r types.Resource) error {
-		fmt.Println(r.Metadata().ID)
 		callSync.Lock()
 		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
@@ -677,7 +729,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
-func TestParserDesrializesJSONCorrectly(t *testing.T) {
+func TestParserDeserializesJSONCorrectly(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)

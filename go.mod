@@ -1,6 +1,6 @@
 module github.com/jumppad-labs/hclconfig
 
-go 1.19
+go 1.20
 
 require (
 	github.com/flytam/filenamify v1.1.1
@@ -60,3 +60,6 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+//replace github.com/zclconf/go-cty => /home/nicj/go/src/github.com/jumppad-labs/go-cty
+replace github.com/zclconf/go-cty => github.com/jumppad-labs/go-cty v0.0.0-20230804061424-9e985cb751f6

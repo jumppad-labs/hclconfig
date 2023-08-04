@@ -24,6 +24,7 @@ func DefaultTypes() RegisteredTypes {
 	return RegisteredTypes{
 		"variable": &Variable{},
 		"output":   &Output{},
+		"local":    &Local{},
 		"module":   &Module{},
 		"root":     &Root{},
 	}

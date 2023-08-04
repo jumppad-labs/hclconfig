@@ -117,6 +117,14 @@ func TestFindResourceFindsContainer(t *testing.T) {
 	require.Equal(t, r[1], cl)
 }
 
+func TestFindResourceGenericsFindsContainer(t *testing.T) {
+	c, r := testSetupConfig(t)
+
+	cl, err := c.FindResource("resource.container.test_dev")
+	require.NoError(t, err)
+	require.Equal(t, r[1], cl)
+}
+
 func TestFindOutputFindsOutput(t *testing.T) {
 	c, _ := testSetupConfig(t)
 

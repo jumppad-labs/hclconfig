@@ -20,7 +20,6 @@ import (
 	"github.com/hashicorp/hcl2/hclparse"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
-	"github.com/mitchellh/go-wordwrap"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
@@ -34,65 +33,6 @@ type ResourceTypeNotExistError struct {
 
 func (r ResourceTypeNotExistError) Error() string {
 	return fmt.Sprintf("Resource type %s defined in file %s, does not exist. Please check the documentation for supported resources. We love PRs if you would like to create a resource of this type :)", r.Type, r.File)
-}
-
-// ParserError is a detailed error that is returned from the parser
-type ParserError struct {
-	Filename string
-	Line     int
-	Column   int
-	Details  string
-	Message  string
-}
-
-// Error pretty prints the error message as a string
-func (p ParserError) Error() string {
-	err := strings.Builder{}
-	err.WriteString("Error:\n")
-
-	errLines := strings.Split(wordwrap.WrapString(p.Message, 80), "\n")
-	for _, l := range errLines {
-		err.WriteString("  " + l + "\n")
-	}
-
-	err.WriteString("\n")
-
-	err.WriteString("  " + fmt.Sprintf("%s:%d,%d\n", p.Filename, p.Line, p.Column))
-	// process the file
-	file, _ := ioutil.ReadFile(wordwrap.WrapString(p.Filename, 80))
-
-	lines := strings.Split(string(file), "\n")
-
-	startLine := p.Line - 3
-	if startLine < 0 {
-		startLine = 0
-	}
-
-	endLine := p.Line + 2
-	if endLine >= len(lines) {
-		endLine = len(lines) - 1
-	}
-
-	for i := startLine; i < endLine; i++ {
-		codeline := wordwrap.WrapString(lines[i], 70)
-		codelines := strings.Split(codeline, "\n")
-
-		if i == p.Line-1 {
-			err.WriteString(fmt.Sprintf("\033[1m  %5d | %s\033[0m\n", i+1, codelines[0]))
-		} else {
-			err.WriteString(fmt.Sprintf("\033[2m  %5d | %s\033[0m\n", i+1, codelines[0]))
-		}
-
-		for _, l := range codelines[1:] {
-			if i == p.Line-1 {
-				err.WriteString(fmt.Sprintf("\033[1m        : %s\033[0m\n", l))
-			} else {
-				err.WriteString(fmt.Sprintf("\033[2m        : %s\033[0m\n", l))
-			}
-		}
-	}
-
-	return err.String()
 }
 
 type ParserOptions struct {
@@ -419,6 +359,8 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			}
 		case types.TypeOutput:
 			fallthrough
+		case types.TypeLocal:
+			fallthrough
 		case types.TypeResource:
 			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn, disabled)
 			if err != nil {
@@ -645,6 +587,48 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		rt.Metadata().Checksum = HashString(cs)
 
+	case types.TypeLocal:
+		// if the type is local check there is one label
+		if len(b.Labels) != 1 {
+			de := ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = `invalid formatting for 'local' stanza, resources should have a name and a type, i.e. 'local "name" {}'`
+
+			return de
+		}
+
+		name := b.Labels[0]
+		if err := validateResourceName(name); err != nil {
+			de := ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = err.Error()
+
+			return de
+		}
+
+		rt, err = p.registeredTypes.CreateResource(types.TypeLocal, name)
+		if err != nil {
+			de := ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = fmt.Sprintf(`unable to create local, this error should never happen %s`, err)
+
+			return de
+		}
+
+		// add the checksum for the resource
+		cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
+		if err != nil {
+			panic(err)
+		}
+
+		rt.Metadata().Checksum = HashString(cs)
+
 	case types.TypeOutput:
 		// if the type is output check there is one label
 		if len(b.Labels) != 1 {
@@ -809,7 +793,6 @@ func setMapVariableFromPath(root map[string]cty.Value, path []string, value cty.
 	}
 
 	if index >= 0 {
-		fmt.Println(path)
 		// if we have an index we need to set the list variable for the map at that
 		// index and then recursively set the other elements in the map
 		updated, err := setListVariableFromPath(val.AsValueSlice(), rPath, index, value)
@@ -1054,13 +1037,14 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 // something = env(resource.mine.attr)
 // something = "testing/${resource.mine.attr}"
 // something = "testing/${env(resource.mine.attr)}"
+// something = resource.mine.attr == "abc" ? resource.mine.attr : "abc"
 func processExpr(expr hclsyntax.Expression) ([]string, error) {
 	resources := []string{}
 
 	switch expr.(type) {
+	// a template is a mix of functions, scope expressions and literals
+	// we need to check each part
 	case *hclsyntax.TemplateExpr:
-		// a template is a mix of functions, scope expressions and literals
-		// we need to check each part
 		for _, v := range expr.(*hclsyntax.TemplateExpr).Parts {
 			res, err := processExpr(v)
 			if err != nil {
@@ -1069,6 +1053,8 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 
 			resources = append(resources, res...)
 		}
+	// function call expressions are user defined functions
+	// myfunction(resource.container.base.name)
 	case *hclsyntax.FunctionCallExpr:
 		for _, v := range expr.(*hclsyntax.FunctionCallExpr).Args {
 			res, err := processExpr(v)
@@ -1078,7 +1064,7 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 
 			resources = append(resources, res...)
 		}
-		// a function can contain args that may also have an expression
+	// a function can contain args that may also have an expression
 	case *hclsyntax.ScopeTraversalExpr:
 		ref, err := processScopeTraversal(expr.(*hclsyntax.ScopeTraversalExpr))
 		if err != nil {
@@ -1108,6 +1094,42 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 
 			resources = append(resources, res...)
 		}
+	// conditional expressions are like if statements
+	// resource.container.base.name == "hello" ? "this" : "that"
+	case *hclsyntax.ConditionalExpr:
+		conditions, err := processExpr(expr.(*hclsyntax.ConditionalExpr).Condition)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, conditions...)
+
+		trueResults, err := processExpr(expr.(*hclsyntax.ConditionalExpr).TrueResult)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, trueResults...)
+
+		falseResults, err := processExpr(expr.(*hclsyntax.ConditionalExpr).FalseResult)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, falseResults...)
+	// binary expressions are two part comparisons
+	// resource.container.base.name == "hello"
+	// resource.container.base.name != "hello"
+	// resource.container.base.name > 3
+	case *hclsyntax.BinaryOpExpr:
+		lhs, err := processExpr(expr.(*hclsyntax.BinaryOpExpr).LHS)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, lhs...)
+
+		rhs, err := processExpr(expr.(*hclsyntax.BinaryOpExpr).RHS)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, rhs...)
 	}
 
 	return resources, nil
@@ -1120,7 +1142,7 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			strExpression += t.(hcl.TraverseRoot).Name
 
 			// if this is not a resource reference quit
-			if strExpression != "resource" && strExpression != "module" {
+			if strExpression != "resource" && strExpression != "module" && strExpression != "local" && strExpression != "output" {
 				return "", nil
 			}
 		} else {
@@ -1139,7 +1161,7 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 	return strExpression, nil
 }
 
-// recurses throught destination object and returns the type of the field marked by path
+// recurses through destination object and returns the type of the field marked by path
 // e.g path "volume[1].source" is string
 func findTypeFromInterface(path string, s interface{}) string {
 	// strip the indexes as we are doing the lookup on a empty struct

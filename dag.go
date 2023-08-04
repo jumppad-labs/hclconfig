@@ -2,19 +2,15 @@ package hclconfig
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
-	"reflect"
-	"regexp"
-	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"github.com/hashicorp/hcl2/gohcl"
 	"github.com/hashicorp/hcl2/hcl"
 	"github.com/hashicorp/terraform/dag"
 	"github.com/hashicorp/terraform/tfdiags"
-	"github.com/jumppad-labs/hclconfig/lookup"
+	"github.com/jumppad-labs/hclconfig/convert"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -237,7 +233,7 @@ func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	w.Reverse = reverse
 
 	// update the dag and process the nodes
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 
 	w.Update(d)
 	diags := w.Wait()
@@ -300,125 +296,35 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				return diags.Append(pe)
 			}
 
-			// if the type is output always look for value
-			if fqdn.Type == types.TypeOutput {
-				fqdn.Attribute = "value"
-			}
+			var ctyRes cty.Value
 
-			var src reflect.Value
-
-			// get the type of the linked resource
-			paramType := findTypeFromInterface(fqdn.Attribute, l)
-
-			// did we find the type if not check the meta properties
-			if paramType == "" {
-				paramType = findTypeFromInterface(fqdn.Attribute, l.Metadata())
-				if paramType == "" {
-					pe := ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`type not found "%v"`, fqdn.Attribute)
-
-					return diags.Append(pe)
-				}
-			}
-
-			// find the value
-			path := strings.Split(fqdn.Attribute, ".")
-			src, err = lookup.LookupI(l, path, []string{"hcl", "json"})
-
-			// the property might be one of the meta properties check the resource info
-			if err != nil {
-				src, err = lookup.LookupI(l.Metadata(), path, []string{"hcl", "json"})
-
-				// still not found return an error
-				if err != nil {
-					pe := ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`value not found "%s" %s`, fqdn.Attribute, err)
-
-					return diags.Append(pe)
-				}
-			}
-
-			// we need to set src in the context
-			var val cty.Value
-			switch paramType {
-			case "string":
-				val = cty.StringVal(src.String())
-			case "int":
-				val = cty.NumberIntVal(src.Int())
-			case "bool":
-				val = cty.BoolVal(src.Bool())
-			case "ptr":
-				pe := ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`pointer values are not implemented "%v"`, src)
-
-				return diags.Append(pe)
-			case "[]string":
-				vals := []cty.Value{}
-				for i := 0; i < src.Len(); i++ {
-					vals = append(vals, cty.StringVal(src.Index(i).String()))
-				}
-
-				// if vals is empty SetVal will panic
-				if len(vals) > 0 {
-					val = cty.SetVal(vals)
-				} else {
-					val = cty.SetValEmpty(cty.String)
-				}
-
-			case "[]int":
-				vals := []cty.Value{}
-				for i := 0; i < src.Len(); i++ {
-					vals = append(vals, cty.NumberIntVal(src.Index(i).Int()))
-				}
-
-				// if vals is empty SetVal will panic
-				if len(vals) > 0 {
-					val = cty.SetVal(vals)
-				} else {
-					val = cty.SetValEmpty(cty.Number)
-				}
-
-			case "cty.Value":
-				val = src.Interface().(cty.Value)
-
-				if val.Type().IsTupleType() {
-					// if we have a tuple do we have an index
-					rg, _ := regexp.Compile(`(.*)\[(.+)\]`)
-					if sm := rg.FindStringSubmatch(v); len(sm) == 3 {
-						var convErr error
-						index, convErr := strconv.Atoi(sm[2])
-						if convErr != nil {
-							panic(fmt.Errorf("index %s is not a number", sm[2]))
-						}
-
-						// we have a tuple with an index, grab the right value
-						if index >= 0 {
-							val = val.Index(cty.NumberIntVal(int64(index)))
-						}
-
-					}
-				}
-
+			// once we have found a resource convert it to a cty type and then
+			// set it on the context
+			switch l.Metadata().Type {
+			case types.TypeLocal:
+				loc := l.(*types.Local)
+				ctyRes = loc.CtyValue
+			case types.TypeOutput:
+				out := l.(*types.Output)
+				ctyRes = out.CtyValue
 			default:
+				ctyRes, err = convert.GoToCtyValue(l)
+			}
+
+			if err != nil {
 				pe := ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to link resource "%s" as it references an unsupported type "%s"`, v, paramType)
+				pe.Message = fmt.Sprintf(`unable to convert go type to context variable: %s`, err)
 
 				return diags.Append(pe)
 			}
 
-			err = setContextVariableFromPath(ctx, v, val)
+			// remove the attributes and to get a pure resource ref
+			fqdn.Attribute = ""
+
+			err = setContextVariableFromPath(ctx, fqdn.String(), ctyRes)
 			if err != nil {
 				pe := ParserError{}
 				pe.Filename = r.Metadata().File
@@ -513,10 +419,18 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			}
 		}
 
-		// if this is an output we need to convert the value into
+		// if this is an output or local we need to convert the value into
 		// a go type
 		if r.Metadata().Type == types.TypeOutput {
 			o := r.(*types.Output)
+
+			if !o.CtyValue.IsNull() {
+				o.Value = castVar(o.CtyValue)
+			}
+		}
+
+		if r.Metadata().Type == types.TypeLocal {
+			o := r.(*types.Local)
 
 			if !o.CtyValue.IsNull() {
 				o.Value = castVar(o.CtyValue)

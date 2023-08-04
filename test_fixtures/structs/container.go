@@ -10,9 +10,10 @@ const TypeContainer = "container"
 // Container defines a structure for creating Docker containers
 type Container struct {
 	// embedded type holding name, etc
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceMetadata `hcl:"rm,remain"`
 
-	Networks []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"` // Attach to the correct network // only when Image is specified
+	Networks   []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"`         // Attach to the correct network // only when Image is specified
+	NetworkObj Network             `hcl:"networkobj,optional" json:"networkobj,omitempty"` // Reference to an object
 
 	Build      *Build            `hcl:"build,block" json:"build"`                        // Enables containers to be built on the fly
 	Entrypoint []string          `hcl:"entrypoint,optional" json:"entrypoint,omitempty"` // entrypoint to use when starting the container
@@ -40,7 +41,7 @@ type User struct {
 }
 
 type NetworkAttachment struct {
-	ID        int      `hcl:"id,optional" json:"id,optional"`
+	ID        int      `hcl:"id,optional" json:"id,omitempty"`
 	Name      string   `hcl:"name" json:"name"`
 	IPAddress string   `hcl:"ip_address,optional" json:"ip_address,omitempty" mapstructure:"ip_address"`
 	Aliases   []string `hcl:"aliases,optional" json:"aliases,omitempty"` // Network aliases for the resource
