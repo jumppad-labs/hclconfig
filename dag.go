@@ -316,7 +316,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to convert go type to context variable: %s`, err)
+				pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
 
 				return diags.Append(pe)
 			}

@@ -196,18 +196,18 @@
    "column": 1,
    "checksum": "cmVzb3VyY2UgImNvbmZpZyIgIm15YXBwIiB7CiAgLy8gQ3VzdG9tIGZ1bmN0aW9ucyBjYW4gYmUgY3JlYXRlZCB0byBlbmFibGUgZnVuY3Rpb25hbGl0eSBsaWtlIGdlbmVyYXRpbmcgcmFuZG9tIG51bWJlcnMKICBpZCA9ICJteWFwcF8ke3JhbmRvbV9udW1iZXIoKX0iCgogIC8vIHJlc291cmNlLnBvc3RncmVzLm15ZGIuY29ubmVjdGlvbl9zdHJpbmcgd2lsbCBiZSBhdmFpbGFibGUgYWZ0ZXIgdGhlIGBQcm9jZXNzYCBoYXMKICAvLyBiZWVuIGNhbGxlZCBvbiB0aGUgYHBvc3RncmVzYCByZXNvdXJjZS4gSENMQ29uZmlnIHVuZGVyc3RhbmRzIGRlcGVuZGVuY3kgYW5kIHdpbGwKICAvLyBjYWxsIFByb2Nlc3MgaW4gYSBzdHJpY3Qgb3JkZXIKICBkYl9jb25uZWN0aW9uX3N0cmluZyA9IHJlc291cmNlLnBvc3RncmVzLm15ZGIuY29ubmVjdGlvbl9zdHJpbmcKCiAgLy8gcmVmZXJlbmNlIGFuIGVudGlyZSBvdGhlciByZXNvdXJjZQogIG1haW5fZGJfY29ubmVjdGlvbiA9IHJlc291cmNlLnBvc3RncmVzLm15ZGIKCiAgLy8gY29sbGVjdGlvbiBvZiBlbnRpcmUgb3RoZXIgcmVzb3VyY2VzCiAgb3RoZXJfZGJfY29ubmVjdGlvbnMgPSBbCiAgICByZXNvdXJjZS5wb3N0Z3Jlcy5vdGhlcjEsCiAgICByZXNvdXJjZS5wb3N0Z3Jlcy5vdGhlcjIKICBdCgogIHRpbWVvdXRzIHsKICAgIGNvbm5lY3Rpb24gPSAxMAogICAga2VlcF9hbGl2ZSA9IDYwCiAgICAvLyBvcHRpb25hbCBwYXJhbWV0ZXIgdGxzX2hhbmRzaGFrZSBub3Qgc3BlY2lmaWVkCiAgICAvLyBUTFNIYW5kc2hha2UgPSAxMAogIH0KfdQdjNmPALIE6YAJmOz4Qn4=",
    "resource_links": [
-    "resource.postgres.mydb.connection_string",
     "resource.postgres.mydb",
     "resource.postgres.other1",
-    "resource.postgres.other2"
+    "resource.postgres.other2",
+    "resource.postgres.mydb.connection_string"
    ],
    "depends_on": [
-    "resource.postgres.mydb.connection_string",
     "resource.postgres.mydb",
     "resource.postgres.other1",
-    "resource.postgres.other2"
+    "resource.postgres.other2",
+    "resource.postgres.mydb.connection_string"
    ],
-   "ID": "myapp_48",
+   "ID": "myapp_14",
    "DBConnectionString": "postgresql://admin:password@localhost:5432/mydatabase",
    "MainDBConnection": {
     "id": "resource.postgres.mydb",

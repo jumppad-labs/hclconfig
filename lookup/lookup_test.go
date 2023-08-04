@@ -7,7 +7,6 @@ import (
 
 	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
-	"github.com/tj/assert"
 )
 
 func TestLookup_Map(t *testing.T) {
@@ -396,9 +395,9 @@ func TestLookupType(t *testing.T) {
 
 	rt, found := LookupType(typ, []string{"volume", "source"}, false, []string{"hcl", "json"})
 	require.NotNil(t, rt)
-	assert.True(t, found)
+	require.True(t, found)
 
-	assert.Equal(t, "string", rt.Name())
+	require.Equal(t, "string", rt.Name())
 }
 
 func ExampleLookupString() {

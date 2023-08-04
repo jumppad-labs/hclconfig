@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/hcl2/hcl"
 	"github.com/hashicorp/hcl2/hcl/hclsyntax"
 	"github.com/hashicorp/hcl2/hclparse"
-	"github.com/kr/pretty"
 )
 
 type Schema struct {
@@ -59,12 +58,9 @@ func main() {
 		val := &Schema{}
 		gohcl.DecodeBody(b.Body, ctx, val)
 
-		pretty.Print(val)
-
 		// generate the dynamic type
 		dt := createDynamicType(val)
 
-		pretty.Println(dt)
 		parser2 := hclparse.NewParser()
 
 		f, diag := parser2.ParseHCLFile("./example_data.hcl")
@@ -84,14 +80,10 @@ func main() {
 			v := p.Interface()
 			gohcl.DecodeBody(b.Body, ctx, v)
 
-			pretty.Println(v)
-
 			d, _ := json.Marshal(v)
 			pp := &Person{}
 
 			json.Unmarshal(d, pp)
-
-			pretty.Println(pp)
 		}
 	}
 }
