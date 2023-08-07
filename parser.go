@@ -321,6 +321,9 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
+// 98322294d372ccf762dfa54af247d9fe
+// b68f15e0da231e78f2e7067c9c830266
+
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
 func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) error {
 	parser := hclparse.NewParser()
@@ -579,14 +582,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return err
 		}
 
-		// add the checksum for the resource
-		cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
-		if err != nil {
-			panic(err)
-		}
-
-		rt.Metadata().Checksum = HashString(cs)
-
 	case types.TypeLocal:
 		// if the type is local check there is one label
 		if len(b.Labels) != 1 {
@@ -621,14 +616,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		// add the checksum for the resource
-		cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
-		if err != nil {
-			panic(err)
-		}
-
-		rt.Metadata().Checksum = HashString(cs)
-
 	case types.TypeOutput:
 		// if the type is output check there is one label
 		if len(b.Labels) != 1 {
@@ -662,14 +649,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 			return de
 		}
-
-		// add the checksum for the resource
-		cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
-		if err != nil {
-			panic(err)
-		}
-
-		rt.Metadata().Checksum = HashString(cs)
 	}
 
 	rt.Metadata().Module = moduleName

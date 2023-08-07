@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 
@@ -47,8 +46,11 @@ func main() {
 	fmt.Println("")
 
 	// serialize the config to a file
-	d, err := c.ToJSON()
-	ioutil.WriteFile("./config.json", d, os.ModePerm)
+	d, _ := c.ToJSON()
+	err = os.WriteFile("./config.json", d, os.ModePerm)
+	if err != nil {
+		fmt.Println("unable to write config", err)
+	}
 
 	// deserialize the config
 	nc, err := p.UnmarshalJSON(d)

@@ -20,7 +20,7 @@ type Config struct {
 	// add the methods from the `Resource` interface
 	types.ResourceMetadata `hcl:",remain"`
 
-	ID string `hcl:"id"`
+	FQN string `hcl:"fqn"`
 
 	DBConnectionString string `hcl:"db_connection_string"`
 
@@ -53,7 +53,7 @@ type PostgreSQL struct {
 
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`
-	DBName   string `hcl:"name"`
+	DBName   string `hcl:"db_name"`
 	Username string `hcl:"username"`
 	Password string `hcl:"password"`
 

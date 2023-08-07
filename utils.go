@@ -3,7 +3,6 @@ package hclconfig
 import (
 	"bufio"
 	"crypto/md5"
-	"encoding/base64"
 	"fmt"
 	"os"
 
@@ -59,9 +58,9 @@ func ReadFileLocation(filename string, startLine, startCol, endLine, endCol int)
 // HashString creates an MD5 hash of the given string
 func HashString(in string) string {
 	h := md5.New()
-	hash := h.Sum([]byte(in))
+	h.Write([]byte(in))
 
-	return base64.StdEncoding.EncodeToString(hash)
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func castVar(v cty.Value) interface{} {

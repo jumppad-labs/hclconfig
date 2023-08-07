@@ -1,13 +1,13 @@
 {
  "resources": [
   {
-   "id": "resource.variable.db_username",
+   "id": "variable.db_username",
    "name": "db_username",
    "type": "variable",
    "file": "",
    "line": 0,
    "column": 0,
-   "checksum": "dmFyaWFibGUgImRiX3VzZXJuYW1lIiB7CiAgZGVmYXVsdCA9ICJhZG1pbiIKfdQdjNmPALIE6YAJmOz4Qn4=",
+   "checksum": "0989ecc3627ae8ea11c51556dbf3daca",
    "default": {
     "Name": "default",
     "Expr": {
@@ -72,13 +72,13 @@
    }
   },
   {
-   "id": "resource.variable.db_password",
+   "id": "variable.db_password",
    "name": "db_password",
    "type": "variable",
    "file": "",
    "line": 0,
    "column": 0,
-   "checksum": "dmFyaWFibGUgImRiX3Bhc3N3b3JkIiB7CiAgZGVmYXVsdCA9ICJwYXNzd29yZCIKfdQdjNmPALIE6YAJmOz4Qn4=",
+   "checksum": "094b2fc3b416ff530bacefccc5e9139a",
    "default": {
     "Name": "default",
     "Expr": {
@@ -149,7 +149,7 @@
    "file": "./config.hcl",
    "line": 10,
    "column": 1,
-   "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAibXlkYiIgewogIGxvY2F0aW9uID0gImxvY2FsaG9zdCIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJteWRhdGFiYXNlIgoKICAvLyBWYXJhaWJsZXMgY2FuIGJlIHVzZWQgdG8gc2V0IHZhbHVlcywgdGhlIGRlZmF1bHQgdmFsdWVzIGZvciB0aGVzZSB2YXJpYWJsZXMgd2lsbCBiZSBvdmVyaWRkZW4KICAvLyBieSB2YWx1ZXMgc2V0IGJ5IHRoZSBlbnZpcm9ubWVudCB2YXJpYWJsZXMgSENMX2RiX3VzZXJuYW1lIGFuZCBIQ0xfZGJfcGFzc3dvcmQKICB1c2VybmFtZSA9IHZhcmlhYmxlLmRiX3VzZXJuYW1lCiAgcGFzc3dvcmQgPSB2YXJpYWJsZS5kYl9wYXNzd29yZAp91B2M2Y8AsgTpgAmY7PhCfg==",
+   "checksum": "98322294d372ccf762dfa54af247d9fe",
    "Location": "localhost",
    "Port": 5432,
    "DBName": "mydatabase",
@@ -164,7 +164,7 @@
    "file": "./config.hcl",
    "line": 21,
    "column": 1,
-   "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAib3RoZXIxIiB7CiAgbG9jYXRpb24gPSAiMS5vdGhlci5sb2NhdGlvbiIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJvdGhlcjEiCgogIC8vIFZhcmFpYmxlcyBjYW4gYmUgdXNlZCB0byBzZXQgdmFsdWVzLCB0aGUgZGVmYXVsdCB2YWx1ZXMgZm9yIHRoZXNlIHZhcmlhYmxlcyB3aWxsIGJlIG92ZXJpZGRlbgogIC8vIGJ5IHZhbHVlcyBzZXQgYnkgdGhlIGVudmlyb25tZW50IHZhcmlhYmxlcyBIQ0xfZGJfdXNlcm5hbWUgYW5kIEhDTF9kYl9wYXNzd29yZAogIHVzZXJuYW1lID0gdmFyaWFibGUuZGJfdXNlcm5hbWUKICBwYXNzd29yZCA9IHZhcmlhYmxlLmRiX3Bhc3N3b3JkCn3UHYzZjwCyBOmACZjs+EJ+",
+   "checksum": "43fb66cad9bd7e925b97f6b9d98b99eb",
    "Location": "1.other.location",
    "Port": 5432,
    "DBName": "other1",
@@ -179,13 +179,13 @@
    "file": "./config.hcl",
    "line": 32,
    "column": 1,
-   "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAib3RoZXIyIiB7CiAgbG9jYXRpb24gPSAiMi5vdGhlci5sb2NhdGlvbiIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJvdGhlcjIiCgogIC8vIFZhcmFpYmxlcyBjYW4gYmUgdXNlZCB0byBzZXQgdmFsdWVzLCB0aGUgZGVmYXVsdCB2YWx1ZXMgZm9yIHRoZXNlIHZhcmlhYmxlcyB3aWxsIGJlIG92ZXJpZGRlbgogIC8vIGJ5IHZhbHVlcyBzZXQgYnkgdGhlIGVudmlyb25tZW50IHZhcmlhYmxlcyBIQ0xfZGJfdXNlcm5hbWUgYW5kIEhDTF9kYl9wYXNzd29yZAogIHVzZXJuYW1lID0gdmFyaWFibGUuZGJfdXNlcm5hbWUKICBwYXNzd29yZCA9IHZhcmlhYmxlLmRiX3Bhc3N3b3JkCn3UHYzZjwCyBOmACZjs+EJ+",
+   "checksum": "77560a357985e20846a70b146024c335",
    "Location": "2.other.location",
    "Port": 5432,
-   "DBName": "other2",
+   "DBName": "other3",
    "Username": "admin",
    "Password": "password",
-   "ConnectionString": "postgresql://admin:password@2.other.location:5432/other2"
+   "ConnectionString": "postgresql://admin:password@2.other.location:5432/other3"
   },
   {
    "id": "resource.config.myapp",
@@ -194,20 +194,20 @@
    "file": "./config.hcl",
    "line": 43,
    "column": 1,
-   "checksum": "cmVzb3VyY2UgImNvbmZpZyIgIm15YXBwIiB7CiAgLy8gQ3VzdG9tIGZ1bmN0aW9ucyBjYW4gYmUgY3JlYXRlZCB0byBlbmFibGUgZnVuY3Rpb25hbGl0eSBsaWtlIGdlbmVyYXRpbmcgcmFuZG9tIG51bWJlcnMKICBpZCA9ICJteWFwcF8ke3JhbmRvbV9udW1iZXIoKX0iCgogIC8vIHJlc291cmNlLnBvc3RncmVzLm15ZGIuY29ubmVjdGlvbl9zdHJpbmcgd2lsbCBiZSBhdmFpbGFibGUgYWZ0ZXIgdGhlIGBQcm9jZXNzYCBoYXMKICAvLyBiZWVuIGNhbGxlZCBvbiB0aGUgYHBvc3RncmVzYCByZXNvdXJjZS4gSENMQ29uZmlnIHVuZGVyc3RhbmRzIGRlcGVuZGVuY3kgYW5kIHdpbGwKICAvLyBjYWxsIFByb2Nlc3MgaW4gYSBzdHJpY3Qgb3JkZXIKICBkYl9jb25uZWN0aW9uX3N0cmluZyA9IHJlc291cmNlLnBvc3RncmVzLm15ZGIuY29ubmVjdGlvbl9zdHJpbmcKCiAgLy8gcmVmZXJlbmNlIGFuIGVudGlyZSBvdGhlciByZXNvdXJjZQogIG1haW5fZGJfY29ubmVjdGlvbiA9IHJlc291cmNlLnBvc3RncmVzLm15ZGIKCiAgLy8gY29sbGVjdGlvbiBvZiBlbnRpcmUgb3RoZXIgcmVzb3VyY2VzCiAgb3RoZXJfZGJfY29ubmVjdGlvbnMgPSBbCiAgICByZXNvdXJjZS5wb3N0Z3Jlcy5vdGhlcjEsCiAgICByZXNvdXJjZS5wb3N0Z3Jlcy5vdGhlcjIKICBdCgogIHRpbWVvdXRzIHsKICAgIGNvbm5lY3Rpb24gPSAxMAogICAga2VlcF9hbGl2ZSA9IDYwCiAgICAvLyBvcHRpb25hbCBwYXJhbWV0ZXIgdGxzX2hhbmRzaGFrZSBub3Qgc3BlY2lmaWVkCiAgICAvLyBUTFNIYW5kc2hha2UgPSAxMAogIH0KfdQdjNmPALIE6YAJmOz4Qn4=",
+   "checksum": "5302de93dbe3d6c0c94c41a9b4a19151",
    "resource_links": [
     "resource.postgres.mydb",
+    "resource.postgres.mydb.connection_string",
     "resource.postgres.other1",
-    "resource.postgres.other2",
-    "resource.postgres.mydb.connection_string"
+    "resource.postgres.other2"
    ],
    "depends_on": [
     "resource.postgres.mydb",
+    "resource.postgres.mydb.connection_string",
     "resource.postgres.other1",
-    "resource.postgres.other2",
-    "resource.postgres.mydb.connection_string"
+    "resource.postgres.other2"
    ],
-   "ID": "myapp_14",
+   "FQN": "2",
    "DBConnectionString": "postgresql://admin:password@localhost:5432/mydatabase",
    "MainDBConnection": {
     "id": "resource.postgres.mydb",
@@ -216,10 +216,10 @@
     "file": "./config.hcl",
     "line": 10,
     "column": 1,
-    "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAibXlkYiIgewogIGxvY2F0aW9uID0gImxvY2FsaG9zdCIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJteWRhdGFiYXNlIgoKICAvLyBWYXJhaWJsZXMgY2FuIGJlIHVzZWQgdG8gc2V0IHZhbHVlcywgdGhlIGRlZmF1bHQgdmFsdWVzIGZvciB0aGVzZSB2YXJpYWJsZXMgd2lsbCBiZSBvdmVyaWRkZW4KICAvLyBieSB2YWx1ZXMgc2V0IGJ5IHRoZSBlbnZpcm9ubWVudCB2YXJpYWJsZXMgSENMX2RiX3VzZXJuYW1lIGFuZCBIQ0xfZGJfcGFzc3dvcmQKICB1c2VybmFtZSA9IHZhcmlhYmxlLmRiX3VzZXJuYW1lCiAgcGFzc3dvcmQgPSB2YXJpYWJsZS5kYl9wYXNzd29yZAp91B2M2Y8AsgTpgAmY7PhCfg==",
+    "checksum": "98322294d372ccf762dfa54af247d9fe",
     "Location": "localhost",
     "Port": 5432,
-    "DBName": "mydb",
+    "DBName": "mydatabase",
     "Username": "admin",
     "Password": "password",
     "ConnectionString": "postgresql://admin:password@localhost:5432/mydatabase"
@@ -232,7 +232,7 @@
      "file": "./config.hcl",
      "line": 21,
      "column": 1,
-     "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAib3RoZXIxIiB7CiAgbG9jYXRpb24gPSAiMS5vdGhlci5sb2NhdGlvbiIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJvdGhlcjEiCgogIC8vIFZhcmFpYmxlcyBjYW4gYmUgdXNlZCB0byBzZXQgdmFsdWVzLCB0aGUgZGVmYXVsdCB2YWx1ZXMgZm9yIHRoZXNlIHZhcmlhYmxlcyB3aWxsIGJlIG92ZXJpZGRlbgogIC8vIGJ5IHZhbHVlcyBzZXQgYnkgdGhlIGVudmlyb25tZW50IHZhcmlhYmxlcyBIQ0xfZGJfdXNlcm5hbWUgYW5kIEhDTF9kYl9wYXNzd29yZAogIHVzZXJuYW1lID0gdmFyaWFibGUuZGJfdXNlcm5hbWUKICBwYXNzd29yZCA9IHZhcmlhYmxlLmRiX3Bhc3N3b3JkCn3UHYzZjwCyBOmACZjs+EJ+",
+     "checksum": "43fb66cad9bd7e925b97f6b9d98b99eb",
      "Location": "1.other.location",
      "Port": 5432,
      "DBName": "other1",
@@ -247,13 +247,13 @@
      "file": "./config.hcl",
      "line": 32,
      "column": 1,
-     "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAib3RoZXIyIiB7CiAgbG9jYXRpb24gPSAiMi5vdGhlci5sb2NhdGlvbiIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJvdGhlcjIiCgogIC8vIFZhcmFpYmxlcyBjYW4gYmUgdXNlZCB0byBzZXQgdmFsdWVzLCB0aGUgZGVmYXVsdCB2YWx1ZXMgZm9yIHRoZXNlIHZhcmlhYmxlcyB3aWxsIGJlIG92ZXJpZGRlbgogIC8vIGJ5IHZhbHVlcyBzZXQgYnkgdGhlIGVudmlyb25tZW50IHZhcmlhYmxlcyBIQ0xfZGJfdXNlcm5hbWUgYW5kIEhDTF9kYl9wYXNzd29yZAogIHVzZXJuYW1lID0gdmFyaWFibGUuZGJfdXNlcm5hbWUKICBwYXNzd29yZCA9IHZhcmlhYmxlLmRiX3Bhc3N3b3JkCn3UHYzZjwCyBOmACZjs+EJ+",
+     "checksum": "77560a357985e20846a70b146024c335",
      "Location": "2.other.location",
      "Port": 5432,
-     "DBName": "other2",
+     "DBName": "other3",
      "Username": "admin",
      "Password": "password",
-     "ConnectionString": "postgresql://admin:password@2.other.location:5432/other2"
+     "ConnectionString": "postgresql://admin:password@2.other.location:5432/other3"
     }
    ],
    "Timeouts": {
@@ -263,433 +263,13 @@
    }
   },
   {
-   "id": "module.mymodule_1",
-   "name": "mymodule_1",
-   "type": "module",
-   "file": "./config.hcl",
-   "line": 70,
-   "column": 1,
-   "checksum": "",
-   "source": "github.com/jumppad-labs/hclconfig?ref=9173050/example/modules//db",
-   "variables": {
-    "Name": "variables",
-    "Expr": {
-     "Items": [
-      {
-       "KeyExpr": {
-        "Wrapped": {
-         "Traversal": [
-          {
-           "Name": "db_username",
-           "SrcRange": {
-            "Filename": "./config.hcl",
-            "Start": {
-             "Line": 74,
-             "Column": 5,
-             "Byte": 2154
-            },
-            "End": {
-             "Line": 74,
-             "Column": 16,
-             "Byte": 2165
-            }
-           }
-          }
-         ],
-         "SrcRange": {
-          "Filename": "./config.hcl",
-          "Start": {
-           "Line": 74,
-           "Column": 5,
-           "Byte": 2154
-          },
-          "End": {
-           "Line": 74,
-           "Column": 16,
-           "Byte": 2165
-          }
-         }
-        }
-       },
-       "ValueExpr": {
-        "Traversal": [
-         {
-          "Name": "variable",
-          "SrcRange": {
-           "Filename": "./config.hcl",
-           "Start": {
-            "Line": 74,
-            "Column": 19,
-            "Byte": 2168
-           },
-           "End": {
-            "Line": 74,
-            "Column": 27,
-            "Byte": 2176
-           }
-          }
-         },
-         {
-          "Name": "db_username",
-          "SrcRange": {
-           "Filename": "./config.hcl",
-           "Start": {
-            "Line": 74,
-            "Column": 27,
-            "Byte": 2176
-           },
-           "End": {
-            "Line": 74,
-            "Column": 39,
-            "Byte": 2188
-           }
-          }
-         }
-        ],
-        "SrcRange": {
-         "Filename": "./config.hcl",
-         "Start": {
-          "Line": 74,
-          "Column": 19,
-          "Byte": 2168
-         },
-         "End": {
-          "Line": 74,
-          "Column": 39,
-          "Byte": 2188
-         }
-        }
-       }
-      },
-      {
-       "KeyExpr": {
-        "Wrapped": {
-         "Traversal": [
-          {
-           "Name": "db_password",
-           "SrcRange": {
-            "Filename": "./config.hcl",
-            "Start": {
-             "Line": 75,
-             "Column": 5,
-             "Byte": 2193
-            },
-            "End": {
-             "Line": 75,
-             "Column": 16,
-             "Byte": 2204
-            }
-           }
-          }
-         ],
-         "SrcRange": {
-          "Filename": "./config.hcl",
-          "Start": {
-           "Line": 75,
-           "Column": 5,
-           "Byte": 2193
-          },
-          "End": {
-           "Line": 75,
-           "Column": 16,
-           "Byte": 2204
-          }
-         }
-        }
-       },
-       "ValueExpr": {
-        "Parts": [
-         {
-          "Val": {},
-          "SrcRange": {
-           "Filename": "./config.hcl",
-           "Start": {
-            "Line": 75,
-            "Column": 20,
-            "Byte": 2208
-           },
-           "End": {
-            "Line": 75,
-            "Column": 29,
-            "Byte": 2217
-           }
-          }
-         }
-        ],
-        "SrcRange": {
-         "Filename": "./config.hcl",
-         "Start": {
-          "Line": 75,
-          "Column": 19,
-          "Byte": 2207
-         },
-         "End": {
-          "Line": 75,
-          "Column": 30,
-          "Byte": 2218
-         }
-        }
-       }
-      }
-     ],
-     "SrcRange": {
-      "Filename": "./config.hcl",
-      "Start": {
-       "Line": 73,
-       "Column": 15,
-       "Byte": 2148
-      },
-      "End": {
-       "Line": 76,
-       "Column": 4,
-       "Byte": 2222
-      }
-     },
-     "OpenRange": {
-      "Filename": "./config.hcl",
-      "Start": {
-       "Line": 73,
-       "Column": 15,
-       "Byte": 2148
-      },
-      "End": {
-       "Line": 73,
-       "Column": 16,
-       "Byte": 2149
-      }
-     }
-    },
-    "Range": {
-     "Filename": "./config.hcl",
-     "Start": {
-      "Line": 73,
-      "Column": 3,
-      "Byte": 2136
-     },
-     "End": {
-      "Line": 76,
-      "Column": 4,
-      "Byte": 2222
-     }
-    },
-    "NameRange": {
-     "Filename": "./config.hcl",
-     "Start": {
-      "Line": 73,
-      "Column": 3,
-      "Byte": 2136
-     },
-     "End": {
-      "Line": 73,
-      "Column": 12,
-      "Byte": 2145
-     }
-    }
-   },
-   "SubContext": {
-    "Variables": {
-     "resource": {},
-     "variable": {}
-    },
-    "Functions": {
-     "dir": {},
-     "element": {},
-     "env": {},
-     "file": {},
-     "home": {},
-     "len": {},
-     "random_number": {},
-     "template_file": {},
-     "trim": {}
-    }
-   }
-  },
-  {
-   "id": "module.mymodule_1.resource.variable.db_username",
-   "name": "db_username",
-   "type": "variable",
-   "module": "mymodule_1",
-   "file": "",
-   "line": 0,
-   "column": 0,
-   "checksum": "dmFyaWFibGUgImRiX3VzZXJuYW1lIiB7CiAgZGVmYXVsdCA9ICJhZG1pbiIKfdQdjNmPALIE6YAJmOz4Qn4=",
-   "default": {
-    "Name": "default",
-    "Expr": {
-     "Parts": [
-      {
-       "Val": {},
-       "SrcRange": {
-        "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-        "Start": {
-         "Line": 2,
-         "Column": 14,
-         "Byte": 38
-        },
-        "End": {
-         "Line": 2,
-         "Column": 19,
-         "Byte": 43
-        }
-       }
-      }
-     ],
-     "SrcRange": {
-      "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-      "Start": {
-       "Line": 2,
-       "Column": 13,
-       "Byte": 37
-      },
-      "End": {
-       "Line": 2,
-       "Column": 20,
-       "Byte": 44
-      }
-     }
-    },
-    "Range": {
-     "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-     "Start": {
-      "Line": 2,
-      "Column": 3,
-      "Byte": 27
-     },
-     "End": {
-      "Line": 2,
-      "Column": 20,
-      "Byte": 44
-     }
-    },
-    "NameRange": {
-     "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-     "Start": {
-      "Line": 2,
-      "Column": 3,
-      "Byte": 27
-     },
-     "End": {
-      "Line": 2,
-      "Column": 10,
-      "Byte": 34
-     }
-    }
-   }
-  },
-  {
-   "id": "module.mymodule_1.resource.variable.db_password",
-   "name": "db_password",
-   "type": "variable",
-   "module": "mymodule_1",
-   "file": "",
-   "line": 0,
-   "column": 0,
-   "checksum": "dmFyaWFibGUgImRiX3Bhc3N3b3JkIiB7CiAgZGVmYXVsdCA9ICJwYXNzd29yZCIKfdQdjNmPALIE6YAJmOz4Qn4=",
-   "default": {
-    "Name": "default",
-    "Expr": {
-     "Parts": [
-      {
-       "Val": {},
-       "SrcRange": {
-        "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-        "Start": {
-         "Line": 6,
-         "Column": 14,
-         "Byte": 86
-        },
-        "End": {
-         "Line": 6,
-         "Column": 22,
-         "Byte": 94
-        }
-       }
-      }
-     ],
-     "SrcRange": {
-      "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-      "Start": {
-       "Line": 6,
-       "Column": 13,
-       "Byte": 85
-      },
-      "End": {
-       "Line": 6,
-       "Column": 23,
-       "Byte": 95
-      }
-     }
-    },
-    "Range": {
-     "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-     "Start": {
-      "Line": 6,
-      "Column": 3,
-      "Byte": 75
-     },
-     "End": {
-      "Line": 6,
-      "Column": 23,
-      "Byte": 95
-     }
-    },
-    "NameRange": {
-     "Filename": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-     "Start": {
-      "Line": 6,
-      "Column": 3,
-      "Byte": 75
-     },
-     "End": {
-      "Line": 6,
-      "Column": 10,
-      "Byte": 82
-     }
-    }
-   }
-  },
-  {
-   "id": "module.mymodule_1.resource.postgres.mydb",
-   "name": "mydb",
-   "type": "postgres",
-   "module": "mymodule_1",
-   "file": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-   "line": 9,
-   "column": 1,
-   "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAibXlkYiIgewogIGxvY2F0aW9uID0gImxvY2FsaG9zdCIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJteWRhdGFiYXNlIgoKICAvLyBWYXJhaWJsZXMgY2FuIGJlIHVzZWQgdG8gc2V0IHZhbHVlcywgdGhlIGRlZmF1bHQgdmFsdWVzIGZvciB0aGVzZSB2YXJpYWJsZXMgd2lsbCBiZSBvdmVyaWRkZW4KICAvLyBieSB2YWx1ZXMgc2V0IGJ5IHRoZSBlbnZpcm9ubWVudCB2YXJpYWJsZXMgSENMX2RiX3VzZXJuYW1lIGFuZCBIQ0xfZGJfcGFzc3dvcmQKICB1c2VybmFtZSA9IHZhcmlhYmxlLmRiX3VzZXJuYW1lCiAgcGFzc3dvcmQgPSB2YXJpYWJsZS5kYl9wYXNzd29yZAp91B2M2Y8AsgTpgAmY7PhCfg==",
-   "Location": "localhost",
-   "Port": 5432,
-   "DBName": "mydatabase",
-   "Username": "admin",
-   "Password": "topsecret",
-   "ConnectionString": "postgresql://admin:topsecret@localhost:5432/mydatabase"
-  },
-  {
-   "id": "module.mymodule_1.output.connection_string",
-   "name": "connection_string",
-   "type": "output",
-   "module": "mymodule_1",
-   "file": "/home/nicj/.hclconfig/cache/github.com_jumppad-labs_hclconfig_ref=9173050_example_modules_db/db.hcl",
-   "line": 22,
-   "column": 1,
-   "checksum": "b3V0cHV0ICJjb25uZWN0aW9uX3N0cmluZyIgewogIHZhbHVlID0gcmVzb3VyY2UucG9zdGdyZXMubXlkYi5jb25uZWN0aW9uX3N0cmluZwp91B2M2Y8AsgTpgAmY7PhCfg==",
-   "resource_links": [
-    "resource.postgres.mydb.connection_string"
-   ],
-   "depends_on": [
-    "resource.postgres.mydb.connection_string"
-   ],
-   "CtyValue": {},
-   "value": "postgresql://admin:topsecret@localhost:5432/mydatabase"
-  },
-  {
    "id": "module.mymodule_2",
    "name": "mymodule_2",
    "type": "module",
    "file": "./config.hcl",
-   "line": 80,
+   "line": 81,
    "column": 1,
-   "checksum": "",
+   "checksum": "63dbe4cfc073de2808e5955cc6600230",
    "source": "../example/modules/db",
    "variables": {
     "Name": "variables",
@@ -704,14 +284,14 @@
            "SrcRange": {
             "Filename": "./config.hcl",
             "Start": {
-             "Line": 84,
+             "Line": 85,
              "Column": 5,
-             "Byte": 2329
+             "Byte": 2360
             },
             "End": {
-             "Line": 84,
+             "Line": 85,
              "Column": 16,
-             "Byte": 2340
+             "Byte": 2371
             }
            }
           }
@@ -719,14 +299,14 @@
          "SrcRange": {
           "Filename": "./config.hcl",
           "Start": {
-           "Line": 84,
+           "Line": 85,
            "Column": 5,
-           "Byte": 2329
+           "Byte": 2360
           },
           "End": {
-           "Line": 84,
+           "Line": 85,
            "Column": 16,
-           "Byte": 2340
+           "Byte": 2371
           }
          }
         }
@@ -738,14 +318,14 @@
           "SrcRange": {
            "Filename": "./config.hcl",
            "Start": {
-            "Line": 84,
+            "Line": 85,
             "Column": 20,
-            "Byte": 2344
+            "Byte": 2375
            },
            "End": {
-            "Line": 84,
+            "Line": 85,
             "Column": 24,
-            "Byte": 2348
+            "Byte": 2379
            }
           }
          }
@@ -753,14 +333,14 @@
         "SrcRange": {
          "Filename": "./config.hcl",
          "Start": {
-          "Line": 84,
+          "Line": 85,
           "Column": 19,
-          "Byte": 2343
+          "Byte": 2374
          },
          "End": {
-          "Line": 84,
+          "Line": 85,
           "Column": 25,
-          "Byte": 2349
+          "Byte": 2380
          }
         }
        }
@@ -774,14 +354,14 @@
            "SrcRange": {
             "Filename": "./config.hcl",
             "Start": {
-             "Line": 85,
+             "Line": 86,
              "Column": 5,
-             "Byte": 2354
+             "Byte": 2385
             },
             "End": {
-             "Line": 85,
+             "Line": 86,
              "Column": 16,
-             "Byte": 2365
+             "Byte": 2396
             }
            }
           }
@@ -789,14 +369,14 @@
          "SrcRange": {
           "Filename": "./config.hcl",
           "Start": {
-           "Line": 85,
+           "Line": 86,
            "Column": 5,
-           "Byte": 2354
+           "Byte": 2385
           },
           "End": {
-           "Line": 85,
+           "Line": 86,
            "Column": 16,
-           "Byte": 2365
+           "Byte": 2396
           }
          }
         }
@@ -808,14 +388,14 @@
           "SrcRange": {
            "Filename": "./config.hcl",
            "Start": {
-            "Line": 85,
+            "Line": 86,
             "Column": 20,
-            "Byte": 2369
+            "Byte": 2400
            },
            "End": {
-            "Line": 85,
+            "Line": 86,
             "Column": 28,
-            "Byte": 2377
+            "Byte": 2408
            }
           }
          }
@@ -823,14 +403,14 @@
         "SrcRange": {
          "Filename": "./config.hcl",
          "Start": {
-          "Line": 85,
+          "Line": 86,
           "Column": 19,
-          "Byte": 2368
+          "Byte": 2399
          },
          "End": {
-          "Line": 85,
+          "Line": 86,
           "Column": 29,
-          "Byte": 2378
+          "Byte": 2409
          }
         }
        }
@@ -839,54 +419,54 @@
      "SrcRange": {
       "Filename": "./config.hcl",
       "Start": {
-       "Line": 83,
+       "Line": 84,
        "Column": 15,
-       "Byte": 2323
+       "Byte": 2354
       },
       "End": {
-       "Line": 86,
+       "Line": 87,
        "Column": 4,
-       "Byte": 2382
+       "Byte": 2413
       }
      },
      "OpenRange": {
       "Filename": "./config.hcl",
       "Start": {
-       "Line": 83,
+       "Line": 84,
        "Column": 15,
-       "Byte": 2323
+       "Byte": 2354
       },
       "End": {
-       "Line": 83,
+       "Line": 84,
        "Column": 16,
-       "Byte": 2324
+       "Byte": 2355
       }
      }
     },
     "Range": {
      "Filename": "./config.hcl",
      "Start": {
-      "Line": 83,
+      "Line": 84,
       "Column": 3,
-      "Byte": 2311
+      "Byte": 2342
      },
      "End": {
-      "Line": 86,
+      "Line": 87,
       "Column": 4,
-      "Byte": 2382
+      "Byte": 2413
      }
     },
     "NameRange": {
      "Filename": "./config.hcl",
      "Start": {
-      "Line": 83,
+      "Line": 84,
       "Column": 3,
-      "Byte": 2311
+      "Byte": 2342
      },
      "End": {
-      "Line": 83,
+      "Line": 84,
       "Column": 12,
-      "Byte": 2320
+      "Byte": 2351
      }
     }
    },
@@ -909,14 +489,14 @@
    }
   },
   {
-   "id": "module.mymodule_2.resource.variable.db_username",
+   "id": "module.mymodule_2.variable.db_username",
    "name": "db_username",
    "type": "variable",
    "module": "mymodule_2",
    "file": "",
    "line": 0,
    "column": 0,
-   "checksum": "dmFyaWFibGUgImRiX3VzZXJuYW1lIiB7CiAgZGVmYXVsdCA9ICJhZG1pbiIKfdQdjNmPALIE6YAJmOz4Qn4=",
+   "checksum": "0989ecc3627ae8ea11c51556dbf3daca",
    "default": {
     "Name": "default",
     "Expr": {
@@ -981,14 +561,14 @@
    }
   },
   {
-   "id": "module.mymodule_2.resource.variable.db_password",
+   "id": "module.mymodule_2.variable.db_password",
    "name": "db_password",
    "type": "variable",
    "module": "mymodule_2",
    "file": "",
    "line": 0,
    "column": 0,
-   "checksum": "dmFyaWFibGUgImRiX3Bhc3N3b3JkIiB7CiAgZGVmYXVsdCA9ICJwYXNzd29yZCIKfdQdjNmPALIE6YAJmOz4Qn4=",
+   "checksum": "094b2fc3b416ff530bacefccc5e9139a",
    "default": {
     "Name": "default",
     "Expr": {
@@ -1060,7 +640,7 @@
    "file": "../example/modules/db/db.hcl",
    "line": 9,
    "column": 1,
-   "checksum": "cmVzb3VyY2UgInBvc3RncmVzIiAibXlkYiIgewogIGxvY2F0aW9uID0gImxvY2FsaG9zdCIKICBwb3J0ICAgICA9IDU0MzIKICBuYW1lICAgICA9ICJteWRhdGFiYXNlIgoKICAvLyBWYXJhaWJsZXMgY2FuIGJlIHVzZWQgdG8gc2V0IHZhbHVlcywgdGhlIGRlZmF1bHQgdmFsdWVzIGZvciB0aGVzZSB2YXJpYWJsZXMgd2lsbCBiZSBvdmVyaWRkZW4KICAvLyBieSB2YWx1ZXMgc2V0IGJ5IHRoZSBlbnZpcm9ubWVudCB2YXJpYWJsZXMgSENMX2RiX3VzZXJuYW1lIGFuZCBIQ0xfZGJfcGFzc3dvcmQKICB1c2VybmFtZSA9IHZhcmlhYmxlLmRiX3VzZXJuYW1lCiAgcGFzc3dvcmQgPSB2YXJpYWJsZS5kYl9wYXNzd29yZAp91B2M2Y8AsgTpgAmY7PhCfg==",
+   "checksum": "b32e4087ac8e4f07a549b9ae0dfe3f2b",
    "Location": "localhost",
    "Port": 5432,
    "DBName": "mydatabase",
@@ -1076,7 +656,7 @@
    "file": "../example/modules/db/db.hcl",
    "line": 22,
    "column": 1,
-   "checksum": "b3V0cHV0ICJjb25uZWN0aW9uX3N0cmluZyIgewogIHZhbHVlID0gcmVzb3VyY2UucG9zdGdyZXMubXlkYi5jb25uZWN0aW9uX3N0cmluZwp91B2M2Y8AsgTpgAmY7PhCfg==",
+   "checksum": "e257c65350326cfd3c9d4a634fbb5ed3",
    "resource_links": [
     "resource.postgres.mydb.connection_string"
    ],
@@ -1087,30 +667,13 @@
    "value": "postgresql://root:password@localhost:5432/mydatabase"
   },
   {
-   "id": "output.module1_connection_string",
-   "name": "module1_connection_string",
-   "type": "output",
-   "file": "./config.hcl",
-   "line": 91,
-   "column": 1,
-   "checksum": "b3V0cHV0ICJtb2R1bGUxX2Nvbm5lY3Rpb25fc3RyaW5nIiB7CiAgdmFsdWUgPSBtb2R1bGUubXltb2R1bGVfMS5vdXRwdXQuY29ubmVjdGlvbl9zdHJpbmcKfdQdjNmPALIE6YAJmOz4Qn4=",
-   "resource_links": [
-    "module.mymodule_1.output.connection_string"
-   ],
-   "depends_on": [
-    "module.mymodule_1.output.connection_string"
-   ],
-   "CtyValue": {},
-   "value": "postgresql://admin:topsecret@localhost:5432/mydatabase"
-  },
-  {
    "id": "output.module2_connection_string",
    "name": "module2_connection_string",
    "type": "output",
    "file": "./config.hcl",
-   "line": 95,
+   "line": 96,
    "column": 1,
-   "checksum": "b3V0cHV0ICJtb2R1bGUyX2Nvbm5lY3Rpb25fc3RyaW5nIiB7CiAgdmFsdWUgPSBtb2R1bGUubXltb2R1bGVfMi5vdXRwdXQuY29ubmVjdGlvbl9zdHJpbmcKfdQdjNmPALIE6YAJmOz4Qn4=",
+   "checksum": "35d8b5d1aad48b904762590645392c09",
    "resource_links": [
     "module.mymodule_2.output.connection_string"
    ],

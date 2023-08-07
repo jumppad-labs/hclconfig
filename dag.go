@@ -1,9 +1,11 @@
 package hclconfig
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"sync/atomic"
 
 	"github.com/hashicorp/hcl2/gohcl"
@@ -437,8 +439,23 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			}
 		}
 
+		// compute the checksum
+		r.Metadata().Checksum = generateChecksum(r)
+
 		return nil
 	}
+}
+
+func generateChecksum(r types.Resource) string {
+	// first sort the resource links and depends on as these change
+	// depending on the dag process
+	sort.Strings(r.Metadata().DependsOn)
+	sort.Strings(r.Metadata().ResourceLinks)
+
+	// first convert the object to json
+	json, _ := json.Marshal(r)
+
+	return HashString(string(json))
 }
 
 func appendDiagnostic(tf tfdiags.Diagnostics, diags hcl.Diagnostics) tfdiags.Diagnostics {
