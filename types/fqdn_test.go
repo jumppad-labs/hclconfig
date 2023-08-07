@@ -250,6 +250,42 @@ func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 	require.Equal(t, "module.mymodule.resource.container.mytest", sfrqn)
 }
 
+func TestFQRNFromVariableReturnsCorrectData(t *testing.T) {
+	dt := DefaultTypes()
+
+	r, err := dt.CreateResource(TypeVariable, "mytest")
+	require.NoError(t, err)
+
+	//r.Metadata().Module = "mymodule"
+
+	fqrn := FQDNFromResource(r)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, TypeVariable, fqrn.Type)
+	require.Equal(t, "mytest", fqrn.Resource)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "variable.mytest", sfrqn)
+}
+
+func TestFQRNFromVariableInModuleReturnsCorrectData(t *testing.T) {
+	dt := DefaultTypes()
+
+	r, err := dt.CreateResource(TypeVariable, "mytest")
+	require.NoError(t, err)
+
+	r.Metadata().Module = "mymodule"
+
+	fqrn := FQDNFromResource(r)
+
+	require.Equal(t, "mymodule", fqrn.Module)
+	require.Equal(t, TypeVariable, fqrn.Type)
+	require.Equal(t, "mytest", fqrn.Resource)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "module.mymodule.variable.mytest", sfrqn)
+}
+
 func TestFQRNAppendsParentCorrectlyWhenNoModule(t *testing.T) {
 	fqrn, err := ParseFQRN("output.mine")
 	require.NoError(t, err)

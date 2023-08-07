@@ -16,10 +16,15 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	typs[structs.TypeContainer] = &structs.Container{}
 	typs[structs.TypeTemplate] = &structs.Template{}
 
+	var1, _ := typs.CreateResource(types.TypeVariable, "var1")
+
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
 
 	mod1, _ := typs.CreateResource(types.TypeModule, "module1")
 	mod1.Metadata().DependsOn = []string{"resource.network.cloud"}
+
+	var2, _ := typs.CreateResource(types.TypeVariable, "var2")
+	var2.Metadata().Module = "module1"
 
 	mod2, _ := typs.CreateResource(types.TypeModule, "module2")
 	mod2.Metadata().Module = "module1"
@@ -56,8 +61,14 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	err := c.addResource(net1, nil, nil)
 	require.NoError(t, err)
 
+	err = c.addResource(var1, nil, nil)
+	require.NoError(t, err)
+
 	// add the modules
 	err = c.addResource(mod1, nil, nil)
+	require.NoError(t, err)
+
+	err = c.addResource(var2, nil, nil)
 	require.NoError(t, err)
 
 	err = c.addResource(mod2, nil, nil)
@@ -94,6 +105,8 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 		con4,
 		out1,
 		out2,
+		var1,
+		var2,
 	}
 }
 
@@ -117,12 +130,20 @@ func TestFindResourceFindsContainer(t *testing.T) {
 	require.Equal(t, r[1], cl)
 }
 
-func TestFindResourceGenericsFindsContainer(t *testing.T) {
+func TestFindResourceFindsVariable(t *testing.T) {
 	c, r := testSetupConfig(t)
 
-	cl, err := c.FindResource("resource.container.test_dev")
+	cl, err := c.FindResource("variable.var1")
 	require.NoError(t, err)
-	require.Equal(t, r[1], cl)
+	require.Equal(t, r[9], cl)
+}
+
+func TestFindResourceFindsModuleVariable(t *testing.T) {
+	c, r := testSetupConfig(t)
+
+	cl, err := c.FindResource("module.module1.variable.var2")
+	require.NoError(t, err)
+	require.Equal(t, r[10], cl)
 }
 
 func TestFindOutputFindsOutput(t *testing.T) {
@@ -211,7 +232,7 @@ func TestFindModuleResourcesFindsResources(t *testing.T) {
 	require.NoError(t, err)
 
 	// should have one resource and one module
-	require.Len(t, cl, 2)
+	require.Len(t, cl, 3)
 }
 
 func TestFindModuleResourcesFindsResourcesWithChildren(t *testing.T) {
@@ -219,7 +240,7 @@ func TestFindModuleResourcesFindsResourcesWithChildren(t *testing.T) {
 
 	cl, err := c.FindModuleResources("module.module1", true)
 	require.NoError(t, err)
-	require.Len(t, cl, 5)
+	require.Len(t, cl, 6)
 }
 
 func TestRemoveResourceRemoves(t *testing.T) {
@@ -227,7 +248,7 @@ func TestRemoveResourceRemoves(t *testing.T) {
 
 	err := c.RemoveResource(c.Resources[0])
 	require.NoError(t, err)
-	require.Len(t, c.Resources, 8)
+	require.Len(t, c.Resources, 10)
 }
 
 func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
@@ -239,7 +260,7 @@ func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
 
 	err := c.RemoveResource(net1)
 	require.Error(t, err)
-	require.Len(t, c.Resources, 9)
+	require.Len(t, c.Resources, 11)
 }
 
 func TestToJSONSerializesJSON(t *testing.T) {

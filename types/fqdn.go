@@ -180,7 +180,7 @@ func (f ResourceFQRN) String() string {
 		attrPart = fmt.Sprintf(".%s", f.Attribute)
 	}
 
-	if f.Type == TypeOutput || f.Type == TypeLocal {
+	if f.Type == TypeOutput || f.Type == TypeLocal || f.Type == TypeVariable {
 		return fmt.Sprintf("%s%s.%s%s", modulePart, f.Type, f.Resource, attrPart)
 	}
 
