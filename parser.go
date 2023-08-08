@@ -123,7 +123,7 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 	}
 
 	// process the files and resolve dependency
-	return c, c.process(c.createCallback(p.options.ParseCallback), false)
+	return c, p.process(c)
 }
 
 // ParseDirectory parses all resource and variable files in the given directory
@@ -138,7 +138,44 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	}
 
 	// process the files and resolve dependency
-	return c, c.process(c.createCallback(p.options.ParseCallback), false)
+	return c, p.process(c)
+}
+
+func (p *Parser) process(c *Config) error {
+	// process the files and resolve dependency, do this first without any
+	// callbacks so we can calculate the checksum
+	err := c.process(c.createCallback(
+		func(r types.Resource) error {
+			r.Metadata().Checksum.Parsed = generateChecksum(r)
+			return nil
+		},
+	), false)
+
+	if err != nil {
+		return err
+	}
+
+	// now re-run this time with the callback and the Process function
+	// to calculate a final checksum after any computed properties have been
+	// set
+	return c.process(c.createCallback(
+		func(r types.Resource) error {
+			if p, ok := r.(types.Processable); ok {
+				if err := p.Process(); err != nil {
+					return err
+				}
+			}
+
+			if p.options.ParseCallback != nil {
+				if err := p.options.ParseCallback(r); err != nil {
+					return err
+				}
+			}
+
+			r.Metadata().Checksum.Processed = generateChecksum(r)
+			return nil
+		},
+	), false)
 }
 
 // internal method
@@ -303,7 +340,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				panic(err)
 			}
 
-			r.Metadata().Checksum = HashString(cs)
+			r.Metadata().Checksum.Parsed = HashString(cs)
 
 			err = decodeBody(ctx, file, b, v)
 			if err != nil {

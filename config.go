@@ -222,8 +222,6 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	c.contexts[r] = ctx
 	c.bodies[r] = b
 
-	r.Metadata().ParentConfig = c
-
 	return nil
 }
 

@@ -92,9 +92,6 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	err = c.addResource(out2, nil, nil)
 	require.NoError(t, err)
 
-	// ensure the config reference is set
-	require.Equal(t, c, net1.Metadata().ParentConfig)
-
 	return c, []types.Resource{
 		net1,
 		con1,

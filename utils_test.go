@@ -25,7 +25,7 @@ func TestLineFromFileAtLocation(t *testing.T) {
 func TestCalculatesHashFromString(t *testing.T) {
 	h := HashString("Hello World")
 
-	require.Equal(t, h, "SGVsbG8gV29ybGTUHYzZjwCyBOmACZjs+EJ+")
+	require.Equal(t, h, "b10a8db164e0754105b7a99be72e3fe5")
 }
 
 var singleLine = `resource "container" "consul"`

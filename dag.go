@@ -377,18 +377,6 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 		// if disabled was set through interpolation, the value has only been set here
 		// we need to handle an additional check
 		if !r.Metadata().Disabled && r.Metadata().Type != types.TypeModule {
-			if p, ok := r.(types.Processable); ok {
-				err := p.Process()
-				if err != nil {
-					pe := ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
-
-					return diags.Append(pe)
-				}
-			}
 
 			// call the callbacks
 			if wf != nil {
@@ -439,8 +427,6 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			}
 		}
 
-		// compute the checksum
-		r.Metadata().Checksum = generateChecksum(r)
 
 		return nil
 	}

@@ -848,13 +848,13 @@ func TestParserGeneratesChecksums(t *testing.T) {
 
 	r, err := c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
-	require.Equal(t, "cmVzb3VyY2UgIm5ldHdvcmsiICJvbnByZW0iIHsKICBzdWJuZXQgPSAiMTAuNi4wLjAvMTYiCn3UHYzZjwCyBOmACZjs+EJ+", r.Metadata().Checksum)
+	require.Equal(t, "802ee4f834e7c1befc9df41289108c70", r.Metadata().Checksum.Parsed)
 
 	r, err = c.FindResource("variable.cpu_resources")
 	require.NoError(t, err)
-	require.Equal(t, "dmFyaWFibGUgImNwdV9yZXNvdXJjZXMiIHsKICBkZWZhdWx0ID0gMjA0OAp91B2M2Y8AsgTpgAmY7PhCfg==", r.Metadata().Checksum)
+	require.Equal(t, "21ff76e0fdeed4c39a8716219846c019", r.Metadata().Checksum.Parsed)
 
 	r, err = c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
-	require.Equal(t, "b3V0cHV0ICJpcF9hZGRyZXNzXzEiIHsKICB2YWx1ZSA9IHJlc291cmNlLmNvbnRhaW5lci5jb25zdWwubmV0d29yay4wLmlwX2FkZHJlc3MKfdQdjNmPALIE6YAJmOz4Qn4=", r.Metadata().Checksum)
+	require.Equal(t, "51a8a4a2e2a136975a4733015503b5c8", r.Metadata().Checksum.Parsed)
 }

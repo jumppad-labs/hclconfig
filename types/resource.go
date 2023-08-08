@@ -80,11 +80,7 @@ type ResourceMetadata struct {
 	Column int `hcl:"column,optional" json:"column"`
 
 	// Checksum is the md5 hash of the resource
-	Checksum string `hcl:"checksum,optional" json:"checksum"`
-
-	// ParentConfig allows the location of other resources in the config
-	// this is an internal property that can not be set with hcl
-	ParentConfig Findable `json:"-"`
+	Checksum Checksum `hcl:"checksum,optional" json:"checksum"`
 
 	// Properties holds a collection that can be used to store adhoc data
 	Properties map[string]interface{} `json:"properties,omitempty"`
@@ -100,6 +96,17 @@ type ResourceMetadata struct {
 
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
+}
+
+type Checksum struct {
+	// Parsed is the checksum of the resource properties after the resource has
+	// been read and the Parse method has been called.
+	Parsed string `hcl:"parsed,optional" json:"parsed,omitempty"`
+	// Processed is the checksum of the object after the Process method, and
+	// any parser callbacks have been called.
+	// The checksum is evaluated in the graph so any dependent properties will be
+	// used in the checksum .
+	Processed string `hcl:"processed,optional" json:"processed,omitempty"`
 }
 
 // Metadata is a function that ensures the struct that embeds the ResourceMetadata
