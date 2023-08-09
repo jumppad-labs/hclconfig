@@ -122,6 +122,23 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return nil, err
 	}
 
+	for _, rt := range c.Resources {
+		// call the resources Parse function if set
+		// if the config implements the processable interface call the resource process method
+		if p, ok := rt.(types.Parsable); ok {
+			err := p.Parse(c)
+			if err != nil {
+				de := ParserError{}
+				de.Line = rt.Metadata().Line
+				de.Column = rt.Metadata().Column
+				de.Filename = rt.Metadata().File
+				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
+
+				return nil, de
+			}
+		}
+	}
+
 	// process the files and resolve dependency
 	return c, p.process(c)
 }
@@ -135,6 +152,23 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	err := p.parseDirectory(rootContext, dir, c)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, rt := range c.Resources {
+		// call the resources Parse function if set
+		// if the config implements the processable interface call the resource process method
+		if p, ok := rt.(types.Parsable); ok {
+			err := p.Parse(c)
+			if err != nil {
+				de := ParserError{}
+				de.Line = rt.Metadata().Line
+				de.Column = rt.Metadata().Column
+				de.Filename = rt.Metadata().File
+				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
+
+				return nil, de
+			}
+		}
 	}
 
 	// process the files and resolve dependency
@@ -711,21 +745,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Message = fmt.Sprintf(`unable to set depends_on, %s`, err)
 
 		return de
-	}
-
-	// call the resources Parse function if set
-	// if the config implements the processable interface call the resource process method
-	if p, ok := rt.(types.Parsable); ok {
-		err := p.Parse()
-		if err != nil {
-			de := ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
-
-			return de
-		}
 	}
 
 	err = c.addResource(rt, ctx, b.Body)

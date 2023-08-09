@@ -12,7 +12,9 @@ var TypeResource = "resource"
 // config file. This occurs before the graph of dependent resources has been
 // built.
 type Parsable interface {
-	// Parse is called when the resource is created from a file
+	// Parse is called when the resource is created from a file, it is called
+	// after all configuration files have been read a list of which are passed
+	// to Parse to allow validation based on other resources.
 	//
 	// Note: it is not possible to set resource properties from parse
 	// as all properties are overwritten when the resource is processed
@@ -20,10 +22,7 @@ type Parsable interface {
 	//
 	// ResourceMetadata can be set by this method as this is not overridden
 	// when processed.
-	//
-	// Returning an error stops the execution of Parse for other resources
-	// in the configuration
-	Parse() error
+	Parse(config Findable) error
 }
 
 // Processable defines an optional interface that allows a resource to define a callback
