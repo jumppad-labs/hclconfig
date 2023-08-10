@@ -39,6 +39,19 @@ func TestParseFQRNParsesComponents2(t *testing.T) {
 	require.Equal(t, "module.consul_1.resource.network.onprem.name", sfrqn)
 }
 
+func TestParseFQRNParsesSplat(t *testing.T) {
+	fqrn, err := ParseFQRN("resource.chapter.installation.tasks.*.id")
+	require.NoError(t, err)
+
+	require.Equal(t, "", fqrn.Module)
+	require.Equal(t, "chapter", fqrn.Type)
+	require.Equal(t, "installation", fqrn.Resource)
+	require.Equal(t, "tasks.*.id", fqrn.Attribute)
+
+	sfrqn := fqrn.String()
+	require.Equal(t, "resource.chapter.installation.tasks.*.id", sfrqn)
+}
+
 func TestParseFQRNParsesModule(t *testing.T) {
 	fqrn, err := ParseFQRN("module.module1")
 	require.NoError(t, err)

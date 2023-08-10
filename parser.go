@@ -1165,6 +1165,19 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 			return nil, err
 		}
 		resources = append(resources, rhs...)
+	case *hclsyntax.SplatExpr:
+		ref, err := processExpr(expr.(*hclsyntax.SplatExpr).Source)
+		if err != nil {
+			return nil, err
+		}
+
+		// only add if a resource has been returned
+		if len(ref) > 0 {
+			resources = append(resources, ref...)
+		}
+
+		//default:
+		//	pretty.Println(expr)
 	}
 
 	return resources, nil

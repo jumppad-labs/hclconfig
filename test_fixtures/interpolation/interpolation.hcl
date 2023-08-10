@@ -26,6 +26,10 @@ output "function" {
   value = len(resource.container.consul.volume)
 }
 
+output "splat" {
+  value = resource.container.consul.volume.*.destination
+}
+
 output "binary" {
   value = resource.container.consul.volume.0.source == resource.container.consul.volume.1.source
 }

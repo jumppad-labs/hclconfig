@@ -270,9 +270,15 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	con := r.(*structs.Container)
 	_ = con
 
-	r, err = c.FindResource("output.function")
+	r, err = c.FindResource("output.splat")
 	require.NoError(t, err)
 	cont := r.(*types.Output)
+	require.Equal(t, "/cache", cont.Value.([]interface{})[0])
+	require.Equal(t, "/cache2", cont.Value.([]interface{})[1])
+
+	r, err = c.FindResource("output.function")
+	require.NoError(t, err)
+	cont = r.(*types.Output)
 	require.Equal(t, float64(2), cont.Value)
 
 	r, err = c.FindResource("output.binary")
