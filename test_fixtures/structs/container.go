@@ -31,6 +31,9 @@ type Container struct {
 
 	// User block for mapping the user id and group id inside the container
 	RunAs *User `hcl:"run_as,block" json:"run_as,omitempty" mapstructure:"run_as"`
+
+	// output
+	CreatedNetworks []NetworkAttachment `hcl:"created_network,block" json:"created_networks,omitempty"` // Attach to the correct network // only when Image is specified
 }
 
 type User struct {
@@ -85,11 +88,18 @@ type Build struct {
 // ResourceMetadata properties can be set
 func (c *Container) Parse(conf types.Findable) error {
 	c.Properties["status"] = "something"
-
 	return nil
 }
 
 // Called when resources is processed by the Graph
 func (c *Container) Process() error {
+	c.CreatedNetworks = []NetworkAttachment{
+		NetworkAttachment{
+			Name: "test1",
+		},
+		NetworkAttachment{
+			Name: "test2",
+		},
+	}
 	return nil
 }

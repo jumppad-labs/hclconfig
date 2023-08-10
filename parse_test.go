@@ -276,6 +276,12 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	require.Equal(t, "/cache", cont.Value.([]interface{})[0])
 	require.Equal(t, "/cache2", cont.Value.([]interface{})[1])
 
+	r, err = c.FindResource("output.splat_with_null")
+	require.NoError(t, err)
+	cont = r.(*types.Output)
+	require.Equal(t, "test1", cont.Value.([]interface{})[0])
+	require.Equal(t, "test2", cont.Value.([]interface{})[1])
+
 	r, err = c.FindResource("output.function")
 	require.NoError(t, err)
 	cont = r.(*types.Output)

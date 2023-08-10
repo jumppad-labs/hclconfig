@@ -30,6 +30,10 @@ output "splat" {
   value = resource.container.consul.volume.*.destination
 }
 
+output "splat_with_null" {
+  value = resource.container.consul.created_network != null ? resource.container.consul.created_network.*.name : []
+}
+
 output "binary" {
   value = resource.container.consul.volume.0.source == resource.container.consul.volume.1.source
 }
