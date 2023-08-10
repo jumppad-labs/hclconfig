@@ -376,7 +376,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 			r.Metadata().Checksum.Parsed = HashString(cs)
 
-			err = decodeBody(ctx, file, b, v)
+			err = decodeBody(ctx, c, file, b, v)
 			if err != nil {
 				return err
 			}
@@ -519,9 +519,15 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt.Metadata().Line = b.TypeRange.Start.Line
 	rt.Metadata().Column = b.TypeRange.Start.Column
 
-	err := decodeBody(ctx, file, b, rt)
+	err := decodeBody(ctx, c, file, b, rt)
 	if err != nil {
-		return fmt.Errorf("error creating resource '%s' in file %s", b.Type, err)
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf("error creating resource: %s", err)
+
+		return de
 	}
 
 	setDisabled(ctx, rt, b.Body, false)
@@ -727,7 +733,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	rt.Metadata().Line = b.TypeRange.Start.Line
 	rt.Metadata().Column = b.TypeRange.Start.Column
 
-	err = decodeBody(ctx, file, b, rt)
+	err = decodeBody(ctx, c, file, b, rt)
 	if err != nil {
 		return fmt.Errorf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
 	}
@@ -984,8 +990,8 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	return ctx
 }
 
-func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interface{}) error {
-	dr, err := getDependentResources(b, ctx, p, "")
+func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}) error {
+	dr, err := getDependentResources(b, ctx, config, p, "")
 	if err != nil {
 		return err
 	}
@@ -1026,7 +1032,7 @@ func decodeBody(ctx *hcl.EvalContext, path string, b *hclsyntax.Block, p interfa
 // i.e. resource.container.foo.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
-func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource interface{}, path string) ([]string, error) {
+func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource interface{}, path string) ([]string, error) {
 	references := []string{}
 
 	for _, a := range b.Body.Attributes {
@@ -1050,12 +1056,39 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, resource in
 
 		ref := fmt.Sprintf("%s.%s[%d]", path, b.Type, blockIndex[b.Type])
 		ref = strings.TrimPrefix(ref, ".")
-		cr, err := getDependentResources(b, ctx, resource, ref)
+		cr, err := getDependentResources(b, ctx, c, resource, ref)
 		if err != nil {
 			return nil, err
 		}
 
 		references = append(references, cr...)
+	}
+
+	me := resource.(types.Resource)
+
+	// got the references, now check that the references
+	// are not cyclical
+	for _, dep := range references {
+		// the references might not exist yet, we are parsing flat
+		// but if there is a cyclical reference, one end of the circle will be found
+		d, err := c.FindResource(dep)
+		if err == nil {
+			// check the deps on the linked resource
+			for _, cdep := range d.Metadata().ResourceLinks {
+				fqdn, err := types.ParseFQRN(cdep)
+
+				fmt.Println(me, fqdn)
+				if err != nil {
+					return nil, fmt.Errorf("dependency %s, is not a valid resource", cdep)
+				}
+
+				if me.Metadata().Name == fqdn.Resource &&
+					me.Metadata().Type == fqdn.Type &&
+					me.Metadata().Module == fqdn.Module {
+					return nil, fmt.Errorf("resource '%s', depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", me.Metadata().Name, fqdn.String())
+				}
+			}
+		}
 	}
 
 	return references, nil

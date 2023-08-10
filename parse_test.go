@@ -328,7 +328,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 34)
+	require.Len(t, c.Resources, 35)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -894,4 +894,18 @@ func TestParserGeneratesChecksums(t *testing.T) {
 	c3, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
 	require.Equal(t, r3.Metadata().Checksum.Parsed, c3.Metadata().Checksum.Parsed)
+}
+
+func TestParserHandlesCyclicalReference(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/cyclical/cyclical.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.Error(t, err)
+
+	require.ErrorContains(t, err, "resource 'one', depends on 'resource.container.one.created_network_map.one.subnet'")
 }

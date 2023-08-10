@@ -51,7 +51,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		// if disabled ignore any dependencies
 		if resource.Metadata().Disabled {
 			// add all disabled resources to the root
-			//fmt.Println("connect", "root", "to", resource.Metadata().ID)
+			fmt.Println("connect", "root", "to", resource.Metadata().ID)
 
 			graph.Connect(dag.BasicEdge(root, resource))
 			continue
@@ -145,13 +145,13 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 		for d := range dependencies {
 			hasDeps = true
-			//fmt.Println("connect", resource.Metadata().ID, "to", d.Metadata().ID)
+			fmt.Println("connect", resource.Metadata().ID, "to", d.Metadata().ID)
 			graph.Connect(dag.BasicEdge(d, resource))
 		}
 
 		// if no deps add to root node
 		if !hasDeps {
-			//fmt.Println("connect", resource.Metadata().ID, "to root")
+			fmt.Println("connect", resource.Metadata().ID, "to root")
 			graph.Connect(dag.BasicEdge(root, resource))
 		}
 	}
