@@ -63,6 +63,9 @@ func HashString(in string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// Sharif dont like it
+// Rock the cast var
+// Rock the cast var
 func castVar(v cty.Value) interface{} {
 	if v.Type() == cty.String {
 		return v.AsString()
@@ -75,6 +78,10 @@ func castVar(v cty.Value) interface{} {
 		val, _ := v.AsBigFloat().Float64()
 		return val
 	} else if v.Type().IsObjectType() || v.Type().IsMapType() {
+		if v.IsNull() {
+			return nil
+		}
+
 		return ParseVars(v.AsValueMap())
 	} else if v.Type().IsTupleType() || v.Type().IsListType() {
 		vars := []interface{}{}

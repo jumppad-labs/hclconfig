@@ -40,6 +40,10 @@ module "consul_3" {
   source     = "../single"
 }
 
+output "object" {
+  value = resource.container.base
+}
+
 // returns a simple type from the ouput of the module
 output "module1_container_resources_cpu" {
   value = module.consul_1.output.container_resources_cpu

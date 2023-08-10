@@ -363,7 +363,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 34)
+	require.Len(t, c.Resources, 35)
 
 	cont, err := c.FindResource("output.module1_container_resources_cpu")
 	require.NoError(t, err)
@@ -408,6 +408,13 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 	// returned in the output
 	require.Equal(t, "consul", cont.(*types.Output).Value)
 	require.Equal(t, float64(4096), cont2.(*types.Output).Value)
+
+	cont, err = c.FindResource("output.object")
+	require.NoError(t, err)
+
+	// check element can be obtained from a map of values
+	// returned in the output
+	require.Equal(t, "base", cont.(*types.Output).Value.(map[string]interface{})["name"])
 }
 
 func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {

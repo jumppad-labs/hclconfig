@@ -33,8 +33,8 @@ type Container struct {
 	RunAs *User `hcl:"run_as,block" json:"run_as,omitempty" mapstructure:"run_as"`
 
 	// output
-	CreatedNetworks    []NetworkAttachment          `hcl:"created_network,optional" json:"created_networks,omitempty"`         // Attach to the correct network // only when Image is specified
-	CreatedNetworksMap map[string]NetworkAttachment `hcl:"created_network_map,optional" json:"created_networks_map,omitempty"` // Attach to the correct network // only when Image is specified
+	CreatedNetworks    []NetworkAttachment `hcl:"created_network,optional" json:"created_networks,omitempty"`         // Attach to the correct network // only when Image is specified
+	CreatedNetworksMap map[string]Network  `hcl:"created_network_map,optional" json:"created_networks_map,omitempty"` // Attach to the correct network // only when Image is specified
 }
 
 type User struct {
@@ -103,10 +103,10 @@ func (c *Container) Process() error {
 		},
 	}
 
-	c.CreatedNetworksMap = map[string]NetworkAttachment{
-		"one": NetworkAttachment{Name: "test1"},
-		"two": NetworkAttachment{Name: "test2"},
-	}
+	//c.CreatedNetworksMap = map[string]Network{
+	//	"one": Network{ResourceMetadata: types.ResourceMetadata{ID: "one", Name: "test1"}},
+	//	"two": Network{ResourceMetadata: types.ResourceMetadata{ID: "two", Name: "test2"}},
+	//}
 
 	return nil
 }

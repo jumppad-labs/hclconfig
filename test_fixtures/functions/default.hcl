@@ -1,3 +1,12 @@
+resource "network" "one" {
+  subnet = "10.0.0.1/16"
+}
+
+resource "network" "two" {
+  subnet = "10.0.0.1/16"
+}
+
+
 resource "container" "with_networks" {
   network {
     name       = "one"
@@ -8,9 +17,15 @@ resource "container" "with_networks" {
     name       = "two"
     ip_address = "127.0.0.2"
   }
+
+  created_network_map = {
+    "one" = resource.network.one
+    "two" = resource.network.two
+  }
 }
 
 resource "container" "default" {
+
   env = {
     "len_string"     = len("abc")
     "len_collection" = len(["one", "two"])
@@ -30,10 +45,12 @@ resource "container" "default" {
     })
   }
 
-  dns = values({
-    "one" = "1"
-    "two" = "2"
-  })
+  dns = resource.container.with_networks.created_network_map != null ? values(resource.container.with_networks.created_network_map).*.name : []
+
+  entrypoint = values({
+    "one" = { "id" = "123" }
+    "two" = { "id" = "abc" }
+  }).*.id
 
   command = keys({
     "one" = "1"
