@@ -441,7 +441,13 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				return err
 			}
 		default:
-			return fmt.Errorf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
+			de := ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
+
+			return de
 		}
 	}
 
@@ -735,7 +741,12 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 	err = decodeBody(ctx, c, file, b, rt)
 	if err != nil {
-		return fmt.Errorf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
+		return de
 	}
 
 	// disabled is a property of the embedded type we need to add this manually
@@ -1072,12 +1083,13 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 		// the references might not exist yet, we are parsing flat
 		// but if there is a cyclical reference, one end of the circle will be found
 		d, err := c.FindResource(dep)
+		//fqdnD := types.FQDNFromResource(me)
 		if err == nil {
 			// check the deps on the linked resource
 			for _, cdep := range d.Metadata().ResourceLinks {
 				fqdn, err := types.ParseFQRN(cdep)
+				fqdn.Attribute = ""
 
-				fmt.Println(me, fqdn)
 				if err != nil {
 					return nil, fmt.Errorf("dependency %s, is not a valid resource", cdep)
 				}
@@ -1085,7 +1097,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 				if me.Metadata().Name == fqdn.Resource &&
 					me.Metadata().Type == fqdn.Type &&
 					me.Metadata().Module == fqdn.Module {
-					return nil, fmt.Errorf("resource '%s', depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", me.Metadata().Name, fqdn.String())
+					return nil, fmt.Errorf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqdn.String(), d.Metadata().ID)
 				}
 			}
 		}

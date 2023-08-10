@@ -907,5 +907,5 @@ func TestParserHandlesCyclicalReference(t *testing.T) {
 	_, err := p.ParseFile(f)
 	require.Error(t, err)
 
-	require.ErrorContains(t, err, "resource 'one', depends on 'resource.container.one.created_network_map.one.subnet'")
+	require.ErrorContains(t, err, "'resource.container.one' depends on 'resource.network.two'")
 }
