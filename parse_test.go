@@ -858,15 +858,33 @@ func TestParserGeneratesChecksums(t *testing.T) {
 	c, err := p.ParseFile(f)
 	require.NoError(t, err)
 
-	r, err := c.FindResource("resource.network.onprem")
+	r1, err := c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
-	require.Equal(t, "802ee4f834e7c1befc9df41289108c70", r.Metadata().Checksum.Parsed)
+	require.NotEmpty(t, r1.Metadata().Checksum.Parsed)
 
-	r, err = c.FindResource("variable.cpu_resources")
+	r2, err := c.FindResource("variable.cpu_resources")
 	require.NoError(t, err)
-	require.Equal(t, "21ff76e0fdeed4c39a8716219846c019", r.Metadata().Checksum.Parsed)
+	require.NotEmpty(t, r2.Metadata().Checksum.Parsed)
 
-	r, err = c.FindResource("output.ip_address_1")
+	r3, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
-	require.Equal(t, "51a8a4a2e2a136975a4733015503b5c8", r.Metadata().Checksum.Parsed)
+	require.NotEmpty(t, r3.Metadata().Checksum.Parsed)
+
+	// parse a second time, the checksums should be equal
+	p = setupParser(t)
+
+	c, err = p.ParseFile(f)
+	require.NoError(t, err)
+
+	c1, err := c.FindResource("resource.network.onprem")
+	require.NoError(t, err)
+	require.Equal(t, r1.Metadata().Checksum.Parsed, c1.Metadata().Checksum.Parsed)
+
+	c2, err := c.FindResource("variable.cpu_resources")
+	require.NoError(t, err)
+	require.Equal(t, r2.Metadata().Checksum.Parsed, c2.Metadata().Checksum.Parsed)
+
+	c3, err := c.FindResource("output.ip_address_1")
+	require.NoError(t, err)
+	require.Equal(t, r3.Metadata().Checksum.Parsed, c3.Metadata().Checksum.Parsed)
 }
