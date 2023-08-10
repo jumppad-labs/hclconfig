@@ -191,6 +191,10 @@ func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
 	require.Contains(t, cont.Env["file"], "container")
 	require.Contains(t, cont.Env["dir"], filepath.Dir(absoluteFolderPath))
 	require.Contains(t, cont.Env["trim"], "foo bar")
+	require.Contains(t, cont.DNS[0], "1")
+	require.Contains(t, cont.DNS[1], "2")
+	require.Contains(t, cont.Command[0], "one")
+	require.Contains(t, cont.Command[1], "two")
 }
 
 func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {

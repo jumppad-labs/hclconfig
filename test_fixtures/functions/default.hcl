@@ -11,8 +11,6 @@ resource "container" "with_networks" {
 }
 
 resource "container" "default" {
-  command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
-
   env = {
     "len_string"     = len("abc")
     "len_collection" = len(["one", "two"])
@@ -21,14 +19,24 @@ resource "container" "default" {
     "file"           = file("./default.hcl")
     "dir"            = dir()
     "trim"           = trim("  foo bar  ")
-    "template_file"  = template_file("template.tmpl", {
-      name = "Raymond"
+    "template_file" = template_file("template.tmpl", {
+      name   = "Raymond"
       number = 43
-      list = ["cheese", "ham", "pineapple"]
+      list   = ["cheese", "ham", "pineapple"]
       map = {
         foo = "bar"
-        x = 1
+        x   = 1
       }
     })
   }
+
+  dns = values({
+    "one" = "1"
+    "two" = "2"
+  })
+
+  command = keys({
+    "one" = "1"
+    "two" = "2"
+  })
 }

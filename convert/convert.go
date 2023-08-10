@@ -40,3 +40,7 @@ func GoToCtyValue(val interface{}) (cty.Value, error) {
 
 	return ctyVal, nil
 }
+
+func CtyToGo(val cty.Value, target interface{}) error {
+	return gocty.FromCtyValue(val, target)
+}

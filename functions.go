@@ -10,6 +10,7 @@ import (
 	"github.com/mailgun/raymond/v2"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
+	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
 
 func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
@@ -388,16 +389,91 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 		},
 	})
 
-	funcs := map[string]function.Function{}
+	//var ToString = function.New(&function.Spec{
+	//	Params: []function.Parameter{
+	//		{
+	//			Name:             "value",
+	//			Type:             cty.DynamicPseudoType,
+	//			AllowDynamicType: true,
+	//		},
+	//	},
+	//	Type: function.StaticReturnType(cty.DynamicPseudoType),
+	//	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+	//		if args[0].Type().IsTupleType() || args[0].Type().IsListType() {
+	//			vals := []cty.Value{}
+	//			i := args[0].ElementIterator()
 
-	funcs["len"] = LenFunc
-	funcs["env"] = EnvFunc
-	funcs["home"] = HomeFunc
-	funcs["file"] = ReadFileFunc
-	funcs["template_file"] = ReadTemplateFileFunc
-	funcs["dir"] = DirFunc
-	funcs["trim"] = TrimFunc
-	funcs["element"] = ElementFunc
+	//			for {
+	//				if !i.Next() {
+	//					break
+	//				}
+
+	//				, e := i.Element()
+	//			}
+
+	//		return cty.NullVal(retType), nil
+	//	},
+	//})
+
+	funcs := map[string]function.Function{
+		"abs":             stdlib.AbsoluteFunc,
+		"ceil":            stdlib.CeilFunc,
+		"chomp":           stdlib.ChompFunc,
+		"coalescelist":    stdlib.CoalesceListFunc,
+		"compact":         stdlib.CompactFunc,
+		"concat":          stdlib.ConcatFunc,
+		"contains":        stdlib.ContainsFunc,
+		"csvdecode":       stdlib.CSVDecodeFunc,
+		"dir":             DirFunc,
+		"distinct":        stdlib.DistinctFunc,
+		"element":         ElementFunc,
+		"env":             EnvFunc,
+		"chunklist":       stdlib.ChunklistFunc,
+		"file":            ReadFileFunc,
+		"flatten":         stdlib.FlattenFunc,
+		"floor":           stdlib.FloorFunc,
+		"format":          stdlib.FormatFunc,
+		"formatdate":      stdlib.FormatDateFunc,
+		"formatlist":      stdlib.FormatListFunc,
+		"home":            HomeFunc,
+		"indent":          stdlib.IndentFunc,
+		"join":            stdlib.JoinFunc,
+		"jsondecode":      stdlib.JSONDecodeFunc,
+		"jsonencode":      stdlib.JSONEncodeFunc,
+		"keys":            stdlib.KeysFunc,
+		"len":             LenFunc,
+		"log":             stdlib.LogFunc,
+		"lower":           stdlib.LowerFunc,
+		"max":             stdlib.MaxFunc,
+		"merge":           stdlib.MergeFunc,
+		"min":             stdlib.MinFunc,
+		"parseint":        stdlib.ParseIntFunc,
+		"pow":             stdlib.PowFunc,
+		"range":           stdlib.RangeFunc,
+		"regex":           stdlib.RegexFunc,
+		"regexall":        stdlib.RegexAllFunc,
+		"reverse":         stdlib.ReverseListFunc,
+		"setintersection": stdlib.SetIntersectionFunc,
+		"setproduct":      stdlib.SetProductFunc,
+		"setsubtract":     stdlib.SetSubtractFunc,
+		"setunion":        stdlib.SetUnionFunc,
+		"signum":          stdlib.SignumFunc,
+		"slice":           stdlib.SliceFunc,
+		"sort":            stdlib.SortFunc,
+		"split":           stdlib.SplitFunc,
+		"strrev":          stdlib.ReverseFunc,
+		"substr":          stdlib.SubstrFunc,
+		"template_file":   ReadTemplateFileFunc,
+		"timeadd":         stdlib.TimeAddFunc,
+		"title":           stdlib.TitleFunc,
+		"trim":            TrimFunc,
+		"trimprefix":      stdlib.TrimPrefixFunc,
+		"trimspace":       stdlib.TrimSpaceFunc,
+		"trimsuffix":      stdlib.TrimSuffixFunc,
+		"upper":           stdlib.UpperFunc,
+		"values":          stdlib.ValuesFunc,
+		"zipmap":          stdlib.ZipmapFunc,
+	}
 
 	return funcs
 }

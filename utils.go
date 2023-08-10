@@ -64,7 +64,6 @@ func HashString(in string) string {
 }
 
 func castVar(v cty.Value) interface{} {
-
 	if v.Type() == cty.String {
 		return v.AsString()
 	} else if v.Type() == cty.Bool {
@@ -78,8 +77,14 @@ func castVar(v cty.Value) interface{} {
 	} else if v.Type().IsObjectType() || v.Type().IsMapType() {
 		return ParseVars(v.AsValueMap())
 	} else if v.Type().IsTupleType() || v.Type().IsListType() {
-		i := v.ElementIterator()
 		vars := []interface{}{}
+
+		if v.IsNull() {
+			return vars
+		}
+
+		i := v.ElementIterator()
+
 		for {
 			if !i.Next() {
 				// cant iterate
