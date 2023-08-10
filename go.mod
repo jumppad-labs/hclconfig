@@ -6,9 +6,9 @@ require (
 	github.com/flytam/filenamify v1.1.1
 	github.com/hashicorp/go-getter v1.7.0
 	github.com/hashicorp/hcl2 v0.0.0-20191002203319-fb75b3253c80
-	github.com/hashicorp/terraform v0.12.29
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/mitchellh/go-wordwrap v1.0.1
+	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.8.1
 	github.com/zclconf/go-cty v1.12.0
 )
@@ -30,14 +30,12 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.6.0 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-multierror v1.0.0 // indirect
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
-	github.com/hashicorp/hcl/v2 v2.3.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

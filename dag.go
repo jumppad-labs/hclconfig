@@ -10,10 +10,10 @@ import (
 
 	"github.com/hashicorp/hcl2/gohcl"
 	"github.com/hashicorp/hcl2/hcl"
-	"github.com/hashicorp/terraform/dag"
-	"github.com/hashicorp/terraform/tfdiags"
+
 	"github.com/jumppad-labs/hclconfig/convert"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -178,7 +178,7 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 	hasError := atomic.Bool{}
 
 	return c.process(
-		func(v dag.Vertex) (diags tfdiags.Diagnostics) {
+		func(v dag.Vertex) (diags dag.Diagnostics) {
 
 			r, ok := v.(types.Resource)
 			// not a resource skip, this should never happen
@@ -247,8 +247,8 @@ func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	return nil
 }
 
-func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tfdiags.Diagnostics) {
-	return func(v dag.Vertex) (diags tfdiags.Diagnostics) {
+func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags dag.Diagnostics) {
+	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		r, ok := v.(types.Resource)
 		// not a resource skip, this should never happen
@@ -427,7 +427,6 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags tf
 			}
 		}
 
-
 		return nil
 	}
 }
@@ -444,7 +443,7 @@ func generateChecksum(r types.Resource) string {
 	return HashString(string(json))
 }
 
-func appendDiagnostic(tf tfdiags.Diagnostics, diags hcl.Diagnostics) tfdiags.Diagnostics {
+func appendDiagnostic(tf dag.Diagnostics, diags hcl.Diagnostics) dag.Diagnostics {
 	for _, d := range diags {
 		tf = tf.Append(d)
 	}
