@@ -7,7 +7,8 @@ import (
 	"os"
 
 	"github.com/jumppad-labs/hclconfig"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/hclconfig/example/types"
+	htypes "github.com/jumppad-labs/hclconfig/types"
 )
 
 func main() {
@@ -17,15 +18,15 @@ func main() {
 	// set the callback that will be executed when a resource has been created
 	// this function can be used to execute any external work required for the
 	// resource.
-	o.ParseCallback = func(r types.Resource) error {
+	o.ParseCallback = func(r htypes.Resource) error {
 		fmt.Printf("  resource '%s' named '%s' has been parsed from the file: %s\n", r.Metadata().Type, r.Metadata().Name, r.Metadata().File)
 		return nil
 	}
 
 	p := hclconfig.NewParser(o)
 	// register the types
-	p.RegisterType("config", &Config{})
-	p.RegisterType("postgres", &PostgreSQL{})
+	p.RegisterType("config", &types.Config{})
+	p.RegisterType("postgres", &types.PostgreSQL{})
 
 	// register a custom function
 	p.RegisterFunction("random_number", func() (int, error) {
@@ -60,7 +61,7 @@ func main() {
 	}
 
 	fmt.Println("## Process config")
-	nc.Process(func(r types.Resource) error {
+	nc.Process(func(r htypes.Resource) error {
 		fmt.Println("  ", r.Metadata().ID)
 		return nil
 	}, false)
@@ -68,7 +69,7 @@ func main() {
 	fmt.Println("")
 	fmt.Println("## Process config reverse")
 
-	nc.Process(func(r types.Resource) error {
+	nc.Process(func(r htypes.Resource) error {
 		fmt.Println("  ", r.Metadata().ID)
 		return nil
 	}, true)
@@ -81,15 +82,15 @@ func printConfig(c *hclconfig.Config) {
 	for _, r := range c.Resources {
 		switch r.Metadata().Type {
 		case "config":
-			t := r.(*Config)
+			t := r.(*types.Config)
 			fmt.Println(printConfigT(t, 2))
 
 		case "postgres":
-			t := r.(*PostgreSQL)
+			t := r.(*types.PostgreSQL)
 			fmt.Println(printPostgres(t, 2))
 
 		case "output":
-			t := r.(*types.Output)
+			t := r.(*htypes.Output)
 			fmt.Printf("  Postgres %s\n", t.Name)
 			fmt.Printf("  Module %s\n", t.Module)
 			fmt.Printf("  --- Value: %s\n", t.Value)
@@ -99,7 +100,7 @@ func printConfig(c *hclconfig.Config) {
 	}
 }
 
-func printConfigT(t *Config, indent int) string {
+func printConfigT(t *types.Config, indent int) string {
 	str := bytes.NewBufferString("")
 	pad := ""
 	for i := 0; i < indent; i++ {
@@ -126,7 +127,7 @@ func printConfigT(t *Config, indent int) string {
 	return str.String()
 }
 
-func printPostgres(p *PostgreSQL, indent int) string {
+func printPostgres(p *types.PostgreSQL, indent int) string {
 	str := bytes.NewBufferString("")
 	pad := ""
 	for i := 0; i < indent; i++ {

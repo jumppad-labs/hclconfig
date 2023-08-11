@@ -105,12 +105,17 @@ func (p *Parser) RegisterType(name string, resource types.Resource) {
 func (p *Parser) RegisterFunction(name string, f interface{}) error {
 	ctyFunc, err := createCtyFunctionFromGoFunc(f)
 	if err != nil {
-		return nil
+		return err
 	}
 
-	p.registeredFunctions[name] = ctyFunc
+	p.RegisterCTYFunction(name, ctyFunc)
 
 	return nil
+}
+
+// RegisterCTYFunction allows you to register a raw CTY function with the parser
+func (p *Parser) RegisterCTYFunction(name string, ctyFunc function.Function) {
+	p.registeredFunctions[name] = ctyFunc
 }
 
 func (p *Parser) ParseFile(file string) (*Config, error) {

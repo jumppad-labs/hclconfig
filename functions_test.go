@@ -11,6 +11,126 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+type TestStruct struct {
+	Name        string      `hcl:"name" json:"name"`               // http_post
+	Description string      `hcl:"description" json:"description"` // a http post is executed
+	Type        string      `hcl:"type" json:"type"`               // command, parameter, comparitor
+	Parameters  []cty.Value `hcl:"parameters" json:"parameters"`   // input params that function gets
+}
+
+func TestCreateFunctionHandlesParams(t *testing.T) {
+	type testCase struct {
+		name string
+		f    interface{}
+	}
+
+	cases := []testCase{
+		{
+			name: "integer parameters",
+			f: func(a, b int) (int, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "int16 parameters",
+			f: func(a, b int16) (int16, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "int32 parameters",
+			f: func(a, b int32) (int32, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "int64 parameters",
+			f: func(a, b int64) (int64, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint parameters",
+			f: func(a, b uint) (uint, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint16 parameters",
+			f: func(a, b uint16) (uint16, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint32 parameters",
+			f: func(a, b uint32) (uint32, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "uint64 parameters",
+			f: func(a, b uint64) (uint64, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "float32 parameters",
+			f: func(a, b float32) (float32, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "float64 parameters",
+			f: func(a, b float64) (float64, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "string parameters",
+			f: func(a, b string) (string, error) {
+				return a + b, nil
+			},
+		},
+		{
+			name: "string list parameters",
+			f: func(a, b []string) ([]string, error) {
+				return append(a, b...), nil
+			},
+		},
+		{
+			name: "int list parameters",
+			f: func(a, b []int) ([]int, error) {
+				return append(a, b...), nil
+			},
+		},
+		{
+			name: "map parameters",
+			f: func(a, b map[string]string) (map[string]string, error) {
+
+				for k, v := range b {
+					a[k] = v
+				}
+
+				return a, nil
+			},
+		},
+		{
+			name: "struct parameters",
+			f: func(a, b TestStruct) (TestStruct, error) {
+				a.Name = b.Name
+				return a, nil
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := createCtyFunctionFromGoFunc(c.f)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestCreateFunctionCreatesFunctionWithCorrectInParameters(t *testing.T) {
 	myfunc := func(a string, b int) (int, error) {
 		return 0, nil
@@ -63,7 +183,7 @@ func TestCreateFunctionWithInvalidOutParameterReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCreateFunctionCallsFunction(t *testing.T) {
+func TestCreateFunctionCallsFunctionWithFloat(t *testing.T) {
 	myfunc := func(a, b int) (int, error) {
 		return a + b, nil
 	}
@@ -79,87 +199,34 @@ func TestCreateFunctionCallsFunction(t *testing.T) {
 	require.Equal(t, int64(5), i)
 }
 
-func TestCreateFunctionHandlesInputParams(t *testing.T) {
-	type testCase struct {
-		name string
-		f    interface{}
+func TestCreateFunctionCallsFunctionWithMap(t *testing.T) {
+	myfunc := func(a, b map[string]string) (map[string]string, error) {
+		// add a to b
+		for k, v := range a {
+			b[k] = v
+		}
+
+		return b, nil
 	}
 
-	cases := []testCase{
-		{
-			name: "integer input parameters",
-			f: func(a, b int) (int, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "int16 input parameters",
-			f: func(a, b int16) (int16, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "int32 input parameters",
-			f: func(a, b int32) (int32, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "int64 input parameters",
-			f: func(a, b int64) (int64, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint input parameters",
-			f: func(a, b uint) (uint, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint16 input parameters",
-			f: func(a, b uint16) (uint16, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint32 input parameters",
-			f: func(a, b uint32) (uint32, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint64 input parameters",
-			f: func(a, b uint64) (uint64, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "float32 input parameters",
-			f: func(a, b float32) (float32, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "float64 input parameters",
-			f: func(a, b float64) (float64, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "string input parameters",
-			f: func(a, b string) (string, error) {
-				return a + b, nil
-			},
-		},
-	}
+	ctyFunc, err := createCtyFunctionFromGoFunc(myfunc)
+	require.NoError(t, err)
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			_, err := createCtyFunctionFromGoFunc(c.f)
-			require.NoError(t, err)
-		})
-	}
+	a := cty.MapVal(map[string]cty.Value{
+		"one": cty.StringVal("1"),
+		"two": cty.StringVal("2"),
+	})
+
+	b := cty.MapVal(map[string]cty.Value{
+		"three": cty.StringVal("3"),
+		"four":  cty.StringVal("4"),
+	})
+
+	val, err := ctyFunc.Call([]cty.Value{a, b})
+	require.NoError(t, err)
+
+	bf := val.AsValueMap()
+	require.Equal(t, cty.StringVal("1"), bf["one"])
 }
 
 func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {

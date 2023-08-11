@@ -63,9 +63,9 @@ func HashString(in string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// Sharif dont like it
-// Rock the cast var
-// Rock the cast var
+// Sharif dont like it,
+// Rock the cast var,
+// Rock the cast var,
 func castVar(v cty.Value) interface{} {
 	if v.Type() == cty.String {
 		return v.AsString()
