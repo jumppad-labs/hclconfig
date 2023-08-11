@@ -43,19 +43,27 @@ func main() {
 		return test.FunctionDetails{}, nil
 	})
 
-	ferr := p.RegisterFunction("with_headers", func(headers map[string]string) (test.FunctionDetails, error) {
+	p.RegisterFunction("script", func(path string) (test.FunctionDetails, error) {
 		return test.FunctionDetails{}, nil
 	})
 
-	if ferr != nil {
-		panic(ferr)
-	}
-
-	p.RegisterFunction("and_body", func(body string) (test.FunctionDetails, error) {
+	p.RegisterFunction("with_headers", func(headers map[string]string) (test.FunctionDetails, error) {
 		return test.FunctionDetails{}, nil
 	})
 
-	p.RegisterFunction("to_return_status_code", func(code int) (test.FunctionDetails, error) {
+	p.RegisterFunction("with_arguments", func(headers map[string]string) (test.FunctionDetails, error) {
+		return test.FunctionDetails{}, nil
+	})
+
+	p.RegisterFunction("with_body", func(body string) (test.FunctionDetails, error) {
+		return test.FunctionDetails{}, nil
+	})
+
+	p.RegisterFunction("return_status_code", func(code int) (test.FunctionDetails, error) {
+		return test.FunctionDetails{}, nil
+	})
+
+	p.RegisterFunction("have_an_exit_code", func(code int) (test.FunctionDetails, error) {
 		return test.FunctionDetails{}, nil
 	})
 
@@ -63,11 +71,15 @@ func main() {
 		return test.FunctionDetails{}, nil
 	})
 
-	p.RegisterFunction("the_body_contains", func(contents string) (test.FunctionDetails, error) {
+	p.RegisterFunction("body_contains", func(contents string) (test.FunctionDetails, error) {
 		return test.FunctionDetails{}, nil
 	})
 
 	p.RegisterFunction("body", func() (test.FunctionDetails, error) {
+		return test.FunctionDetails{}, nil
+	})
+
+	p.RegisterFunction("output", func(out string) (test.FunctionDetails, error) {
 		return test.FunctionDetails{}, nil
 	})
 

@@ -31,7 +31,7 @@ type Context struct {
 	Description string `hcl:"description,label" json:"description,omitempty"`
 
 	// Env contains a map of environments that are set before each parse
-	Env map[string]string `hcl:"env,remain" json:"env,omitempty"`
+	Env map[string]string `hcl:"env,optional" json:"env,omitempty"`
 
 	// Variables are HCL variables that are set before each parse
 	Variables cty.Value `hcl:"variables,optional" json:"variables,omitempty"`
@@ -69,7 +69,7 @@ type It struct {
 	To []FunctionDetails `hcl:"to,optional" json:"to,omitempty"`
 
 	// Outputs are variables that are made available to other it blocks
-	Outputs map[string]cty.Value `hcl:"outputs,optional" json:"outputs,omitempty"`
+	Outputs map[string]FunctionDetails `hcl:"outputs,optional" json:"outputs,omitempty"`
 }
 
 type FunctionDetails struct {

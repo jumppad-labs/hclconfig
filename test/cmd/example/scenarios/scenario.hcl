@@ -6,6 +6,12 @@ variable "next_button" {
   default = ".next_button"
 }
 
+variable "outputs" {
+  default = {
+    consul_leader = "10.1.23.3"
+  }
+}
+
 resource "scenario" "testing_modules" {
   description = "The configurations modules should be tested"
 
@@ -40,13 +46,15 @@ resource "test" "welcome_page" {
   before = []
 
   it "should create the following the resources for the module" {
-    expect = resources_are_created([
-      resource.postgres.mydb.id,
-      resource.postgres.other1.id,
-      resource.postgres.other2.id,
-      resource.config.myapp.id,
-      ]
-    ) // assertion function
+    expect = [
+      resources_are_created([
+        resource.postgres.mydb.id,
+        resource.postgres.other1.id,
+        resource.postgres.other2.id,
+        resource.config.myapp.id,
+        ]
+      ) // assertion function
+    ]
   }
 
   it "should be possible to query the consul members on the second cluster" {
@@ -71,7 +79,7 @@ resource "test" "welcome_page" {
   it "should be possible to check the leader is reachable" {
     expect = [
       script("./script.sh"),
-      with_arguments({ leader_ip = outputs.consul_leader }), // parameter function
+      with_arguments({ leader_ip = variable.outputs.consul_leader }), // parameter function
     ]
 
     to = [

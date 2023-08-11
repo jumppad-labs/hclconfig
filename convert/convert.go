@@ -6,13 +6,23 @@ import (
 	"github.com/zclconf/go-cty/cty/gocty"
 )
 
-func GoToCtyValue(val interface{}) (cty.Value, error) {
+func GoToCtyValue(val interface{}) (t cty.Value, err error) {
 	typ, err := gocty.ImpliedType(val)
 	if err != nil {
 		return cty.False, err
 	}
 
-	ctyVal, err := gocty.ToCtyValue(val, typ)
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				err = e
+			} else {
+				panic(r)
+			}
+		}
+	}()
+
+	t, err = gocty.ToCtyValue(val, typ)
 	if err != nil {
 		return cty.False, err
 	}
@@ -28,17 +38,17 @@ func GoToCtyValue(val interface{}) (cty.Value, error) {
 			return cty.False, err
 		}
 
-		objMap := ctyVal.AsValueMap()
+		objMap := t.AsValueMap()
 		metaMap := metaVal.AsValueMap()
 
 		for k, v := range metaMap {
 			objMap[k] = v
 		}
 
-		ctyVal = cty.ObjectVal(objMap)
+		t = cty.ObjectVal(objMap)
 	}
 
-	return ctyVal, nil
+	return t, err
 }
 
 func CtyToGo(val cty.Value, target interface{}) error {
