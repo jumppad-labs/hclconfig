@@ -1,6 +1,8 @@
 package test
 
 import (
+	"encoding/json"
+
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -22,7 +24,7 @@ type Scenario struct {
 	Contexts []Context `hcl:"context,block" json:"contexts"`
 
 	// Test configurations for the tests that will be executed
-	Test []Test `hcl:"tests" json:"tests"`
+	Tests []Test `hcl:"tests" json:"tests"`
 }
 
 // Context holds configuration prameters
@@ -73,8 +75,19 @@ type It struct {
 }
 
 type FunctionDetails struct {
-	Name        string      `hcl:"name" json:"name"`               // http_post
-	Description string      `hcl:"description" json:"description"` // a http post is executed
-	Type        string      `hcl:"type" json:"type"`               // command, parameter, comparitor
-	Parameters  []cty.Value `hcl:"parameters" json:"parameters"`   // input params that function gets
+	Name        string             `hcl:"name" json:"name"`               // http_post
+	Description string             `hcl:"description" json:"description"` // a http post is executed
+	Type        string             `hcl:"type" json:"type"`               // command, parameter, comparitor
+	Parameters  SerializableParams `hcl:"parameters" json:"parameters"`   // input params that function gets
+}
+
+type SerializableParams string
+
+func (s SerializableParams) Serialize(p interface{}) {
+	d, _ := json.Marshal(p)
+	s = string(d)
+}
+
+func (s SerializableParams) Deserialize(i interface{}) {
+	json.Unmarshal([]byte(p), &i)
 }
