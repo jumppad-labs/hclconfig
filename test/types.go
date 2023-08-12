@@ -75,19 +75,19 @@ type It struct {
 }
 
 type FunctionDetails struct {
-	Name        string             `hcl:"name" json:"name"`               // http_post
-	Description string             `hcl:"description" json:"description"` // a http post is executed
-	Type        string             `hcl:"type" json:"type"`               // command, parameter, comparitor
-	Parameters  SerializableParams `hcl:"parameters" json:"parameters"`   // input params that function gets
+	Name        string `hcl:"name" json:"name"`               // http_post
+	Description string `hcl:"description" json:"description"` // a http post is executed
+	Type        string `hcl:"type" json:"type"`               // command, parameter, comparitor
+	Parameters  string `hcl:"parameters" json:"parameters"`   // input params that function gets
 }
 
 type SerializableParams string
 
-func (s SerializableParams) Serialize(p interface{}) {
+func (s *SerializableParams) Serialize(p interface{}) {
 	d, _ := json.Marshal(p)
-	s = string(d)
+	*s = SerializableParams(d)
 }
 
-func (s SerializableParams) Deserialize(i interface{}) {
-	json.Unmarshal([]byte(p), &i)
+func (s *SerializableParams) Deserialize(i interface{}) {
+	json.Unmarshal([]byte(*s), &i)
 }

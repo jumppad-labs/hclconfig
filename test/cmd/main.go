@@ -152,13 +152,74 @@ func parseCallback(r htypes.Resource) error {
 		// iterate each test and it and build a command
 		for _, t := range r.(*test.Scenario).Tests {
 			for _, i := range t.Its {
+				t := setupTestContext()
+
 				fmt.Println(i.Description)
-				processCommand(i.Expect)
+
+				// process this expectations, this is where we do any work
+				err := processExpect(t, i.Expect)
+				if err != nil {
+					return fmt.Errorf("test failed, '%s' with error '%s'", i.Description, err)
+				}
+
+				// process the assertions
+				err = processAssert(t, i.To)
+				if err != nil {
+					return fmt.Errorf("test failed, '%s' with error '%s'", i.Description, err)
+				}
 			}
 		}
 	}
 
 	return nil
+}
+
+// to call a command we itterate backwards over a list of functions
+// extracting the parameters which we pass to the
+func processExpect(t *TestContext, funcs []test.FunctionDetails) error {
+	ctx := t.Context
+
+	// we need to execute expects backwards as the parameters will always come before the command
+	for i := len(funcs) - 1; i >= 0; i-- {
+		f := funcs[i]
+
+		fmt.Println("  function ", f.Name)
+
+		var err error
+		ctx, err = t.CallFunction(f.Name, f.Parameters, ctx)
+		if err != nil {
+			return fmt.Errorf("expectation error: %s", err)
+		}
+	}
+
+	return nil
+}
+
+func processAssert(t *TestContext, funcs []test.FunctionDetails) error {
+	ctx := t.Context
+	for i := len(funcs) - 1; i >= 0; i-- {
+		f := funcs[i]
+		fmt.Println("  function ", f.Name)
+
+		var err error
+		ctx, err = t.CallFunction(f.Name, f.Parameters, ctx)
+		if err != nil {
+			return fmt.Errorf("assertion error: %s", err)
+		}
+	}
+
+	return nil
+}
+
+func setupTestContext() *TestContext {
+	t := &TestContext{
+		Functions: map[string]interface{}{},
+		Context:   context.Background(),
+	}
+
+	t.Functions = functions
+
+	return t
 }
 
 type TestContext struct {
@@ -206,33 +267,4 @@ func (t *TestContext) CallFunction(name string, p string, ctx context.Context) (
 	}
 
 	return c, e
-}
-
-func setupTestContext() *TestContext {
-	t := &TestContext{
-		Functions: map[string]interface{}{},
-		Context:   context.Background(),
-	}
-
-	t.Functions = functions
-
-	return t
-}
-
-// to call a command we itterate backwards over a list of functions
-// extracting the parameters which we pass to the
-func processCommand(funcs []test.FunctionDetails) error {
-	t := setupTestContext()
-	ctx := t.Context
-	for _, f := range funcs {
-		fmt.Println("  function ", f.Name)
-
-		var err error
-		ctx, err = t.CallFunction(f.Name, f.Parameters, ctx)
-		if err != nil {
-			fmt.Printf("unable to call function: %s\n", err)
-		}
-	}
-
-	return nil
 }
