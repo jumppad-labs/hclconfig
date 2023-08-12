@@ -1,0 +1,40 @@
+TEST: 'we should test the features of the welcome page to ensure correctness'            [FAILED]
+  IT 'should create the following the resources in the module' .              [SUCCESS]
+    check the following resources are created:                     [SUCCESS]
+        resource.a.b
+        resource.a.b
+        resource.a.b
+        resource.a.b
+  IT 'should be possilb to query the conusl member on the second cluster"      [FAILED]
+    make a call to an HTTP server                                  [SUCCESS]
+    with the url:
+      https://google.com
+    and
+    the headers:
+      {blah = blah}
+    then expect
+    the body contains:                                             [FAILED]
+      hello
+    and
+    the status code is:
+      200
+
+ERROR 'assertion error: expected body '' to contain '10.10.1.1''
+
+example/scenarios/scenario.hcl:15,1
+   13 | }
+   14 | 
+   15 | resource "scenario" "testing_modules" {
+   16 |   description = "The configurations modules should be tested"
+   17 |  
+      |
+   60 |         it "should be possible to query the consul members on the second cluster" {
+      |
+   68 |           to = [
+   69 |             return_status_code(200),    // assertion function
+   70 |             and(),                      // comparitor function
+   71 |             body_contains("10.10.1.1"), // assertion function
+   72 |           ]
+
+Tests failed
+Scenarios 1, Passed 0, Failed 1

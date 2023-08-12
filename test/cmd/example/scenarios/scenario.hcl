@@ -41,7 +41,7 @@ resource "scenario" "testing_modules" {
 }
 
 resource "test" "welcome_page" {
-  description = "we should test the features of the welcom page to ensure correctness"
+  description = "we should test the features of the welcome page to ensure correctness"
 
   before = []
 
