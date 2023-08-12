@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"reflect"
 
 	"github.com/jumppad-labs/hclconfig"
 	"github.com/jumppad-labs/hclconfig/example/types"
@@ -12,6 +13,9 @@ import (
 	htypes "github.com/jumppad-labs/hclconfig/types"
 	"golang.org/x/net/context"
 )
+
+// list of registered functions that the test process can call
+var functions map[string]interface{}
 
 func main() {
 	o := hclconfig.DefaultOptions()
@@ -32,78 +36,98 @@ func main() {
 		return rand.Intn(100), nil
 	})
 
-	p.RegisterFunction("resources_are_created", func(res []string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "resources_are_created",
-		}, nil
-	})
+	functions = map[string]interface{}{}
 
-	p.RegisterFunction("http_post", func(uri string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name:       "http_post",
-			Parameters: paramsToString(uri),
-		}, nil
-	})
+	// generate a test func
+	f, err := test.CreateCtyTestFunctionFromGoFunc("http_post_func", "make a call to an HTTP server with the given url", "command", http_post_func)
+	if err != nil {
+		panic(err)
+	}
+	p.RegisterCTYFunction("http_post", f)
+	functions["http_post_func"] = http_post_func
 
-	p.RegisterFunction("script", func(path string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "script",
-		}, nil
-	})
+	f, err = test.CreateCtyTestFunctionFromGoFunc("with_headers", "with the headers", "parameter", with_headers)
+	if err != nil {
+		panic(err)
+	}
+	p.RegisterCTYFunction("with_headers", f)
+	functions["with_headers"] = with_headers
 
-	p.RegisterFunction("with_headers", func(headers map[string]string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "with_headers",
-		}, nil
-	})
+	f, err = test.CreateCtyTestFunctionFromGoFunc("with_body", "with the body", "parameter", with_body)
+	if err != nil {
+		panic(err)
+	}
 
-	p.RegisterFunction("with_arguments", func(headers map[string]string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "with_arguments",
-		}, nil
-	})
+	p.RegisterCTYFunction("with_body", f)
+	functions["with_body"] = with_body
 
-	p.RegisterFunction("with_body", func(body string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "with_body",
-		}, nil
-	})
+	f, err = test.CreateCtyTestFunctionFromGoFunc("body_contains", "the body contains", "assertion", body_contains)
+	if err != nil {
+		panic(err)
+	}
 
-	p.RegisterFunction("return_status_code", func(code int) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "return_status_code",
-		}, nil
-	})
+	p.RegisterCTYFunction("body_contains", f)
+	functions["body_contains"] = body_contains
 
-	p.RegisterFunction("have_an_exit_code", func(code int) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "has_an_exit_code",
-		}, nil
-	})
+	f, err = test.CreateCtyTestFunctionFromGoFunc("body", "output the body", "output", body)
+	if err != nil {
+		panic(err)
+	}
 
-	p.RegisterFunction("and", func() (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "and",
-		}, nil
-	})
+	p.RegisterCTYFunction("body", f)
+	functions["body"] = body
 
-	p.RegisterFunction("body_contains", func(contents string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "body_contains",
-		}, nil
-	})
+	f, err = test.CreateCtyTestFunctionFromGoFunc("return_status_code", "returns the status code", "assertion", return_status_code)
+	if err != nil {
+		panic(err)
+	}
 
-	p.RegisterFunction("body", func() (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "body_contains",
-		}, nil
-	})
+	p.RegisterCTYFunction("return_status_code", f)
+	functions["return_status_code"] = return_status_code
 
-	p.RegisterFunction("output", func(out string) (test.FunctionDetails, error) {
-		return test.FunctionDetails{
-			Name: "body_contains",
-		}, nil
-	})
+	f, err = test.CreateCtyTestFunctionFromGoFunc("resources_are_created", "check resources are created", "command", resources_are_created)
+	if err != nil {
+		panic(err)
+	}
+
+	p.RegisterCTYFunction("resources_are_created", f)
+	functions["resources_are_created"] = resources_are_created
+
+	f, err = test.CreateCtyTestFunctionFromGoFunc("script", "execute the script", "command", script)
+	if err != nil {
+		panic(err)
+	}
+
+	p.RegisterCTYFunction("script", f)
+	functions["script"] = script
+
+	f, err = test.CreateCtyTestFunctionFromGoFunc("with_arguments", "with the arguments", "arguments", with_arguments)
+	if err != nil {
+		panic(err)
+	}
+	p.RegisterCTYFunction("with_arguments", f)
+	functions["with_arguments"] = with_arguments
+
+	f, err = test.CreateCtyTestFunctionFromGoFunc("have_an_exit_code", "should have the exit code", "assertion", have_an_exit_code)
+	if err != nil {
+		panic(err)
+	}
+	p.RegisterCTYFunction("have_an_exit_code", f)
+	functions["have_an_exit_code"] = have_an_exit_code
+
+	f, err = test.CreateCtyTestFunctionFromGoFunc("output", "and output", "assertion", output)
+	if err != nil {
+		panic(err)
+	}
+	p.RegisterCTYFunction("output", f)
+	functions["output"] = output
+
+	f, err = test.CreateCtyTestFunctionFromGoFunc("and", "and equal", "comparitor", and)
+	if err != nil {
+		panic(err)
+	}
+	p.RegisterCTYFunction("and", f)
+	functions["and"] = and
 
 	fmt.Println("## Parse the config")
 	c, err := p.ParseDirectory("./example/scenarios")
@@ -138,7 +162,7 @@ func parseCallback(r htypes.Resource) error {
 }
 
 type TestContext struct {
-	Functions map[string]func(params string, ctx context.Context) (context.Context, error)
+	Functions map[string]interface{} // functions are held as a reference
 	Context   context.Context
 }
 
@@ -148,16 +172,49 @@ func (t *TestContext) CallFunction(name string, p string, ctx context.Context) (
 		return ctx, fmt.Errorf("function '%s' is not registered", name)
 	}
 
-	return f(p, ctx)
+	// we need to call the function using reflection
+	rf := reflect.ValueOf(f)
+
+	// we always pass the context
+	ctxVal := reflect.ValueOf(ctx)
+	inParams := []reflect.Value{ctxVal}
+
+	params := []json.RawMessage{}
+
+	// first deserialize the parameters into an array
+	json.Unmarshal([]byte(p), &params)
+
+	// then do a second pass deserialzing the json into the correct type
+	for i, p := range params {
+		inPar := rf.Type().In(i + 1)
+		inType := reflect.New(inPar)
+
+		json.Unmarshal(p, inType.Interface())
+
+		inParams = append(inParams, inType.Elem())
+	}
+
+	// then try to call the function using reflection
+	out := rf.Call(inParams)
+
+	// now fetch the context and the error from the output
+	var e error
+	c := out[0].Interface().(context.Context)
+
+	if !out[1].IsNil() {
+		e = out[1].Interface().(error)
+	}
+
+	return c, e
 }
 
 func setupTestContext() *TestContext {
 	t := &TestContext{
-		Functions: map[string]func(params string, c context.Context) (context.Context, error){},
+		Functions: map[string]interface{}{},
 		Context:   context.Background(),
 	}
 
-	t.Functions["http_post"] = http_post_func
+	t.Functions = functions
 
 	return t
 }
@@ -178,14 +235,4 @@ func processCommand(funcs []test.FunctionDetails) error {
 	}
 
 	return nil
-}
-
-// http_post_func makes a http post
-func http_post_func(p string, ctx context.Context) (context.Context, error) {
-	var uri string
-	paramsFromString(p, &uri)
-
-	fmt.Println("calling function with uri: %s", uri)
-
-	return ctx, nil
 }
