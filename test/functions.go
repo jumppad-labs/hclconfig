@@ -12,13 +12,13 @@ import (
 	"github.com/zclconf/go-cty/cty/gocty"
 )
 
-// testFunc is a function is a function that is executed by the testing process
+// TestFunc is a function is a function that is executed by the testing process
 // it has a manadator parameter of context that is used to recieive information regarding
 // the current testing environment. If the current test run times out, then the context will be cancelled.
 // params are optional parameters the the function will be called with, these will be the go types that
 // are converted from the hcl function call parameters.
 // If it needs to update the environment it does so by writing to context and returning.
-type testFunc func(ctx context.Context, params ...interface{}) (context.Context, error)
+type TestFunc func(ctx context.Context, l *Logger, params ...any) (context.Context, error)
 
 // creteCtyTestFunctionFromGoFunc creates a CTY function using t
 func CreateCtyTestFunctionFromGoFunc(name, description, typ string, f interface{}) (function.Function, error) {
@@ -30,13 +30,13 @@ func CreateCtyTestFunctionFromGoFunc(name, description, typ string, f interface{
 	}
 
 	// validate the input parameters
-	if rf.NumIn() < 1 {
-		return function.Function{}, fmt.Errorf("error with function %s, test functions must accept a minimum of one parameter, context.Context i.e func(ctx context.Context, a,b int) (context.Context, error)", rf.String())
+	if rf.NumIn() < 2 {
+		return function.Function{}, fmt.Errorf("error with function %s, test functions must accept a minimum of two parameter, context.Context i.e func(ctx context.Context, a,b int) (context.Context, error)", rf.String())
 	}
 
 	inParams := []function.Parameter{}
 	inTypes := []reflect.Type{}
-	if rf.NumIn() > 1 {
+	if rf.NumIn() > 2 {
 		var err error
 		inTypes, inParams, err = getInputParameters(rf)
 		if err != nil {
@@ -90,7 +90,7 @@ func getInputParameters(rf reflect.Type) ([]reflect.Type, []function.Parameter, 
 	inParams := []function.Parameter{}
 
 	// skip the first parameter as that is always context
-	for i := 1; i < rf.NumIn(); i++ {
+	for i := 2; i < rf.NumIn(); i++ {
 		funcParam := rf.In(i)
 
 		// create an instance of our type

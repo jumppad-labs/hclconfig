@@ -11,6 +11,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/example/types"
 	"github.com/jumppad-labs/hclconfig/test"
 	htypes "github.com/jumppad-labs/hclconfig/types"
+	"github.com/kylelemons/godebug/pretty"
 	"golang.org/x/net/context"
 )
 
@@ -129,10 +130,10 @@ func main() {
 	p.RegisterCTYFunction("and", f)
 	functions["and"] = and
 
-	fmt.Println("## Parse the config")
 	c, err := p.ParseDirectory("./example/scenarios")
 	if err != nil {
-		fmt.Printf("An error occurred processing the config: %s\n", err)
+		l := test.NewLogger(test.DefaultOptions())
+		l.LogError(err.Error())
 		os.Exit(1)
 	}
 
@@ -145,16 +146,19 @@ func main() {
 }
 
 func parseCallback(r htypes.Resource) error {
-	fmt.Printf("resource '%s' named '%s' has been parsed from the file: %s\n", r.Metadata().Type, r.Metadata().Name, r.Metadata().File)
+	l := test.NewLogger(test.DefaultOptions())
 
 	if r.Metadata().Type == "scenario" {
-		fmt.Println("")
-		// iterate each test and it and build a command
-		for _, t := range r.(*test.Scenario).Tests {
-			for _, i := range t.Its {
-				t := setupTestContext()
+		s := r.(*test.Scenario)
 
-				fmt.Println(i.Description)
+		l.LogScenario(s.Description)
+
+		// iterate each test and it and build a command
+		for _, t := range s.Tests {
+			for _, i := range t.Its {
+				t := setupTestContext(l)
+
+				l.LogIt(i.Description)
 
 				// process this expectations, this is where we do any work
 				err := processExpect(t, i.Expect)
@@ -183,10 +187,8 @@ func processExpect(t *TestContext, funcs []test.FunctionDetails) error {
 	for i := len(funcs) - 1; i >= 0; i-- {
 		f := funcs[i]
 
-		fmt.Println("  function ", f.Name)
-
 		var err error
-		ctx, err = t.CallFunction(f.Name, f.Parameters, ctx)
+		ctx, err = t.CallFunction(f.Name, f.Description, f.Parameters, ctx)
 		if err != nil {
 			return fmt.Errorf("expectation error: %s", err)
 		}
@@ -199,10 +201,9 @@ func processAssert(t *TestContext, funcs []test.FunctionDetails) error {
 	ctx := t.Context
 	for i := len(funcs) - 1; i >= 0; i-- {
 		f := funcs[i]
-		fmt.Println("  function ", f.Name)
 
 		var err error
-		ctx, err = t.CallFunction(f.Name, f.Parameters, ctx)
+		ctx, err = t.CallFunction(f.Name, f.Description, f.Parameters, ctx)
 		if err != nil {
 			return fmt.Errorf("assertion error: %s", err)
 		}
@@ -211,10 +212,11 @@ func processAssert(t *TestContext, funcs []test.FunctionDetails) error {
 	return nil
 }
 
-func setupTestContext() *TestContext {
+func setupTestContext(l *test.Logger) *TestContext {
 	t := &TestContext{
 		Functions: map[string]interface{}{},
 		Context:   context.Background(),
+		Logger:    l,
 	}
 
 	t.Functions = functions
@@ -225,9 +227,10 @@ func setupTestContext() *TestContext {
 type TestContext struct {
 	Functions map[string]interface{} // functions are held as a reference
 	Context   context.Context
+	Logger    *test.Logger
 }
 
-func (t *TestContext) CallFunction(name string, p string, ctx context.Context) (context.Context, error) {
+func (t *TestContext) CallFunction(name string, description, p string, ctx context.Context) (context.Context, error) {
 	f, ok := t.Functions[name]
 	if !ok {
 		return ctx, fmt.Errorf("function '%s' is not registered", name)
@@ -236,9 +239,10 @@ func (t *TestContext) CallFunction(name string, p string, ctx context.Context) (
 	// we need to call the function using reflection
 	rf := reflect.ValueOf(f)
 
-	// we always pass the context
+	// we always pass the context and logger
 	ctxVal := reflect.ValueOf(ctx)
-	inParams := []reflect.Value{ctxVal}
+	logVal := reflect.ValueOf(t.Logger)
+	inParams := []reflect.Value{ctxVal, logVal}
 
 	params := []json.RawMessage{}
 
@@ -247,12 +251,21 @@ func (t *TestContext) CallFunction(name string, p string, ctx context.Context) (
 
 	// then do a second pass deserialzing the json into the correct type
 	for i, p := range params {
-		inPar := rf.Type().In(i + 1)
+		inPar := rf.Type().In(i + 2)
 		inType := reflect.New(inPar)
 
 		json.Unmarshal(p, inType.Interface())
 
 		inParams = append(inParams, inType.Elem())
+	}
+
+	t.Logger.LogFunctionDescription(description)
+	for i, p := range inParams {
+		if i < 2 {
+			continue
+		}
+
+		t.Logger.LogFunctionLine(pretty.Sprint(p.Interface()))
 	}
 
 	// then try to call the function using reflection

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jumppad-labs/hclconfig/test"
 	"golang.org/x/net/context"
 )
 
 // http_post_func makes a http post
-func http_post_func(ctx context.Context, uri string) (context.Context, error) {
+func http_post_func(ctx context.Context, l *test.Logger, uri string) (context.Context, error) {
 	body := ""
 	headers := map[string]string{}
 
@@ -20,7 +21,8 @@ func http_post_func(ctx context.Context, uri string) (context.Context, error) {
 		body = v.(string)
 	}
 
-	fmt.Printf("     http_post_func called with uri: %s, headers: %#v, body: %s\n", uri, headers, body)
+	_ = body
+	_ = headers
 
 	// set the status code and the body for assertions
 	ctx = context.WithValue(ctx, "response_body", "ok")
@@ -29,19 +31,19 @@ func http_post_func(ctx context.Context, uri string) (context.Context, error) {
 	return ctx, nil
 }
 
-func with_headers(ctx context.Context, headers map[string]string) (context.Context, error) {
+func with_headers(ctx context.Context, l *test.Logger, headers map[string]string) (context.Context, error) {
 	// set the headers to the context
 	ctx = context.WithValue(ctx, "headers", headers)
 	return ctx, nil
 }
 
-func with_body(ctx context.Context, body string) (context.Context, error) {
+func with_body(ctx context.Context, l *test.Logger, body string) (context.Context, error) {
 	// set the headers to the context
 	ctx = context.WithValue(ctx, "body", body)
 	return ctx, nil
 }
 
-func body_contains(ctx context.Context, contains string) (context.Context, error) {
+func body_contains(ctx context.Context, l *test.Logger, contains string) (context.Context, error) {
 	body := ""
 
 	if b := ctx.Value("response_body"); b != nil {
@@ -55,7 +57,7 @@ func body_contains(ctx context.Context, contains string) (context.Context, error
 	return ctx, nil
 }
 
-func return_status_code(ctx context.Context, code int) (context.Context, error) {
+func return_status_code(ctx context.Context, l *test.Logger, code int) (context.Context, error) {
 	scode := 0
 
 	if c := ctx.Value("response_code"); c != nil {
@@ -69,30 +71,30 @@ func return_status_code(ctx context.Context, code int) (context.Context, error) 
 	return ctx, nil
 }
 
-func body(ctx context.Context) (context.Context, error) {
+func body(ctx context.Context, l *test.Logger) (context.Context, error) {
 	return ctx, nil
 }
 
-func resources_are_created(ctx context.Context, r []string) (context.Context, error) {
+func resources_are_created(ctx context.Context, l *test.Logger, r []string) (context.Context, error) {
 	return ctx, nil
 }
 
-func script(ctx context.Context, path string) (context.Context, error) {
+func script(ctx context.Context, l *test.Logger, path string) (context.Context, error) {
 	return ctx, nil
 }
 
-func with_arguments(ctx context.Context, headers map[string]string) (context.Context, error) {
+func with_arguments(ctx context.Context, l *test.Logger, headers map[string]string) (context.Context, error) {
 	return ctx, nil
 }
 
-func have_an_exit_code(ctx context.Context, code int) (context.Context, error) {
+func have_an_exit_code(ctx context.Context, l *test.Logger, code int) (context.Context, error) {
 	return ctx, nil
 }
 
-func output(ctx context.Context, out string) (context.Context, error) {
+func output(ctx context.Context, l *test.Logger, out string) (context.Context, error) {
 	return ctx, nil
 }
 
-func and(ctx context.Context) (context.Context, error) {
+func and(ctx context.Context, l *test.Logger) (context.Context, error) {
 	return ctx, nil
 }
