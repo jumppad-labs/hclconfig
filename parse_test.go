@@ -820,37 +820,37 @@ func TestParserErrorOutputsString(t *testing.T) {
 
 func TestParserRejectsInvalidResourceName(t *testing.T) {
 	// should reject names starting with a number
-	err := validateResourceName("0")
+	err := validateResourceType("0")
 	require.Error(t, err)
 
 	// should reject names containing invalid characters
-	err = validateResourceName("my resource")
+	err = validateResourceType("my resource")
 	require.Error(t, err)
 
-	err = validateResourceName("my*resource")
+	err = validateResourceType("my*resource")
 	require.Error(t, err)
 
 	// should reject reserved names
-	err = validateResourceName("variable")
+	err = validateResourceType("variable")
 	require.Error(t, err)
 
-	err = validateResourceName("output")
+	err = validateResourceType("output")
 	require.Error(t, err)
 
-	err = validateResourceName("resource")
+	err = validateResourceType("resource")
 	require.Error(t, err)
 
-	err = validateResourceName("module")
+	err = validateResourceType("module")
 	require.Error(t, err)
 
 	// should be valid
-	err = validateResourceName("0232module")
+	err = validateResourceType("0232module")
 	require.NoError(t, err)
 
-	err = validateResourceName("0232m_od-ule")
+	err = validateResourceType("0232m_od-ule")
 	require.NoError(t, err)
 
-	err = validateResourceName("my_Module")
+	err = validateResourceType("my_Module")
 	require.NoError(t, err)
 }
 

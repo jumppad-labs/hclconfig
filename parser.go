@@ -543,12 +543,12 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	}
 
 	name := b.Labels[0]
-	if err := validateResourceName(name); err != nil {
+	if err := validateResourceType(name); err != nil {
 		de := ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Message = err.Error()
+		de.Message = fmt.Sprintf("unable to validate resource type: %s", err.Error())
 
 		return de
 	}
@@ -579,7 +579,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Message = err.Error()
+		de.Message = fmt.Sprintf("unable to set dependent resources: %s", err.Error())
 
 		return de
 	}
@@ -689,18 +689,19 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
+		typ := b.Labels[0]
 		name := b.Labels[1]
-		if err := validateResourceName(name); err != nil {
+		if err := validateResourceType(typ); err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = de.Error()
+			de.Message = fmt.Sprintf("unable to validate resource name: %s", err)
 
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
+		rt, err = p.registeredTypes.CreateResource(typ, name)
 		if err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
@@ -711,7 +712,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return err
 		}
 	} else {
-		// if the type does not have a subtype the name should be the first label
+		// if the type does not have a subtype the resource type should be the first label
 		if len(b.Labels) != 1 {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
@@ -722,18 +723,18 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		name := b.Labels[0]
-		if err := validateResourceName(name); err != nil {
+		typ := b.Labels[0]
+		if err := validateResourceType(typ); err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = err.Error()
+			de.Message = fmt.Sprintf("unable to validate resource name: %s", err)
 
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(b.Type, name)
+		rt, err = p.registeredTypes.CreateResource(b.Type, typ)
 		if err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
@@ -1348,23 +1349,21 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 	return conf, nil
 }
 
-func validateResourceName(name string) error {
-	for k, _ := range types.TopLevelTypes {
-		if k == name {
-			return fmt.Errorf("invalid resource name %s, resources can not use the reserved names %#v", name, types.TopLevelTypes)
-		}
+func validateResourceType(name string) error {
+	if types.TopLevelTypes.Contains(name) {
+		return fmt.Errorf("invalid resource type '%s', resources can not use the reserved names '%#v'", name, types.TopLevelTypes.Keys())
 	}
 
 	invalidChars := `^[0-9]*$`
 	r, _ := regexp.Compile(invalidChars)
 	if r.MatchString(name) {
-		return fmt.Errorf("invalid resource name %s, resources can not be given a numeric identifier", name)
+		return fmt.Errorf("invalid resource type '%s', resources can not be given a numeric identifier", name)
 	}
 
 	invalidChars = `[^0-9a-zA-Z_-]`
 	r, _ = regexp.Compile(invalidChars)
 	if r.MatchString(name) {
-		return fmt.Errorf("invalid resource name %s, resources can only contain the characters 0-9 a-z A-Z _ -", name)
+		return fmt.Errorf(`invalid resource type '%s', resources can only contain the characters '0-9 a-z A-Z _ -'`, name)
 	}
 
 	return nil
