@@ -1246,17 +1246,9 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			strExpression += t.(hcl.TraverseRoot).Name
 
 			// if this is not a resource reference quit
-			foundTLT := false
-			for k, _ := range types.TopLevelTypes {
-				if k == strExpression && strExpression != types.TypeVariable {
-					foundTLT = true
-				}
-			}
-
-			if foundTLT {
+			if !types.TopLevelTypes.Contains(strExpression) || strExpression == types.TypeVariable {
 				return "", nil
 			}
-
 		} else {
 			// does this exist in the context
 			switch t.(type) {

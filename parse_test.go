@@ -633,7 +633,6 @@ func TestSetContextVariableFromPathWithIndex(t *testing.T) {
 
 	require.NoError(t, err)
 
-	fmt.Println(ctx.Variables["resource"].AsValueMap()["foo"].Type().FriendlyName())
 	require.True(t, ctx.Variables["resource"].AsValueMap()["foo"].AsValueSlice()[0].AsValueMap()["bar"].True())
 	require.Equal(t, "Hello World", ctx.Variables["resource"].AsValueMap()["foo"].AsValueSlice()[1].AsValueMap()["biz"].AsString())
 }

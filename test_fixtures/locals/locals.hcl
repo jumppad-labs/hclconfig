@@ -17,7 +17,7 @@ resource "container" "consul" {
   }
 }
 
-local "test" {
+local "mylocal" {
 
   //value = resource.container.consul.name
   value = resource.container.consul.name == "consul" ? "yes" : "no"
@@ -38,7 +38,7 @@ resource "template" "consul_config_update" {
 resource "template" "consul_config_update2" {
   disabled = false
 
-  source = local.test
+  source = local.mylocal
 
   destination = "./consul.hcl"
 

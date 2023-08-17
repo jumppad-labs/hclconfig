@@ -54,6 +54,7 @@ var TopLevelTypes = TopLevelTypesList{
 	"output":   TypeDefinition{HasSubType: false},
 	"module":   TypeDefinition{HasSubType: false},
 	"variable": TypeDefinition{HasSubType: false},
+	"local":    TypeDefinition{HasSubType: false},
 	"scenario": TypeDefinition{HasSubType: false},
 	"test":     TypeDefinition{HasSubType: false},
 }
