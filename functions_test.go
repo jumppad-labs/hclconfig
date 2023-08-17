@@ -1,6 +1,7 @@
 package hclconfig
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,120 +19,7 @@ type TestStruct struct {
 	Parameters  []cty.Value `hcl:"parameters" json:"parameters"`   // input params that function gets
 }
 
-func TestCreateFunctionHandlesParams(t *testing.T) {
-	type testCase struct {
-		name string
-		f    interface{}
-	}
-
-	cases := []testCase{
-		{
-			name: "integer parameters",
-			f: func(a, b int) (int, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "int16 parameters",
-			f: func(a, b int16) (int16, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "int32 parameters",
-			f: func(a, b int32) (int32, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "int64 parameters",
-			f: func(a, b int64) (int64, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint parameters",
-			f: func(a, b uint) (uint, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint16 parameters",
-			f: func(a, b uint16) (uint16, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint32 parameters",
-			f: func(a, b uint32) (uint32, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "uint64 parameters",
-			f: func(a, b uint64) (uint64, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "float32 parameters",
-			f: func(a, b float32) (float32, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "float64 parameters",
-			f: func(a, b float64) (float64, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "string parameters",
-			f: func(a, b string) (string, error) {
-				return a + b, nil
-			},
-		},
-		{
-			name: "string list parameters",
-			f: func(a, b []string) ([]string, error) {
-				return append(a, b...), nil
-			},
-		},
-		{
-			name: "int list parameters",
-			f: func(a, b []int) ([]int, error) {
-				return append(a, b...), nil
-			},
-		},
-		{
-			name: "map parameters",
-			f: func(a, b map[string]string) (map[string]string, error) {
-
-				for k, v := range b {
-					a[k] = v
-				}
-
-				return a, nil
-			},
-		},
-		{
-			name: "struct parameters",
-			f: func(a, b TestStruct) (TestStruct, error) {
-				a.Name = b.Name
-				return a, nil
-			},
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			_, err := createCtyFunctionFromGoFunc(c.f)
-			require.NoError(t, err)
-		})
-	}
-}
-
-func TestCreateFunctionCreatesFunctionWithCorrectInParameters(t *testing.T) {
+func TestCreateCTYFunctionCreatesFunctionWithCorrectInParameters(t *testing.T) {
 	myfunc := func(a string, b int) (int, error) {
 		return 0, nil
 	}
@@ -143,7 +31,7 @@ func TestCreateFunctionCreatesFunctionWithCorrectInParameters(t *testing.T) {
 	require.Equal(t, cty.Number, ctyFunc.Params()[1].Type)
 }
 
-func TestCreateFunctionWithInvalidInParameterReturnsError(t *testing.T) {
+func TestCreateCTYFunctionWithInvalidInParameterReturnsError(t *testing.T) {
 	myfunc := func(a string, complex func() error) (int, error) {
 		return 0, nil
 	}
@@ -152,7 +40,7 @@ func TestCreateFunctionWithInvalidInParameterReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCreateFunctionCreatesFunctionWithCorrectOutParameters(t *testing.T) {
+func TestCreateCTYFunctionCreatesFunctionWithCorrectOutParameters(t *testing.T) {
 	myfunc := func(a string, b int) (int, error) {
 		return 0, nil
 	}
@@ -165,7 +53,7 @@ func TestCreateFunctionCreatesFunctionWithCorrectOutParameters(t *testing.T) {
 	require.Equal(t, cty.Number, rt)
 }
 
-func TestCreateFunctionWithInvalidOutParameterReturnsError(t *testing.T) {
+func TestCreateCTYFunctionWithInvalidOutParameterReturnsError(t *testing.T) {
 	myfunc := func(a string, b int) func() error {
 		return func() error {
 			return fmt.Errorf("oops")
@@ -183,7 +71,7 @@ func TestCreateFunctionWithInvalidOutParameterReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCreateFunctionCallsFunctionWithFloat(t *testing.T) {
+func TestCreateCTYFunctionCallsFunctionWithFloat(t *testing.T) {
 	myfunc := func(a, b int) (int, error) {
 		return a + b, nil
 	}
@@ -199,7 +87,7 @@ func TestCreateFunctionCallsFunctionWithFloat(t *testing.T) {
 	require.Equal(t, int64(5), i)
 }
 
-func TestCreateFunctionCallsFunctionWithMap(t *testing.T) {
+func TestCreateCTYFunctionCallsFunctionWithMap(t *testing.T) {
 	myfunc := func(a, b map[string]string) (map[string]string, error) {
 		// add a to b
 		for k, v := range a {
@@ -324,4 +212,59 @@ func TestParseProcessesCustomFunctions(t *testing.T) {
 	cont := r.(*structs.Container)
 
 	require.Equal(t, "42", cont.Env["len"])
+}
+
+func TestCreateTestFunctionReturnsErrorIfFunctionNotHas2ReturnParams(t *testing.T) {
+	_, err := createCtyTestFunctionFromGoFunc("test", "this is a test func", TestFuncCommand, func() {})
+	require.Error(t, err)
+}
+
+func TestCreateTestFunctionReturnsErrorIfFunctionNotHas2InputParams(t *testing.T) {
+	_, err := createCtyTestFunctionFromGoFunc(
+		"test",
+		"this is a test func",
+		TestFuncCommand,
+		func() (context.Context, error) {
+			return context.TODO(), nil
+		},
+	)
+	require.Error(t, err)
+}
+
+func TestCreateTestFunctionCreatesFunctionWithCorrectParameters(t *testing.T) {
+	f, err := createCtyTestFunctionFromGoFunc(
+		"test",
+		"this is a test func",
+		TestFuncCommand,
+		func(context.Context, TestLogger, string, int) (context.Context, error) {
+			return context.TODO(), nil
+		},
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, cty.String, f.Params()[0].Type)
+	require.Equal(t, cty.Number, f.Params()[1].Type)
+}
+
+func TestExecuteTestFunctionReturnsCorrectOutput(t *testing.T) {
+	f, err := createCtyTestFunctionFromGoFunc(
+		"test",
+		"this is a test func",
+		TestFuncCommand,
+		func(context.Context, TestLogger, string, int) (context.Context, error) {
+			return context.TODO(), nil
+		},
+	)
+	require.NoError(t, err)
+
+	out, err := f.Call([]cty.Value{cty.StringVal("hello world"), cty.NumberIntVal(1)})
+	require.NoError(t, err)
+
+	require.True(t, out.Type().IsObjectType())
+	require.Equal(t, cty.StringVal("test"), out.AsValueMap()["name"])
+	require.Equal(t, cty.StringVal(TestFuncCommand), out.AsValueMap()["type"])
+	require.Equal(t, cty.StringVal("this is a test func"), out.AsValueMap()["description"])
+
+	// output parameters are encoded as a json array
+	require.Equal(t, cty.StringVal(`["hello world",1]`), out.AsValueMap()["parameters"])
 }

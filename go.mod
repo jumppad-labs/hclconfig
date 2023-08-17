@@ -7,6 +7,7 @@ require (
 	github.com/flytam/filenamify v1.1.1
 	github.com/hashicorp/go-getter v1.7.0
 	github.com/hashicorp/hcl2 v0.0.0-20191002203319-fb75b3253c80
+	github.com/kylelemons/godebug v1.1.0
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
@@ -38,7 +39,6 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
@@ -49,6 +49,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/oauth2 v0.1.0 // indirect

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -118,6 +119,18 @@ func (p *Parser) RegisterCTYFunction(name string, ctyFunc function.Function) {
 	p.registeredFunctions[name] = ctyFunc
 }
 
+// RegisterTestFunction registers a go function that can be used by HCL tests
+func (p *Parser) RegisterTestFunction(name, description, typ string, f interface{}) error {
+	ctyFunc, err := createCtyTestFunctionFromGoFunc(name, description, typ, f)
+	if err != nil {
+		return err
+	}
+
+	p.RegisterCTYFunction(name, ctyFunc)
+
+	return nil
+}
+
 func (p *Parser) ParseFile(file string) (*Config, error) {
 	c := NewConfig()
 	rootContext = buildContext(file, p.registeredFunctions)
@@ -178,6 +191,21 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 
 	// process the files and resolve dependency
 	return c, p.process(c)
+}
+
+// TestConfig executes the test scenarios in the given folder.
+// Output from the tests is written in pretty format to the given writer,
+// if a test fails an error is returned
+func (p *Parser) TestConfig(dir string, output io.Writer) (*Config, error) {
+	c := NewConfig()
+	rootContext = buildContext(dir, p.registeredFunctions)
+
+	err := p.parseDirectory(rootContext, dir, c)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (p *Parser) process(c *Config) error {
@@ -397,9 +425,6 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
-// 98322294d372ccf762dfa54af247d9fe
-// b68f15e0da231e78f2e7067c9c830266
-
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
 func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) error {
 	parser := hclparse.NewParser()
@@ -426,34 +451,39 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			return de
 		}
 
+		// skip varaibles as they have allready been processed
+		if b.Type == types.TypeVariable {
+			continue
+		}
+
 		// create the registered type if not a variable or output
 		// variables and outputs are processed in a separate run
-		switch b.Type {
-		case types.TypeVariable:
-			continue
-		case types.TypeModule:
+		if b.Type == types.TypeModule {
 			err := p.parseModule(ctx, c, file, b, moduleName, dependsOn)
 			if err != nil {
 				return err
 			}
-		case types.TypeOutput:
-			fallthrough
-		case types.TypeLocal:
-			fallthrough
-		case types.TypeResource:
+
+			continue
+		}
+
+		if types.TopLevelTypes.Contains(b.Type) {
 			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn, disabled)
 			if err != nil {
 				return err
 			}
-		default:
-			de := ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
 
-			return de
+			continue
 		}
+
+		// if we get here we have not matched a type
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only '%s' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column, types.TopLevelTypes.Keys())
+
+		return de
 	}
 
 	return nil
@@ -635,15 +665,26 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	var rt types.Resource
 	var err error
 
-	switch b.Type {
-	case types.TypeResource:
+	// find the TypeDefinition
+	tdf, ok := types.TopLevelTypes[b.Type]
+	if !ok {
+		de := ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf("resource '%s', is not a registered top level type", b.Type)
+
+		return de
+	}
+
+	if tdf.HasSubType {
 		// if the type is resource there should be two labels, one for the type and one for the name
 		if len(b.Labels) != 2 {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = `"invalid formatting for 'resource' stanza, resources should have a name and a type, i.e. 'resource "type" "name" {}'`
+			de.Message = fmt.Sprintf(`invalid formatting for '%s' stanza, resources should have a name and a type, i.e. '%s "type" "name" {}'`, b.Type, b.Type)
 
 			return de
 		}
@@ -669,15 +710,14 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 			return err
 		}
-
-	case types.TypeLocal:
-		// if the type is local check there is one label
+	} else {
+		// if the type does not have a subtype the name should be the first label
 		if len(b.Labels) != 1 {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = `invalid formatting for 'local' stanza, resources should have a name and a type, i.e. 'local "name" {}'`
+			de.Message = fmt.Sprintf(`invalid formatting for '%s' stanza, resources should have a name and a type, i.e. '%s "name" {}'`, b.Type, b.Type)
 
 			return de
 		}
@@ -693,47 +733,13 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(types.TypeLocal, name)
+		rt, err = p.registeredTypes.CreateResource(b.Type, name)
 		if err != nil {
 			de := ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
 			de.Message = fmt.Sprintf(`unable to create local, this error should never happen %s`, err)
-
-			return de
-		}
-
-	case types.TypeOutput:
-		// if the type is output check there is one label
-		if len(b.Labels) != 1 {
-			de := ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = `invalid formatting for 'output' stanza, resources should have a name and a type, i.e. 'output "name" {}'`
-
-			return de
-		}
-
-		name := b.Labels[0]
-		if err := validateResourceName(name); err != nil {
-			de := ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = err.Error()
-
-			return de
-		}
-
-		rt, err = p.registeredTypes.CreateResource(types.TypeOutput, name)
-		if err != nil {
-			de := ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = fmt.Sprintf(`unable to create output, this error should never happen %s`, err)
 
 			return de
 		}
@@ -1240,9 +1246,17 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			strExpression += t.(hcl.TraverseRoot).Name
 
 			// if this is not a resource reference quit
-			if strExpression != "resource" && strExpression != "module" && strExpression != "local" && strExpression != "output" {
+			foundTLT := false
+			for k, _ := range types.TopLevelTypes {
+				if k == strExpression && strExpression != types.TypeVariable {
+					foundTLT = true
+				}
+			}
+
+			if foundTLT {
 				return "", nil
 			}
+
 		} else {
 			// does this exist in the context
 			switch t.(type) {
@@ -1343,8 +1357,10 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 }
 
 func validateResourceName(name string) error {
-	if name == "resource" || name == "module" || name == "output" || name == "variable" {
-		return fmt.Errorf("invalid resource name %s, resources can not use the reserved names [resource, module, output, variable]", name)
+	for k, _ := range types.TopLevelTypes {
+		if k == name {
+			return fmt.Errorf("invalid resource name %s, resources can not use the reserved names %#v", name, types.TopLevelTypes)
+		}
 	}
 
 	invalidChars := `^[0-9]*$`

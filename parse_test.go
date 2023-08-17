@@ -30,6 +30,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 	p.RegisterType("container", &structs.Container{})
 	p.RegisterType("network", &structs.Network{})
 	p.RegisterType("template", &structs.Template{})
+	p.RegisterType("test_browser", &structs.TestBrowser{})
 
 	return p
 }
