@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hashicorp/hcl2/hcl"
+	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"

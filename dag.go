@@ -8,8 +8,8 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/hashicorp/hcl2/gohcl"
-	"github.com/hashicorp/hcl2/hcl"
+	"github.com/hashicorp/hcl/v2/gohcl"
+	"github.com/hashicorp/hcl/v2"
 
 	"github.com/jumppad-labs/hclconfig/convert"
 	"github.com/jumppad-labs/hclconfig/types"

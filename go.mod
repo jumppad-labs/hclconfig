@@ -5,12 +5,12 @@ go 1.20
 require (
 	github.com/flytam/filenamify v1.1.1
 	github.com/hashicorp/go-getter v1.7.0
-	github.com/hashicorp/hcl2 v0.0.0-20191002203319-fb75b3253c80
+	github.com/hashicorp/hcl/v2 v2.17.0
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.8.1
-	github.com/zclconf/go-cty v1.12.0
+	github.com/zclconf/go-cty v1.13.0
 )
 
 require (
@@ -19,7 +19,6 @@ require (
 	cloud.google.com/go/iam v0.5.0 // indirect
 	cloud.google.com/go/storage v1.27.0 // indirect
 	github.com/agext/levenshtein v1.2.2 // indirect
-	github.com/apparentlymart/go-textseg v1.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.44.122 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
