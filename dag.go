@@ -8,10 +8,11 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/gohcl"
 
 	"github.com/jumppad-labs/hclconfig/convert"
+	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
@@ -68,7 +69,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			var err error
 			fqdn, err := types.ParseFQRN(d)
 			if err != nil {
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Line = resource.Metadata().Line
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
@@ -87,7 +88,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
 				deps, err := c.FindModuleResources(relFQDN.String(), true)
 				if err != nil {
-					pe := ParserError{}
+					pe := errors.ParserError{}
 					pe.Line = resource.Metadata().Line
 					pe.Column = resource.Metadata().Column
 					pe.Filename = resource.Metadata().File
@@ -111,7 +112,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
 				dep, err := c.FindResource(relFQDN.String())
 				if err != nil {
-					pe := ParserError{}
+					pe := errors.ParserError{}
 					pe.Line = resource.Metadata().Line
 					pe.Column = resource.Metadata().Column
 					pe.Filename = resource.Metadata().File
@@ -130,7 +131,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 			d, err := c.FindResource(fqdnString)
 			if err != nil {
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Line = resource.Metadata().Line
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
@@ -177,7 +178,9 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 	// Unfortunately returning an error with tfdiags does not stop the walk
 	hasError := atomic.Bool{}
 
-	return c.process(
+	pe := errors.NewConfigError()
+
+	errs := c.process(
 		func(v dag.Vertex) (diags dag.Diagnostics) {
 
 			r, ok := v.(types.Resource)
@@ -208,16 +211,22 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 		},
 		reverse,
 	)
+
+	for _, e := range errs {
+		pe.AppendProcessError(e)
+	}
+
+	return pe
 }
 
 // Until parse is called the HCL configuration is not deserialized into
 // the structs. We have to do this using a graph as some inputs depend on
 // outputs from other resources, therefore we need to process this is strict order
-func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
+func (c *Config) process(wf dag.WalkFunc, reverse bool) []error {
 	// build the graph
 	d, err := doYaLikeDAGs(c)
 	if err != nil {
-		return err
+		return []error{err}
 	}
 
 	// reduce the graph nodes to unique instances
@@ -226,7 +235,7 @@ func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	// validate the dependency graph is ok
 	err = d.Validate()
 	if err != nil {
-		return fmt.Errorf("unable to validate dependency graph: %w", err)
+		return []error{fmt.Errorf("unable to validate dependency graph: %w", err)}
 	}
 
 	// define the walker callback that will be called for every node in the graph
@@ -237,11 +246,17 @@ func (c *Config) process(wf dag.WalkFunc, reverse bool) error {
 	// update the dag and process the nodes
 	log.SetOutput(io.Discard)
 
+	errs := []error{}
 	w.Update(d)
 	diags := w.Wait()
 	if diags.HasErrors() {
-		err := diags.Err()
-		return err
+		for _, d := range diags {
+			if d.Severity() == dag.Error {
+				errs = append(errs, fmt.Errorf(d.Description().Summary))
+			}
+		}
+
+		return errs
 	}
 
 	return nil
@@ -277,7 +292,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 		for _, v := range r.Metadata().ResourceLinks {
 			fqdn, err := types.ParseFQRN(v)
 			if err != nil {
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -289,7 +304,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 			// get the value from the linked resource
 			l, err := c.FindRelativeResource(v, r.Metadata().Module)
 			if err != nil {
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -314,7 +329,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 			}
 
 			if err != nil {
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -328,7 +343,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 
 			err = setContextVariableFromPath(ctx, fqdn.String(), ctyRes)
 			if err != nil {
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -356,7 +371,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 			dr, err := c.FindModuleResources(r.Metadata().ID, true)
 			if err != nil {
 				// should not be here unless an internal error
-				pe := ParserError{}
+				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -382,7 +397,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 			if wf != nil {
 				err := wf(r)
 				if err != nil {
-					pe := ParserError{}
+					pe := errors.ParserError{}
 					pe.Filename = r.Metadata().File
 					pe.Line = r.Metadata().Line
 					pe.Column = r.Metadata().Column

@@ -1,4 +1,4 @@
-package hclconfig
+package errors
 
 import (
 	"fmt"

@@ -2,7 +2,6 @@ package hclconfig
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
@@ -113,13 +113,18 @@ func (p *Parser) RegisterFunction(name string, f interface{}) error {
 	return nil
 }
 
+// ParseDirectory parses all resources in the given file
+// error can be cast to *ConfigError to get a list of errors
 func (p *Parser) ParseFile(file string) (*Config, error) {
 	c := NewConfig()
 	rootContext = buildContext(file, p.registeredFunctions)
 
+	ce := errors.NewConfigError()
+
 	err := p.parseFile(rootContext, file, c, p.options.Variables, p.options.VariablesFiles)
 	if err != nil {
-		return nil, err
+		ce.AppendParseError(err)
+		return nil, ce
 	}
 
 	for _, rt := range c.Resources {
@@ -128,15 +133,19 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		if p, ok := rt.(types.Parsable); ok {
 			err := p.Parse(c)
 			if err != nil {
-				de := ParserError{}
+				de := errors.ParserError{}
 				de.Line = rt.Metadata().Line
 				de.Column = rt.Metadata().Column
 				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
-				return nil, de
+				ce.AppendParseError(de)
 			}
 		}
+	}
+
+	if len(ce.ParseErrors) > 0 {
+		return nil, ce
 	}
 
 	// process the files and resolve dependency
@@ -145,13 +154,17 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 
 // ParseDirectory parses all resource and variable files in the given directory
 // note: this method does not recurse into sub folders
+// error can be cast to *ConfigError to get a list of errors
 func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	c := NewConfig()
 	rootContext = buildContext(dir, p.registeredFunctions)
 
+	ce := errors.NewConfigError()
+
 	err := p.parseDirectory(rootContext, dir, c)
 	if err != nil {
-		return nil, err
+		ce.AppendParseError(err)
+		return nil, ce
 	}
 
 	for _, rt := range c.Resources {
@@ -160,15 +173,19 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		if p, ok := rt.(types.Parsable); ok {
 			err := p.Parse(c)
 			if err != nil {
-				de := ParserError{}
+				de := errors.ParserError{}
 				de.Line = rt.Metadata().Line
 				de.Column = rt.Metadata().Column
 				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
-				return nil, de
+				ce.AppendParseError(de)
 			}
 		}
+	}
+
+	if len(ce.ParseErrors) > 0 {
+		return nil, ce
 	}
 
 	// process the files and resolve dependency
@@ -176,23 +193,25 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 }
 
 func (p *Parser) process(c *Config) error {
+	ce := errors.NewConfigError()
+
 	// process the files and resolve dependency, do this first without any
 	// callbacks so we can calculate the checksum
-	err := c.process(c.createCallback(
+	errs := c.process(c.createCallback(
 		func(r types.Resource) error {
 			r.Metadata().Checksum.Parsed = generateChecksum(r)
 			return nil
 		},
 	), false)
 
-	if err != nil {
-		return err
+	for _, e := range errs {
+		ce.AppendParseError(e)
 	}
 
 	// now re-run this time with the callback and the Process function
 	// to calculate a final checksum after any computed properties have been
 	// set
-	return c.process(c.createCallback(
+	errs = c.process(c.createCallback(
 		func(r types.Resource) error {
 			if p, ok := r.(types.Processable); ok {
 				if err := p.Process(); err != nil {
@@ -210,6 +229,12 @@ func (p *Parser) process(c *Config) error {
 			return nil
 		},
 	), false)
+
+	for _, e := range errs {
+		ce.AppendProcessError(e)
+	}
+
+	return ce
 }
 
 // internal method
@@ -300,7 +325,7 @@ func (p *Parser) loadVariablesFromFile(ctx *hcl.EvalContext, path string) error 
 
 	f, diag := parser.ParseHCLFile(path)
 	if diag.HasErrors() {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = diag[0].Subject.Start.Line
 		de.Column = diag[0].Subject.Start.Line
 		de.Filename = path
@@ -358,9 +383,13 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	f, diag := parser.ParseHCLFile(file)
 	if diag.HasErrors() {
-		de := ParserError{}
-		de.Line = diag[0].Subject.Start.Line
-		de.Column = diag[0].Subject.Start.Line
+		de := errors.ParserError{}
+
+		if diag[0].Subject != nil {
+			de.Line = diag[0].Subject.Start.Line
+			de.Column = diag[0].Subject.Start.Line
+		}
+
 		de.Filename = file
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
 		return de
@@ -368,7 +397,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		return errors.New("Error getting body")
+		return fmt.Errorf("Error getting body")
 	}
 
 	for _, b := range body.Blocks {
@@ -407,7 +436,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	f, diag := parser.ParseHCLFile(file)
 	if diag.HasErrors() {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = diag[0].Subject.Start.Line
 		de.Column = diag[0].Subject.Start.Line
 		de.Filename = file
@@ -416,13 +445,13 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		return errors.New("Error getting body")
+		return fmt.Errorf("Error getting body")
 	}
 
 	for _, b := range body.Blocks {
 		// check the resource has a name
 		if len(b.Labels) == 0 {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -451,7 +480,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				return err
 			}
 		default:
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -519,7 +548,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	name := b.Labels[0]
 	if err := validateResourceName(name); err != nil {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
@@ -537,7 +566,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	err := decodeBody(ctx, c, file, b, rt)
 	if err != nil {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
@@ -550,7 +579,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	err = setDependsOn(ctx, rt, b.Body, dependsOn)
 	if err != nil {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
@@ -579,7 +608,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 		mp, err := gg.Get(src.AsString(), p.options.ModuleCache, false)
 		if err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -644,7 +673,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	case types.TypeResource:
 		// if the type is resource there should be two labels, one for the type and one for the name
 		if len(b.Labels) != 2 {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -655,7 +684,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		name := b.Labels[1]
 		if err := validateResourceName(name); err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -666,7 +695,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
 		if err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -678,7 +707,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	case types.TypeLocal:
 		// if the type is local check there is one label
 		if len(b.Labels) != 1 {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -689,7 +718,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		name := b.Labels[0]
 		if err := validateResourceName(name); err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -700,7 +729,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		rt, err = p.registeredTypes.CreateResource(types.TypeLocal, name)
 		if err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -712,7 +741,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	case types.TypeOutput:
 		// if the type is output check there is one label
 		if len(b.Labels) != 1 {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -723,7 +752,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		name := b.Labels[0]
 		if err := validateResourceName(name); err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -734,7 +763,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 		rt, err = p.registeredTypes.CreateResource(types.TypeOutput, name)
 		if err != nil {
-			de := ParserError{}
+			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
@@ -751,7 +780,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 	err = decodeBody(ctx, c, file, b, rt)
 	if err != nil {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
@@ -765,7 +794,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	// depends on is a property of the embedded type we need to set this manually
 	err = setDependsOn(ctx, rt, b.Body, dependsOn)
 	if err != nil {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
@@ -776,7 +805,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 	err = c.addResource(rt, ctx, b.Body)
 	if err != nil {
-		de := ParserError{}
+		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
@@ -1038,7 +1067,7 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 	if b.Type == string(types.TypeVariable) {
 		diag := gohcl.DecodeBody(b.Body, ctx, p)
 		if diag.HasErrors() {
-			return errors.New(diag.Error())
+			return fmt.Errorf(diag.Error())
 		}
 	}
 
