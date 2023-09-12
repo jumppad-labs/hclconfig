@@ -14,10 +14,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
@@ -300,7 +300,11 @@ func (p *Parser) loadVariablesFromFile(ctx *hcl.EvalContext, path string) error 
 
 	f, diag := parser.ParseHCLFile(path)
 	if diag.HasErrors() {
-		return errors.New(diag.Error())
+		de := ParserError{}
+		de.Line = diag[0].Subject.Start.Line
+		de.Column = diag[0].Subject.Start.Line
+		de.Filename = path
+		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
 	}
 
 	attrs, _ := f.Body.JustAttributes()
@@ -354,7 +358,12 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	f, diag := parser.ParseHCLFile(file)
 	if diag.HasErrors() {
-		return errors.New(diag.Error())
+		de := ParserError{}
+		de.Line = diag[0].Subject.Start.Line
+		de.Column = diag[0].Subject.Start.Line
+		de.Filename = file
+		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+		return de
 	}
 
 	body, ok := f.Body.(*hclsyntax.Body)
@@ -392,16 +401,17 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
-// 98322294d372ccf762dfa54af247d9fe
-// b68f15e0da231e78f2e7067c9c830266
-
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
 func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) error {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(file)
 	if diag.HasErrors() {
-		return errors.New(diag.Error())
+		de := ParserError{}
+		de.Line = diag[0].Subject.Start.Line
+		de.Column = diag[0].Subject.Start.Line
+		de.Filename = file
+		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
 	}
 
 	body, ok := f.Body.(*hclsyntax.Body)
