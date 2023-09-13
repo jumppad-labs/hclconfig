@@ -197,21 +197,19 @@ func (p *Parser) process(c *Config) error {
 
 	// process the files and resolve dependency, do this first without any
 	// callbacks so we can calculate the checksum
-	errs := c.process(c.createCallback(
+	// we are going to ignore the errors at this stage
+	// as there might be interpolation errors
+	c.process(c.createCallback(
 		func(r types.Resource) error {
 			r.Metadata().Checksum.Parsed = generateChecksum(r)
 			return nil
 		},
 	), false)
 
-	for _, e := range errs {
-		ce.AppendParseError(e)
-	}
-
 	// now re-run this time with the callback and the Process function
 	// to calculate a final checksum after any computed properties have been
 	// set
-	errs = c.process(c.createCallback(
+	errs := c.process(c.createCallback(
 		func(r types.Resource) error {
 			if p, ok := r.(types.Processable); ok {
 				if err := p.Process(); err != nil {
@@ -234,7 +232,11 @@ func (p *Parser) process(c *Config) error {
 		ce.AppendProcessError(e)
 	}
 
-	return ce
+	if len(ce.ParseErrors) > 0 || len(ce.ProcessErrors) > 0 {
+		return ce
+	}
+
+	return nil
 }
 
 // internal method

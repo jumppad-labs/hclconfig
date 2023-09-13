@@ -216,7 +216,11 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 		pe.AppendProcessError(e)
 	}
 
-	return pe
+	if len(pe.ProcessErrors) > 0 {
+		return pe
+	}
+
+	return nil
 }
 
 // Until parse is called the HCL configuration is not deserialized into
