@@ -269,6 +269,20 @@ func (c *Config) ToJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// ResourceDiff is a container for resources that have changed between
+// two different configurations
+type ResourceDiff struct {
+	Added   []types.Resource
+	Updated []types.Resource
+	Removed []types.Resource
+}
+
+// Diff compares the current configuration to the provided configuration and
+// returns resources that have changed between the two configurations
+func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
+	return nil, nil
+}
+
 func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
 	if ctx, ok := c.contexts[rf]; ok {
 		return ctx, nil

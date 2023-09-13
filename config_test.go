@@ -398,3 +398,24 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 	// be one callback network cloud
 	require.Equal(t, 1, len(calls))
 }
+
+func copyConfig(t *testing.T, c *Config) *Config {
+	d, _ := c.ToJSON()
+	p := setupParser(t)
+
+	new, err := p.UnmarshalJSON(d)
+	require.NoError(t, err)
+	require.NotNil(t, new)
+
+	return new
+}
+
+func TestDiffReturnsResourcesAdded(t *testing.T) {
+	c, _ := testSetupConfig(t)
+	new := copyConfig(t, c)
+
+	changes, err := c.Diff(new)
+	require.NoError(t, err)
+	require.NotNil(t, changes)
+	require.Len(t, changes.Added, 1)
+}
