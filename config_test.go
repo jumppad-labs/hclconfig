@@ -470,4 +470,60 @@ func TestDiffReturnsResourcesAdded(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, changes)
 	require.Len(t, changes.Added, 1)
+	require.Len(t, changes.Updated, 0)
+	require.Len(t, changes.Removed, 0)
+	require.Len(t, changes.Unchanged, 11)
+}
+
+func TestDiffReturnsResourcesUpdated(t *testing.T) {
+	c, _ := testSetupConfig(t)
+	new := copyConfig(t, c)
+
+	var1, _ := new.FindResource("variable.var1")
+	var1.Metadata().Checksum = types.Checksum{
+		Parsed:    "zzz",
+		Processed: "111",
+	}
+
+	changes, err := c.Diff(new)
+	require.NoError(t, err)
+	require.NotNil(t, changes)
+	require.Len(t, changes.Added, 0)
+	require.Len(t, changes.Updated, 1)
+	require.Len(t, changes.Removed, 0)
+	require.Len(t, changes.Unchanged, 10)
+}
+
+func TestDiffReturnsResourcesRemoved(t *testing.T) {
+	c, _ := testSetupConfig(t)
+	new := copyConfig(t, c)
+
+	var1, _ := new.FindResource("variable.var1")
+	var1.Metadata().Checksum = types.Checksum{
+		Parsed:    "zzz",
+		Processed: "111",
+	}
+
+	new.RemoveResource(var1)
+
+	changes, err := c.Diff(new)
+	require.NoError(t, err)
+	require.NotNil(t, changes)
+	require.Len(t, changes.Added, 0)
+	require.Len(t, changes.Updated, 0)
+	require.Len(t, changes.Removed, 1)
+	require.Len(t, changes.Unchanged, 10)
+}
+
+func TestDiffReturnsResourcesUnchanged(t *testing.T) {
+	c, _ := testSetupConfig(t)
+	new := copyConfig(t, c)
+
+	changes, err := c.Diff(new)
+	require.NoError(t, err)
+	require.NotNil(t, changes)
+	require.Len(t, changes.Added, 0)
+	require.Len(t, changes.Updated, 0)
+	require.Len(t, changes.Removed, 0)
+	require.Len(t, changes.Unchanged, 11)
 }

@@ -286,9 +286,9 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 	var removed []types.Resource
 	var unchanged []types.Resource
 
-	for _, r := range c.Resources {
+	for _, r := range o.Resources {
 		// does the resource exist
-		cr, err := o.FindResource(r.Metadata().ID)
+		cr, err := c.FindResource(r.Metadata().ID)
 
 		// check if the resource has been found
 		if err != nil {
@@ -303,15 +303,13 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 			changed = append(changed, r)
 			continue
 		}
-
-		unchanged = append(unchanged, r)
 	}
 
 	// check if there are resources in the state that are no longer
 	// in the config
-	for _, r := range o.Resources {
+	for _, r := range c.Resources {
 		found := false
-		for _, r2 := range c.Resources {
+		for _, r2 := range o.Resources {
 			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
@@ -320,6 +318,35 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 
 		if !found {
 			removed = append(removed, r)
+		}
+	}
+
+	// now add any unchanged resources
+	for _, r := range c.Resources {
+		found := false
+		for _, r2 := range new {
+			if r.Metadata().ID == r2.Metadata().ID {
+				found = true
+				break
+			}
+		}
+
+		for _, r2 := range changed {
+			if r.Metadata().ID == r2.Metadata().ID {
+				found = true
+				break
+			}
+		}
+
+		for _, r2 := range removed {
+			if r.Metadata().ID == r2.Metadata().ID {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			unchanged = append(unchanged, r)
 		}
 	}
 
