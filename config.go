@@ -272,15 +272,64 @@ func (c *Config) ToJSON() ([]byte, error) {
 // ResourceDiff is a container for resources that have changed between
 // two different configurations
 type ResourceDiff struct {
-	Added   []types.Resource
-	Updated []types.Resource
-	Removed []types.Resource
+	Added     []types.Resource
+	Updated   []types.Resource
+	Removed   []types.Resource
+	Unchanged []types.Resource
 }
 
 // Diff compares the current configuration to the provided configuration and
 // returns resources that have changed between the two configurations
 func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
-	return nil, nil
+	var new []types.Resource
+	var changed []types.Resource
+	var removed []types.Resource
+	var unchanged []types.Resource
+
+	for _, r := range c.Resources {
+		// does the resource exist
+		cr, err := o.FindResource(r.Metadata().ID)
+
+		// check if the resource has been found
+		if err != nil {
+			// resource does not exist
+			new = append(new, r)
+			continue
+		}
+
+		// check if the resource has changed
+		if cr.Metadata().Checksum != r.Metadata().Checksum {
+			// resource has changes rebuild
+			changed = append(changed, r)
+			continue
+		}
+
+		unchanged = append(unchanged, r)
+	}
+
+	// check if there are resources in the state that are no longer
+	// in the config
+	for _, r := range o.Resources {
+		found := false
+		for _, r2 := range c.Resources {
+			if r.Metadata().ID == r2.Metadata().ID {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			removed = append(removed, r)
+		}
+	}
+
+	return &ResourceDiff{
+		Added:     new,
+		Removed:   removed,
+		Updated:   changed,
+		Unchanged: unchanged,
+	}, nil
+
 }
 
 func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
