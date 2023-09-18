@@ -4,42 +4,51 @@ import "strings"
 
 // ConfigError defines an error that was encountered while parsing the config
 type ConfigError struct {
-	// ParseErrors is a list of errors that were encountered while reading the config
-	// from the text file
-	ParseErrors []error
-
-	// ProcessErrors is a list of errors that were encountered while processing the
+	// Errors is a list of errors that were encountered while processing the
 	// config which includes calling the process function on the resource or any
 	// default callbacks
-	ProcessErrors []error
+	// Errors may be marked as warnings or errors
+	Errors []ParserError
 }
 
 func NewConfigError() *ConfigError {
 	return &ConfigError{
-		ParseErrors:   []error{},
-		ProcessErrors: []error{},
+		Errors: []ParserError{},
 	}
 }
 
-// AppendParseError adds a new parse error to the list of errors
-func (p *ConfigError) AppendParseError(err error) {
-	p.ParseErrors = append(p.ParseErrors, err)
+// AppendError adds a new parse error to the list of errors
+func (p *ConfigError) AppendError(err ParserError) {
+	p.Errors = append(p.Errors, err)
 }
 
-// AppendProcessError adds a new process error to the list of errors
-func (p *ConfigError) AppendProcessError(err error) {
-	p.ProcessErrors = append(p.ProcessErrors, err)
+// ContainsWarnings returns true if any of the errors are warnings
+func (p *ConfigError) ContainsWarnings() bool {
+	for _, e := range p.Errors {
+		if e.Level == ParserErrorLevelWarning {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ContainsErrors returns true if any of the errors are errors
+func (p *ConfigError) ContainsErrors() bool {
+	for _, e := range p.Errors {
+		if e.Level == ParserErrorLevelError {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Error pretty prints the error message as a string
 func (p *ConfigError) Error() string {
 	err := strings.Builder{}
 
-	for _, e := range p.ParseErrors {
-		err.WriteString(e.Error() + "\n")
-	}
-
-	for _, e := range p.ProcessErrors {
+	for _, e := range p.Errors {
 		err.WriteString(e.Error() + "\n")
 	}
 

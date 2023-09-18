@@ -272,9 +272,20 @@ func (c *Config) ToJSON() ([]byte, error) {
 // ResourceDiff is a container for resources that have changed between
 // two different configurations
 type ResourceDiff struct {
-	Added     []types.Resource
-	Updated   []types.Resource
-	Removed   []types.Resource
+	// Resources that have been added to the configuration
+	Added []types.Resource
+	// Resources that have been updated after the parse step, typically this is
+	// any change to the resource definition, but does not include changes to referenced
+	// resources
+	// It is possible that a resource is in both ParseUpdated and ProcessUpdated
+	ParseUpdated []types.Resource
+	// Resources that have been updated after the process step, typically this includes
+	// any changes to referenced resources
+	// It is possible that a resource is in both ParseUpdated and ProcessUpdated
+	ProcessedUpdated []types.Resource
+	// Resources that have been removed from the configuration
+	Removed []types.Resource
+	// Resources that have not changed
 	Unchanged []types.Resource
 }
 
@@ -282,7 +293,8 @@ type ResourceDiff struct {
 // returns resources that have changed between the two configurations
 func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 	var new []types.Resource
-	var changed []types.Resource
+	var parseChanged []types.Resource
+	var processChanged []types.Resource
 	var removed []types.Resource
 	var unchanged []types.Resource
 
@@ -298,9 +310,15 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 		}
 
 		// check if the resource has changed
-		if cr.Metadata().Checksum != r.Metadata().Checksum {
+		if cr.Metadata().Checksum.Parsed != r.Metadata().Checksum.Parsed {
 			// resource has changes rebuild
-			changed = append(changed, r)
+			parseChanged = append(parseChanged, r)
+			continue
+		}
+
+		if cr.Metadata().Checksum.Processed != r.Metadata().Checksum.Processed {
+			// resource has changes rebuild
+			processChanged = append(processChanged, r)
 			continue
 		}
 	}
@@ -331,7 +349,14 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 			}
 		}
 
-		for _, r2 := range changed {
+		for _, r2 := range parseChanged {
+			if r.Metadata().ID == r2.Metadata().ID {
+				found = true
+				break
+			}
+		}
+
+		for _, r2 := range processChanged {
 			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
@@ -351,10 +376,11 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 	}
 
 	return &ResourceDiff{
-		Added:     new,
-		Removed:   removed,
-		Updated:   changed,
-		Unchanged: unchanged,
+		Added:            new,
+		Removed:          removed,
+		ParseUpdated:     parseChanged,
+		ProcessedUpdated: processChanged,
+		Unchanged:        unchanged,
 	}, nil
 
 }

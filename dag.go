@@ -213,10 +213,10 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 	)
 
 	for _, e := range errs {
-		pe.AppendProcessError(e)
+		pe.AppendError(e)
 	}
 
-	if len(pe.ProcessErrors) > 0 {
+	if len(pe.Errors) > 0 {
 		return pe
 	}
 
@@ -226,7 +226,7 @@ func (c *Config) Process(wf ProcessCallback, reverse bool) error {
 // Until parse is called the HCL configuration is not deserialized into
 // the structs. We have to do this using a graph as some inputs depend on
 // outputs from other resources, therefore we need to process this is strict order
-func (c *Config) process(wf dag.WalkFunc, reverse bool) []error {
+func (c *Config) process(wf dag.WalkFunc, reverse bool) []errors. {
 	// build the graph
 	d, err := doYaLikeDAGs(c)
 	if err != nil {

@@ -293,7 +293,7 @@ func (p *Parser) parseFile(
 	file string,
 	c *Config,
 	variables map[string]string,
-	variablesFile []string) error {
+	variablesFile []string) errors.ParserError {
 
 	// This must be done before any other process as the resources
 	// might reference the variables
@@ -380,7 +380,7 @@ func valueFromString(v string) cty.Value {
 }
 
 // ParseVariableFile parses a config file for variables
-func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Config) error {
+func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Config) errors.ParserError {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(file)
@@ -399,7 +399,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		return fmt.Errorf("Error getting body")
+		panic("Error getting body")
 	}
 
 	for _, b := range body.Blocks {
@@ -666,7 +666,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	return nil
 }
 
-func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) error {
+func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) *errors.ParserError {
 
 	var rt types.Resource
 	var err error
@@ -681,7 +681,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = `"invalid formatting for 'resource' stanza, resources should have a name and a type, i.e. 'resource "type" "name" {}'`
 
-			return de
+			return &de
 		}
 
 		name := b.Labels[1]
@@ -692,7 +692,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = de.Error()
 
-			return de
+			return &de
 		}
 
 		rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
@@ -703,7 +703,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = fmt.Sprintf("unable to create resource '%s' %s", b.Type, err)
 
-			return err
+			return &de
 		}
 
 	case types.TypeLocal:
@@ -715,7 +715,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = `invalid formatting for 'local' stanza, resources should have a name and a type, i.e. 'local "name" {}'`
 
-			return de
+			return &de
 		}
 
 		name := b.Labels[0]
@@ -726,7 +726,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = err.Error()
 
-			return de
+			return &de
 		}
 
 		rt, err = p.registeredTypes.CreateResource(types.TypeLocal, name)
@@ -737,7 +737,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = fmt.Sprintf(`unable to create local, this error should never happen %s`, err)
 
-			return de
+			return &de
 		}
 
 	case types.TypeOutput:
@@ -749,7 +749,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = `invalid formatting for 'output' stanza, resources should have a name and a type, i.e. 'output "name" {}'`
 
-			return de
+			return &de
 		}
 
 		name := b.Labels[0]
@@ -760,7 +760,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = err.Error()
 
-			return de
+			return &de
 		}
 
 		rt, err = p.registeredTypes.CreateResource(types.TypeOutput, name)
@@ -771,7 +771,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = fmt.Sprintf(`unable to create output, this error should never happen %s`, err)
 
-			return de
+			return &de
 		}
 	}
 
@@ -787,7 +787,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
-		return de
+		return &de
 	}
 
 	// disabled is a property of the embedded type we need to add this manually
@@ -802,7 +802,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Filename = file
 		de.Message = fmt.Sprintf(`unable to set depends_on, %s`, err)
 
-		return de
+		return &de
 	}
 
 	err = c.addResource(rt, ctx, b.Body)
@@ -813,7 +813,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Filename = file
 		de.Message = fmt.Sprintf(`unable to add resource "%s" to config %s`, types.FQDNFromResource(rt).String(), err)
 
-		return de
+		return &de
 	}
 
 	return nil
@@ -1042,7 +1042,7 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	return ctx
 }
 
-func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}) error {
+func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}) *errors.ParserError {
 	dr, err := getDependentResources(b, ctx, config, p, "")
 	if err != nil {
 		return err
@@ -1069,7 +1069,14 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 	if b.Type == string(types.TypeVariable) {
 		diag := gohcl.DecodeBody(b.Body, ctx, p)
 		if diag.HasErrors() {
-			return fmt.Errorf(diag.Error())
+			pe := errors.ParserError{}
+			pe.Column = b.Body.SrcRange.Start.Column
+			pe.Line = b.Body.SrcRange.Start.Line
+			pe.Filename = b.Body.SrcRange.Filename
+			pe.Message = fmt.Sprintf("unable to decode body, %s", err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return &pe
 		}
 	}
 
@@ -1084,13 +1091,20 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 // i.e. resource.container.foo.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
-func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource interface{}, path string) ([]string, error) {
+func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource interface{}, path string) ([]string, *errors.ParserError) {
 	references := []string{}
 
 	for _, a := range b.Body.Attributes {
 		refs, err := processExpr(a.Expr)
 		if err != nil {
-			return nil, err
+			pe := errors.ParserError{}
+			pe.Column = b.Body.SrcRange.Start.Column
+			pe.Line = b.Body.SrcRange.Start.Line
+			pe.Filename = b.Body.SrcRange.Filename
+			pe.Message = fmt.Sprintf("unable to process attribute %s, %s", a.Name, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return nil, &pe
 		}
 
 		references = append(references, refs...)
@@ -1118,7 +1132,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 
 	me := resource.(types.Resource)
 
-	// got the references, now check that the references
+	// we have the references, now check that the references
 	// are not cyclical
 	for _, dep := range references {
 		// the references might not exist yet, we are parsing flat
@@ -1132,13 +1146,27 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 				fqdn.Attribute = ""
 
 				if err != nil {
-					return nil, fmt.Errorf("dependency %s, is not a valid resource", cdep)
+					pe := errors.ParserError{}
+					pe.Column = b.Body.SrcRange.Start.Column
+					pe.Line = b.Body.SrcRange.Start.Line
+					pe.Filename = b.Body.SrcRange.Filename
+					pe.Message = fmt.Sprintf("dependency %s, is not a valid resource", cdep)
+					pe.Level = errors.ParserErrorLevelError
+					return nil, &pe
 				}
 
 				if me.Metadata().Name == fqdn.Resource &&
 					me.Metadata().Type == fqdn.Type &&
 					me.Metadata().Module == fqdn.Module {
-					return nil, fmt.Errorf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqdn.String(), d.Metadata().ID)
+
+					pe := errors.ParserError{}
+					pe.Column = b.Body.SrcRange.Start.Column
+					pe.Line = b.Body.SrcRange.Start.Line
+					pe.Filename = b.Body.SrcRange.Filename
+					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqdn.String(), d.Metadata().ID)
+					pe.Level = errors.ParserErrorLevelError
+
+					return nil, &pe
 				}
 			}
 		}

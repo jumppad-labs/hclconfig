@@ -1,30 +1,38 @@
 package errors
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestAppendParseErrorAddsError(t *testing.T) {
+func TestAppendErrorAddsError(t *testing.T) {
 	ce := NewConfigError()
-	ce.AppendParseError(fmt.Errorf("boom"))
+	ce.AppendError(ParserError{})
 
-	require.Len(t, ce.ParseErrors, 1)
+	require.Len(t, ce.Errors, 1)
 }
 
-func TestAppendProcessErrorAddsError(t *testing.T) {
+func TestContainsWarningsReturnsTrue(t *testing.T) {
 	ce := NewConfigError()
-	ce.AppendProcessError(fmt.Errorf("boom"))
+	ce.AppendError(ParserError{Level: ParserErrorLevelWarning})
 
-	require.Len(t, ce.ProcessErrors, 1)
+	require.True(t, ce.ContainsWarnings())
+	require.False(t, ce.ContainsErrors())
+}
+
+func TestContainsErrorsReturnsTrue(t *testing.T) {
+	ce := NewConfigError()
+	ce.AppendError(ParserError{Level: ParserErrorLevelError})
+
+	require.False(t, ce.ContainsWarnings())
+	require.True(t, ce.ContainsErrors())
 }
 
 func TestErrorReturnsConcatonatedString(t *testing.T) {
 	ce := NewConfigError()
-	ce.AppendParseError(fmt.Errorf("boom"))
-	ce.AppendProcessError(fmt.Errorf("bang"))
+	ce.AppendError(ParserError{Message: "boom"})
+	ce.AppendError(ParserError{Message: "bang"})
 
-	require.Equal(t, "boom\nbang", ce.Error())
+	require.Equal(t, "Error:\n  boom\n\n  :0,0\n\nError:\n  bang\n\n  :0,0\n", ce.Error())
 }
