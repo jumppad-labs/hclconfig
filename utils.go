@@ -3,9 +3,14 @@ package hclconfig
 import (
 	"bufio"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -111,4 +116,24 @@ func castVar(v cty.Value) interface{} {
 	}
 
 	return nil
+}
+
+func generateChecksum(r types.Resource) string {
+	// first sort the resource links and depends on as these change
+	// depending on the dag process
+	sort.Strings(r.Metadata().DependsOn)
+	sort.Strings(r.Metadata().ResourceLinks)
+
+	// first convert the object to json
+	json, _ := json.Marshal(r)
+
+	return HashString(string(json))
+}
+
+func appendDiagnostic(tf dag.Diagnostics, diags hcl.Diagnostics) dag.Diagnostics {
+	for _, d := range diags {
+		tf = tf.Append(d)
+	}
+
+	return tf
 }

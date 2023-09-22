@@ -483,7 +483,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
@@ -517,7 +517,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
@@ -648,7 +648,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
 		//fmt.Println(r.Metadata().ID, r.Metadata().DependsOn)
@@ -722,7 +722,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
 		calls = append(calls, types.ResourceFQRN{
@@ -910,7 +910,7 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ParseErrors, 1)
+	require.Len(t, ce.Errors, 1)
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenResourceParseError(t *testing.T) {
@@ -925,7 +925,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceParseError(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ParseErrors, 1)
+	require.Len(t, ce.Errors, 1)
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
@@ -940,7 +940,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) 
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ProcessErrors, 2)
+	require.Len(t, ce.Errors, 2)
 }
 
 func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
@@ -955,7 +955,7 @@ func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ParseErrors, 1)
+	require.Len(t, ce.Errors, 1)
 }
 
 func TestParseFileReturnsConfigErrorWhenResourceParseError(t *testing.T) {
@@ -970,7 +970,7 @@ func TestParseFileReturnsConfigErrorWhenResourceParseError(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ParseErrors, 1)
+	require.Len(t, ce.Errors, 1)
 }
 
 func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
@@ -985,7 +985,7 @@ func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ProcessErrors, 2)
+	require.Len(t, ce.Errors, 2)
 }
 
 func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
@@ -1000,5 +1000,5 @@ func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.ParseErrors, 1)
+	require.Len(t, ce.Errors, 1)
 }

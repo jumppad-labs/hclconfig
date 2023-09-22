@@ -15,7 +15,7 @@ func TestAppendErrorAddsError(t *testing.T) {
 
 func TestContainsWarningsReturnsTrue(t *testing.T) {
 	ce := NewConfigError()
-	ce.AppendError(ParserError{Level: ParserErrorLevelWarning})
+	ce.AppendError(&ParserError{Level: ParserErrorLevelWarning})
 
 	require.True(t, ce.ContainsWarnings())
 	require.False(t, ce.ContainsErrors())

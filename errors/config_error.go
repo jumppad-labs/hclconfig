@@ -8,24 +8,24 @@ type ConfigError struct {
 	// config which includes calling the process function on the resource or any
 	// default callbacks
 	// Errors may be marked as warnings or errors
-	Errors []ParserError
+	Errors []error
 }
 
 func NewConfigError() *ConfigError {
 	return &ConfigError{
-		Errors: []ParserError{},
+		Errors: []error{},
 	}
 }
 
 // AppendError adds a new parse error to the list of errors
-func (p *ConfigError) AppendError(err ParserError) {
+func (p *ConfigError) AppendError(err error) {
 	p.Errors = append(p.Errors, err)
 }
 
 // ContainsWarnings returns true if any of the errors are warnings
 func (p *ConfigError) ContainsWarnings() bool {
 	for _, e := range p.Errors {
-		if e.Level == ParserErrorLevelWarning {
+		if pe, ok := e.(*ParserError); ok && pe.Level == ParserErrorLevelWarning {
 			return true
 		}
 	}
@@ -36,9 +36,16 @@ func (p *ConfigError) ContainsWarnings() bool {
 // ContainsErrors returns true if any of the errors are errors
 func (p *ConfigError) ContainsErrors() bool {
 	for _, e := range p.Errors {
-		if e.Level == ParserErrorLevelError {
+		pe, ok := e.(*ParserError)
+		// if not a parser error is a standard error
+		if !ok {
 			return true
 		}
+
+		if pe.Level == ParserErrorLevelError {
+			return true
+		}
+
 	}
 
 	return false

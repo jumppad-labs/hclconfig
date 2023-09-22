@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/silas/dag"
 )
 
 // Config defines the stack config
@@ -207,52 +212,6 @@ func (c *Config) AppendResource(r types.Resource) error {
 	return c.addResource(r, nil, nil)
 }
 
-func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
-	fqdn := types.FQDNFromResource(r)
-
-	// set the ID
-	r.Metadata().ID = fqdn.String()
-
-	rf, err := c.FindResource(fqdn.String())
-	if err == nil && rf != nil {
-		return ResourceExistsError{r.Metadata().Name}
-	}
-
-	c.Resources = append(c.Resources, r)
-	c.contexts[r] = ctx
-	c.bodies[r] = b
-
-	return nil
-}
-
-func (c *Config) RemoveResource(rf types.Resource) error {
-	c.sync.Lock()
-	defer c.sync.Unlock()
-
-	pos := -1
-	for i, r := range c.Resources {
-		if rf.Metadata().Name == r.Metadata().Name &&
-			rf.Metadata().Type == r.Metadata().Type &&
-			rf.Metadata().Module == r.Metadata().Module {
-			pos = i
-			break
-		}
-	}
-
-	// found the resource remove from the collection
-	// preserve order
-	if pos > -1 {
-		c.Resources = append(c.Resources[:pos], c.Resources[pos+1:]...)
-
-		// clean up the context and body
-		delete(c.contexts, rf)
-		delete(c.bodies, rf)
-		return nil
-	}
-
-	return ResourceNotFoundError{}
-}
-
 // ToJSON converts the config to a serializable json string
 // to unmarshal the output of this method back into a config you can use
 // the Parser.UnmarshalJSON method
@@ -383,6 +342,158 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 		Unchanged:        unchanged,
 	}, nil
 
+}
+
+func (c *Config) RemoveResource(rf types.Resource) error {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
+	pos := -1
+	for i, r := range c.Resources {
+		if rf.Metadata().Name == r.Metadata().Name &&
+			rf.Metadata().Type == r.Metadata().Type &&
+			rf.Metadata().Module == r.Metadata().Module {
+			pos = i
+			break
+		}
+	}
+
+	// found the resource remove from the collection
+	// preserve order
+	if pos > -1 {
+		c.Resources = append(c.Resources[:pos], c.Resources[pos+1:]...)
+
+		// clean up the context and body
+		delete(c.contexts, rf)
+		delete(c.bodies, rf)
+		return nil
+	}
+
+	return ResourceNotFoundError{}
+}
+
+// WalkCallback is called with the resource when the graph processes that particular node
+type WalkCallback func(r types.Resource) error
+
+// Walk creates a Directed Acyclic Graph for the configuration resources depending on their
+// links and references. All the resources defined in the graph are traversed and
+// the provided callback is executed for every resource in the graph.
+//
+// Any error returned from the ProcessCallback function halts execution of any other
+// callback for resources in the graph.
+//
+// Specifying the reverse option to 'true' causes the graph to be traversed in reverse
+// order.
+func (c *Config) Walk(wf WalkCallback, reverse bool) error {
+	// We need to ensure that Process does not execute the callback when
+	// any other callback returns an error.
+	// Unfortunately returning an error with tfdiags does not stop the walk
+	hasError := atomic.Bool{}
+
+	pe := errors.NewConfigError()
+
+	errs := c.walk(
+		func(v dag.Vertex) (diags dag.Diagnostics) {
+
+			r, ok := v.(types.Resource)
+			// not a resource skip, this should never happen
+			if !ok {
+				panic("an item has been added to the graph that is not a resource")
+			}
+
+			// if this is the root module or is disabled skip
+			if (r.Metadata().Type == types.TypeRoot || r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
+				return nil
+			}
+
+			// call the callback only if a previous error has not occurred
+			if hasError.Load() {
+				return nil
+			}
+
+			err := wf(r)
+			if err != nil {
+				// set the global error mutex to stop further processing
+				hasError.Store(true)
+
+				return diags.Append(err)
+			}
+
+			return nil
+		},
+		reverse,
+	)
+
+	for _, e := range errs {
+		pe.AppendError(e)
+	}
+
+	if len(pe.Errors) > 0 {
+		return pe
+	}
+
+	return nil
+}
+
+// Until parse is called the HCL configuration is not deserialized into
+// the structs. We have to do this using a graph as some inputs depend on
+// outputs from other resources, therefore we need to process this is strict order
+func (c *Config) walk(wf dag.WalkFunc, reverse bool) []error {
+	// build the graph
+	d, err := doYaLikeDAGs(c)
+	if err != nil {
+		return []error{err}
+	}
+
+	// reduce the graph nodes to unique instances
+	d.TransitiveReduction()
+
+	// validate the dependency graph is ok
+	err = d.Validate()
+	if err != nil {
+		return []error{fmt.Errorf("unable to validate dependency graph: %w", err)}
+	}
+
+	// define the walker callback that will be called for every node in the graph
+	w := dag.Walker{}
+	w.Callback = wf
+	w.Reverse = reverse
+
+	// update the dag and process the nodes
+	log.SetOutput(io.Discard)
+
+	errs := []error{}
+	w.Update(d)
+	diags := w.Wait()
+	if diags.HasErrors() {
+		for _, d := range diags {
+			if d.Severity() == dag.Error {
+				errs = append(errs, fmt.Errorf(d.Description().Summary))
+			}
+		}
+
+		return errs
+	}
+
+	return nil
+}
+
+func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
+	fqdn := types.FQDNFromResource(r)
+
+	// set the ID
+	r.Metadata().ID = fqdn.String()
+
+	rf, err := c.FindResource(fqdn.String())
+	if err == nil && rf != nil {
+		return ResourceExistsError{r.Metadata().Name}
+	}
+
+	c.Resources = append(c.Resources, r)
+	c.contexts[r] = ctx
+	c.bodies[r] = b
+
+	return nil
 }
 
 func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {

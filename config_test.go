@@ -353,7 +353,7 @@ func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 
 	calls := []string{}
 	callSync := sync.Mutex{}
-	err := c.Process(
+	err := c.Walk(
 		func(r types.Resource) error {
 			callSync.Lock()
 
@@ -385,7 +385,7 @@ func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 
 	calls := []string{}
 	callSync := sync.Mutex{}
-	err := c.Process(
+	err := c.Walk(
 		func(r types.Resource) error {
 			callSync.Lock()
 
@@ -415,7 +415,7 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 
 	calls := []string{}
 	callSync := sync.Mutex{}
-	err := c.Process(
+	err := c.Walk(
 		func(r types.Resource) error {
 			callSync.Lock()
 			calls = append(calls, types.ResourceFQRN{

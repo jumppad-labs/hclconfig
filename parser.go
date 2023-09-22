@@ -44,13 +44,13 @@ type ParserOptions struct {
 	VariableEnvPrefix string
 	// location of any downloaded modules
 	ModuleCache string
-	// callback executed when the parser reads a resource stanza, callbacks are
+	// Callback executed when the parser reads a resource stanza, callbacks are
 	// executed based on a directed acyclic graph. If resource 'a' references
 	// a property defined in resource 'b', i.e 'resource.a.myproperty' then the
 	// callback for resource 'b' will be executed before resource 'a'. This allows
 	// you to set the dependent properties of resource 'b' before resource 'a'
 	// consumes them.
-	ParseCallback ProcessCallback
+	Callback WalkCallback
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -123,7 +123,10 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 
 	err := p.parseFile(rootContext, file, c, p.options.Variables, p.options.VariablesFiles)
 	if err != nil {
-		ce.AppendParseError(err)
+		for _, e := range err {
+			ce.AppendError(e)
+		}
+
 		return nil, ce
 	}
 
@@ -139,12 +142,12 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
-				ce.AppendParseError(de)
+				ce.AppendError(de)
 			}
 		}
 	}
 
-	if len(ce.ParseErrors) > 0 {
+	if len(ce.Errors) > 0 {
 		return nil, ce
 	}
 
@@ -163,7 +166,10 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 
 	err := p.parseDirectory(rootContext, dir, c)
 	if err != nil {
-		ce.AppendParseError(err)
+		for _, e := range err {
+			ce.AppendError(e)
+		}
+
 		return nil, ce
 	}
 
@@ -179,12 +185,12 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
-				ce.AppendParseError(de)
+				ce.AppendError(de)
 			}
 		}
 	}
 
-	if len(ce.ParseErrors) > 0 {
+	if len(ce.Errors) > 0 {
 		return nil, ce
 	}
 
@@ -192,69 +198,60 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	return c, p.process(c)
 }
 
-func (p *Parser) process(c *Config) error {
-	ce := errors.NewConfigError()
+// UnmarshalJSON parses a JSON string from a serialized Config and returns a
+// valid Config.
+func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
+	conf := NewConfig()
 
-	// process the files and resolve dependency, do this first without any
-	// callbacks so we can calculate the checksum
-	// we are going to ignore the errors at this stage
-	// as there might be interpolation errors
-	c.process(c.createCallback(
-		func(r types.Resource) error {
-			r.Metadata().Checksum.Parsed = generateChecksum(r)
-			return nil
-		},
-	), false)
-
-	// now re-run this time with the callback and the Process function
-	// to calculate a final checksum after any computed properties have been
-	// set
-	errs := c.process(c.createCallback(
-		func(r types.Resource) error {
-			if p, ok := r.(types.Processable); ok {
-				if err := p.Process(); err != nil {
-					return err
-				}
-			}
-
-			if p.options.ParseCallback != nil {
-				if err := p.options.ParseCallback(r); err != nil {
-					return err
-				}
-			}
-
-			r.Metadata().Checksum.Processed = generateChecksum(r)
-			return nil
-		},
-	), false)
-
-	for _, e := range errs {
-		ce.AppendProcessError(e)
+	var objMap map[string]*json.RawMessage
+	err := json.Unmarshal(d, &objMap)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(ce.ParseErrors) > 0 || len(ce.ProcessErrors) > 0 {
-		return ce
+	var rawMessagesForResources []*json.RawMessage
+	err = json.Unmarshal(*objMap["resources"], &rawMessagesForResources)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	for _, m := range rawMessagesForResources {
+		mm := map[string]interface{}{}
+		err := json.Unmarshal(*m, &mm)
+		if err != nil {
+			return nil, err
+		}
+
+		r, err := p.registeredTypes.CreateResource(mm["type"].(string), mm["name"].(string))
+		if err != nil {
+			return nil, err
+		}
+
+		resData, _ := json.Marshal(mm)
+
+		json.Unmarshal(resData, r)
+		conf.addResource(r, nil, nil)
+	}
+
+	return conf, nil
 }
 
 // internal method
-func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) error {
+func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) []error {
 
 	// get all files in a directory
 	path, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("directory %s does not exist", dir)
+		return []error{fmt.Errorf("directory %s does not exist", dir)}
 	}
 
 	if !path.IsDir() {
-		return fmt.Errorf("%s is not a directory", dir)
+		return []error{fmt.Errorf("%s is not a directory", dir)}
 	}
 
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("unable to list files in directory %s, error: %s", dir, err)
+		return []error{fmt.Errorf("unable to list files in directory %s, error: %s", dir, err)}
 	}
 
 	variablesFiles := p.options.VariablesFiles
@@ -293,29 +290,29 @@ func (p *Parser) parseFile(
 	file string,
 	c *Config,
 	variables map[string]string,
-	variablesFile []string) errors.ParserError {
+	variablesFile []string) []error {
 
 	// This must be done before any other process as the resources
 	// might reference the variables
 	err := p.parseVariablesInFile(ctx, file, c)
 	if err != nil {
-		return err
+		return []error{err}
 	}
 
 	// override any variables from files
 	for _, vf := range variablesFile {
 		err := p.loadVariablesFromFile(ctx, vf)
 		if err != nil {
-			return err
+			return []error{err}
 		}
 	}
 
 	// override default values for variables from environment or variables map
 	p.setVariables(ctx, variables)
 
-	err = p.parseResourcesInFile(ctx, file, c, "", false, []string{})
-	if err != nil {
-		return err
+	errs := p.parseResourcesInFile(ctx, file, c, "", false, []string{})
+	if errs != nil {
+		return errs
 	}
 
 	return nil
@@ -380,7 +377,7 @@ func valueFromString(v string) cty.Value {
 }
 
 // ParseVariableFile parses a config file for variables
-func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Config) errors.ParserError {
+func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Config) error {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(file)
@@ -394,7 +391,8 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 		de.Filename = file
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
-		return de
+
+		return &de
 	}
 
 	body, ok := f.Body.(*hclsyntax.Body)
@@ -433,7 +431,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 }
 
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
-func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) error {
+func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) []error {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(file)
@@ -443,11 +441,14 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		de.Column = diag[0].Subject.Start.Line
 		de.Filename = file
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+
+		return []error{&de}
 	}
 
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		return fmt.Errorf("Error getting body")
+		// this should never happen, body should always be a hclsyntax.Body
+		panic("Error getting body")
 	}
 
 	for _, b := range body.Blocks {
@@ -459,7 +460,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			de.Filename = file
 			de.Message = fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type)
 
-			return de
+			return []error{&de}
 		}
 
 		// create the registered type if not a variable or output
@@ -479,7 +480,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		case types.TypeResource:
 			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn, disabled)
 			if err != nil {
-				return err
+				return []error{err}
 			}
 		default:
 			de := errors.ParserError{}
@@ -488,7 +489,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			de.Filename = file
 			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
 
-			return de
+			return []error{&de}
 		}
 	}
 
@@ -542,10 +543,17 @@ func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dep
 	return nil
 }
 
-func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
+func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) []error {
 	// check the module has a name
 	if len(b.Labels) != 1 {
-		return fmt.Errorf(`error in file %s at position %d,%d, invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`, file, b.Range().Start.Line, b.TypeRange.Start.Column)
+		de := errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf(`invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`)
+
+		return []error{&de}
 	}
 
 	name := b.Labels[0]
@@ -554,9 +562,10 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
 		de.Message = err.Error()
 
-		return de
+		return []error{&de}
 	}
 
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), b.Labels[0])
@@ -572,29 +581,38 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("error creating resource: %s", err)
 
-		return de
+		return []error{&de}
 	}
 
 	setDisabled(ctx, rt, b.Body, false)
 
-	err = setDependsOn(ctx, rt, b.Body, dependsOn)
+	derr := setDependsOn(ctx, rt, b.Body, dependsOn)
 	if err != nil {
 		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Message = err.Error()
+		de.Level = errors.ParserErrorLevelError
+		de.Message = derr.Error()
 
-		return de
+		return []error{&de}
 	}
 
 	// we need to fetch the source so that we can process the child resources
 	// "source" is the attribute but we need to read this manually
 	src, diags := b.Body.Attributes["source"].Expr.Value(ctx)
 	if diags.HasErrors() {
-		return fmt.Errorf("unable to read source from module: %s", diags.Error())
+		de := errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf("unable to read source from module: %s", diags.Error())
+
+		return []error{&de}
 	}
 
 	// src could be a github module or a relative folder
@@ -602,8 +620,8 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	dir := path.Dir(file)
 	moduleSrc := path.Join(dir, src.AsString())
 
-	fi, err := os.Stat(moduleSrc)
-	if err != nil || !fi.IsDir() {
+	fi, serr := os.Stat(moduleSrc)
+	if serr != nil || !fi.IsDir() {
 
 		// is not a directory fetch from source using go getter
 		gg := NewGoGetter()
@@ -616,7 +634,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 			de.Filename = file
 			de.Message = fmt.Sprintf(`unable to fetch remote module "%s" %s`, src.AsString(), err)
 
-			return de
+			return []error{&de}
 		}
 
 		moduleSrc = mp
@@ -628,9 +646,9 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	// modules should have their own context so that variables are not globally scoped
 	subContext := buildContext(moduleSrc, p.registeredFunctions)
 
-	err = p.parseDirectory(subContext, moduleSrc, moduleConfig)
-	if err != nil {
-		return err
+	errs := p.parseDirectory(subContext, moduleSrc, moduleConfig)
+	if errs != nil {
+		return errs
 	}
 
 	rt.(*types.Module).SubContext = subContext
@@ -658,16 +676,21 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		setDisabled(ctx, r, bdy, rt.Metadata().Disabled)
 
 		// depends on is a property of the embedded type we need to set this manually
-		setDependsOn(ctx, rt, b.Body, dependsOn)
+		err = setDependsOn(ctx, rt, b.Body, dependsOn)
+		if err != nil {
+			return []error{err}
+		}
 
-		c.addResource(r, ctx, bdy)
+		err = c.addResource(r, ctx, bdy)
+		if err != nil {
+			return []error{err}
+		}
 	}
 
 	return nil
 }
 
-func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) *errors.ParserError {
-
+func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) error {
 	var rt types.Resource
 	var err error
 
@@ -1042,7 +1065,7 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	return ctx
 }
 
-func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}) *errors.ParserError {
+func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}) error {
 	dr, err := getDependentResources(b, ctx, config, p, "")
 	if err != nil {
 		return err
@@ -1091,7 +1114,7 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 // i.e. resource.container.foo.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
-func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource interface{}, path string) ([]string, *errors.ParserError) {
+func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource interface{}, path string) ([]string, error) {
 	references := []string{}
 
 	for _, a := range b.Body.Attributes {
@@ -1340,6 +1363,55 @@ func findTypeFromInterface(path string, s interface{}) string {
 	return val.String()
 }
 
+func (p *Parser) process(c *Config) error {
+	ce := errors.NewConfigError()
+
+	// process the files and resolve dependency, do this first without any
+	// callbacks so we can calculate the checksum
+	// we are going to ignore the errors at this stage
+	// as there might be interpolation errors
+	c.walk(createCallback(
+		c,
+		func(r types.Resource) error {
+			r.Metadata().Checksum.Parsed = generateChecksum(r)
+			return nil
+		},
+	), false)
+
+	// now re-run this time with the callback and the Process function
+	// to calculate a final checksum after any computed properties have been
+	// set
+	errs := c.walk(createCallback(
+		c,
+		func(r types.Resource) error {
+			if p, ok := r.(types.Processable); ok {
+				if err := p.Process(); err != nil {
+					return err
+				}
+			}
+
+			if p.options.Callback != nil {
+				if err := p.options.Callback(r); err != nil {
+					return err
+				}
+			}
+
+			r.Metadata().Checksum.Processed = generateChecksum(r)
+			return nil
+		},
+	), false)
+
+	for _, e := range errs {
+		ce.AppendError(e)
+	}
+
+	if len(ce.Errors) > 0 || len(ce.Errors) > 0 {
+		return ce
+	}
+
+	return nil
+}
+
 // ensureAbsolute ensure that the given path is either absolute or
 // if relative is converted to abasolute based on the path of the config
 func ensureAbsolute(path, file string) string {
@@ -1366,44 +1438,6 @@ func ensureAbsolute(path, file string) string {
 	fp := filepath.Join(baseDir, path)
 
 	return filepath.Clean(fp)
-}
-
-// UnmarshalJSON parses a JSON string from a serialized Config and returns a
-// valid Config.
-func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
-	conf := NewConfig()
-
-	var objMap map[string]*json.RawMessage
-	err := json.Unmarshal(d, &objMap)
-	if err != nil {
-		return nil, err
-	}
-
-	var rawMessagesForResources []*json.RawMessage
-	err = json.Unmarshal(*objMap["resources"], &rawMessagesForResources)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, m := range rawMessagesForResources {
-		mm := map[string]interface{}{}
-		err := json.Unmarshal(*m, &mm)
-		if err != nil {
-			return nil, err
-		}
-
-		r, err := p.registeredTypes.CreateResource(mm["type"].(string), mm["name"].(string))
-		if err != nil {
-			return nil, err
-		}
-
-		resData, _ := json.Marshal(mm)
-
-		json.Unmarshal(resData, r)
-		conf.addResource(r, nil, nil)
-	}
-
-	return conf, nil
 }
 
 func validateResourceName(name string) error {

@@ -17,7 +17,7 @@ func main() {
 	// set the callback that will be executed when a resource has been created
 	// this function can be used to execute any external work required for the
 	// resource.
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		fmt.Printf("  resource '%s' named '%s' has been parsed from the file: %s\n", r.Metadata().Type, r.Metadata().Name, r.Metadata().File)
 		return nil
 	}
@@ -60,7 +60,7 @@ func main() {
 	}
 
 	fmt.Println("## Process config")
-	nc.Process(func(r types.Resource) error {
+	nc.Walk(func(r types.Resource) error {
 		fmt.Println("  ", r.Metadata().ID)
 		return nil
 	}, false)
@@ -68,7 +68,7 @@ func main() {
 	fmt.Println("")
 	fmt.Println("## Process config reverse")
 
-	nc.Process(func(r types.Resource) error {
+	nc.Walk(func(r types.Resource) error {
 		fmt.Println("  ", r.Metadata().ID)
 		return nil
 	}, true)

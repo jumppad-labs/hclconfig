@@ -1,12 +1,7 @@
 package hclconfig
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"sort"
-	"sync/atomic"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -74,6 +69,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
 				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return nil, pe
 			}
@@ -93,6 +89,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 					pe.Column = resource.Metadata().Column
 					pe.Filename = resource.Metadata().File
 					pe.Message = fmt.Sprintf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
+					pe.Level = errors.ParserErrorLevelError
 
 					return nil, pe
 				}
@@ -117,6 +114,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 					pe.Column = resource.Metadata().Column
 					pe.Filename = resource.Metadata().File
 					pe.Message = fmt.Sprintf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
+					pe.Level = errors.ParserErrorLevelError
 
 					return nil, pe
 				}
@@ -136,6 +134,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
 				pe.Message = fmt.Sprintf("unable to find resources parent module: '%s, error: %s", fqdnString, err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return nil, pe
 			}
@@ -160,113 +159,11 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	return graph, nil
 }
 
-// ProcessCallback is called with the resource when the graph processes that particular node
-type ProcessCallback func(r types.Resource) error
-
-// Process creates a Directed Acyclic Graph for the configuration resources depending on their
-// links and references. All the resources defined in the graph are traversed and
-// the provided callback is executed for every resource in the graph.
-//
-// Any error returned from the ProcessCallback function halts execution of any other
-// callback for resources in the graph.
-//
-// Specifying the reverse option to 'true' causes the graph to be traversed in reverse
-// order.
-func (c *Config) Process(wf ProcessCallback, reverse bool) error {
-	// We need to ensure that Process does not execute the callback when
-	// any other callback returns an error.
-	// Unfortunately returning an error with tfdiags does not stop the walk
-	hasError := atomic.Bool{}
-
-	pe := errors.NewConfigError()
-
-	errs := c.process(
-		func(v dag.Vertex) (diags dag.Diagnostics) {
-
-			r, ok := v.(types.Resource)
-			// not a resource skip, this should never happen
-			if !ok {
-				panic("an item has been added to the graph that is not a resource")
-			}
-
-			// if this is the root module or is disabled skip
-			if (r.Metadata().Type == types.TypeRoot || r.Metadata().Type == types.TypeModule) || r.Metadata().Disabled {
-				return nil
-			}
-
-			// call the callback only if a previous error has not occurred
-			if hasError.Load() {
-				return nil
-			}
-
-			err := wf(r)
-			if err != nil {
-				// set the global error mutex to stop further processing
-				hasError.Store(true)
-
-				return diags.Append(err)
-			}
-
-			return nil
-		},
-		reverse,
-	)
-
-	for _, e := range errs {
-		pe.AppendError(e)
-	}
-
-	if len(pe.Errors) > 0 {
-		return pe
-	}
-
-	return nil
-}
-
-// Until parse is called the HCL configuration is not deserialized into
-// the structs. We have to do this using a graph as some inputs depend on
-// outputs from other resources, therefore we need to process this is strict order
-func (c *Config) process(wf dag.WalkFunc, reverse bool) []errors. {
-	// build the graph
-	d, err := doYaLikeDAGs(c)
-	if err != nil {
-		return []error{err}
-	}
-
-	// reduce the graph nodes to unique instances
-	d.TransitiveReduction()
-
-	// validate the dependency graph is ok
-	err = d.Validate()
-	if err != nil {
-		return []error{fmt.Errorf("unable to validate dependency graph: %w", err)}
-	}
-
-	// define the walker callback that will be called for every node in the graph
-	w := dag.Walker{}
-	w.Callback = wf
-	w.Reverse = reverse
-
-	// update the dag and process the nodes
-	log.SetOutput(io.Discard)
-
-	errs := []error{}
-	w.Update(d)
-	diags := w.Wait()
-	if diags.HasErrors() {
-		for _, d := range diags {
-			if d.Severity() == dag.Error {
-				errs = append(errs, fmt.Errorf(d.Description().Summary))
-			}
-		}
-
-		return errs
-	}
-
-	return nil
-}
-
-func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags dag.Diagnostics) {
+// createCallback creates the internal callback that is called when a node in the
+// dag is visited. This callback is responsible for processing the resource, setting
+// any linked values and calling the user defined callback so that external work
+// can be performed
+func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		r, ok := v.(types.Resource)
@@ -301,6 +198,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf("error parsing resource link %s", err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
 			}
@@ -313,6 +211,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
 			}
@@ -338,6 +237,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
 			}
@@ -352,6 +252,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
 			}
@@ -364,6 +265,13 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
+			pe := errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
+			pe.Level = errors.ParserErrorLevelWarning
+
 			return appendDiagnostic(diags, diag)
 		}
 
@@ -380,6 +288,7 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
+				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
 			}
@@ -405,7 +314,8 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 					pe.Filename = r.Metadata().File
 					pe.Line = r.Metadata().Line
 					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`unable to create resource "%s" %s`, r.Metadata().ID, err)
+					pe.Message = fmt.Sprintf(`error calling callback for resource "%s" %s`, r.Metadata().ID, err)
+					pe.Level = errors.ParserErrorLevelError
 
 					return diags.Append(pe)
 				}
@@ -448,24 +358,4 @@ func (c *Config) createCallback(wf ProcessCallback) func(v dag.Vertex) (diags da
 
 		return nil
 	}
-}
-
-func generateChecksum(r types.Resource) string {
-	// first sort the resource links and depends on as these change
-	// depending on the dag process
-	sort.Strings(r.Metadata().DependsOn)
-	sort.Strings(r.Metadata().ResourceLinks)
-
-	// first convert the object to json
-	json, _ := json.Marshal(r)
-
-	return HashString(string(json))
-}
-
-func appendDiagnostic(tf dag.Diagnostics, diags hcl.Diagnostics) dag.Diagnostics {
-	for _, d := range diags {
-		tf = tf.Append(d)
-	}
-
-	return tf
 }
