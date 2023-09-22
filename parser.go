@@ -32,7 +32,7 @@ type ResourceTypeNotExistError struct {
 }
 
 func (r ResourceTypeNotExistError) Error() string {
-	return fmt.Sprintf("Resource type %s defined in file %s, does not exist. Please check the documentation for supported resources. We love PRs if you would like to create a resource of this type :)", r.Type, r.File)
+	return fmt.Sprintf("Resource type %s defined in file %s, is not a registered resource.", r.Type, r.File)
 }
 
 type ParserOptions struct {
