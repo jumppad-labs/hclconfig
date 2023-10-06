@@ -1,4 +1,4 @@
-package hclconfig
+package errors
 
 import (
 	"fmt"
@@ -8,6 +8,9 @@ import (
 	"github.com/mitchellh/go-wordwrap"
 )
 
+const ParserErrorLevelError = "error"
+const ParserErrorLevelWarning = "warning"
+
 // ParserError is a detailed error that is returned from the parser
 type ParserError struct {
 	Filename string
@@ -15,6 +18,7 @@ type ParserError struct {
 	Column   int
 	Details  string
 	Message  string
+	Level    string
 }
 
 // Error pretty prints the error message as a string

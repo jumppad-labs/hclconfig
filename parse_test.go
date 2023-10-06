@@ -7,7 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hashicorp/hcl2/hcl"
+	"github.com/hashicorp/hcl/v2"
+	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
@@ -30,6 +31,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 	p.RegisterType("container", &structs.Container{})
 	p.RegisterType("network", &structs.Network{})
 	p.RegisterType("template", &structs.Template{})
+	p.RegisterType(structs.TypeParseError, &structs.ParseError{})
 
 	return p
 }
@@ -481,7 +483,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
@@ -515,7 +517,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
@@ -646,7 +648,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
 		//fmt.Println(r.Metadata().ID, r.Metadata().DependsOn)
@@ -720,7 +722,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	o := DefaultOptions()
 	calls := []string{}
 	callSync := sync.Mutex{}
-	o.ParseCallback = func(r types.Resource) error {
+	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
 		calls = append(calls, types.ResourceFQRN{
@@ -802,20 +804,6 @@ func requireBefore(t *testing.T, first, second string, list []string) {
 	}
 
 	require.Greater(t, pos2, pos1, fmt.Sprintf("expected %s to be created before %s. calls: %v", first, second, list))
-}
-
-func TestParserErrorOutputsString(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/simple/container.hcl")
-	require.NoError(t, pathErr)
-
-	err := ParserError{}
-	err.Line = 80
-	err.Column = 18
-	err.Filename = f
-	err.Message = "something has gone wrong, Erik probably made a typo somewhere, nic will have to fix"
-
-	require.Contains(t, err.Error(), "Error:")
-	require.Contains(t, err.Error(), "80")
 }
 
 func TestParserRejectsInvalidResourceName(t *testing.T) {
@@ -908,4 +896,114 @@ func TestParserHandlesCyclicalReference(t *testing.T) {
 	require.Error(t, err)
 
 	require.ErrorContains(t, err, "'resource.container.one' depends on 'resource.network.two'")
+}
+
+func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/invalid")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseDirectory(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+}
+
+func TestParseDirectoryReturnsConfigErrorWhenResourceParseError(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/parse_error")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseDirectory(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+}
+
+func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/process_error")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseDirectory(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+}
+
+func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/invalid/no_name.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+}
+
+func TestParseFileReturnsConfigErrorWhenResourceParseError(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/parse_error/resource_parse.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+}
+
+func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/process_error/bad_interpolation.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+	
+	require.False(t,ce.ContainsErrors())
+
+	pe := ce.Errors[0].(errors.ParserError)
+	require.Equal(t, pe.Level, errors.ParserErrorLevelWarning)
+}
+
+func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/invalid/notexist.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
 }

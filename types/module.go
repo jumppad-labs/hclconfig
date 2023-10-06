@@ -1,6 +1,6 @@
 package types
 
-import "github.com/hashicorp/hcl2/hcl"
+import "github.com/hashicorp/hcl/v2"
 
 // TypeModule is the resource string for a Module resource
 const TypeModule = "module"
