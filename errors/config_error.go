@@ -36,19 +36,25 @@ func (p *ConfigError) ContainsWarnings() bool {
 // ContainsErrors returns true if any of the errors are errors
 func (p *ConfigError) ContainsErrors() bool {
 	for _, e := range p.Errors {
-		pe, ok := e.(*ParserError)
-		// if not a parser error is a standard error
-		if !ok {
+		if isParserError(e) {
 			return true
 		}
-
-		if pe.Level == ParserErrorLevelError {
-			return true
-		}
-
 	}
 
 	return false
+}
+
+// isParserError returns if the error is a parser error with LevelError
+func isParserError(err error) bool {
+		if pe, ok := err.(*ParserError); ok && pe.Level != ParserErrorLevelError {
+			return false
+		}
+		
+		if pe, ok := err.(ParserError); ok && pe.Level != ParserErrorLevelError {
+			return false
+		}
+
+	return true
 }
 
 // Error pretty prints the error message as a string

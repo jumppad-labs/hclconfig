@@ -8,9 +8,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/types"
-	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -128,12 +126,4 @@ func generateChecksum(r types.Resource) string {
 	json, _ := json.Marshal(r)
 
 	return HashString(string(json))
-}
-
-func appendDiagnostic(tf dag.Diagnostics, diags hcl.Diagnostics) dag.Diagnostics {
-	for _, d := range diags {
-		tf = tf.Append(d)
-	}
-
-	return tf
 }

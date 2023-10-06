@@ -272,7 +272,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
 			pe.Level = errors.ParserErrorLevelWarning
 
-			return appendDiagnostic(diags, diag)
+			return diags.Append(pe)
 		}
 
 		// if the type is a module the potentially we only just found out that we should be

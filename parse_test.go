@@ -940,7 +940,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) 
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.Errors, 2)
+	require.Len(t, ce.Errors, 1)
 }
 
 func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
@@ -985,7 +985,12 @@ func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
 	require.IsType(t, err, &errors.ConfigError{})
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.Errors, 2)
+	require.Len(t, ce.Errors, 1)
+	
+	require.False(t,ce.ContainsErrors())
+
+	pe := ce.Errors[0].(errors.ParserError)
+	require.Equal(t, pe.Level, errors.ParserErrorLevelWarning)
 }
 
 func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
-	"github.com/jumppad-labs/hclconfig/lookup"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -551,7 +549,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
-		de.Message = fmt.Sprintf(`invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`)
+		de.Message = `invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`
 
 		return []error{&de}
 	}
@@ -1213,11 +1211,11 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 func processExpr(expr hclsyntax.Expression) ([]string, error) {
 	resources := []string{}
 
-	switch expr.(type) {
+	switch ex := expr.(type) {
 	// a template is a mix of functions, scope expressions and literals
 	// we need to check each part
 	case *hclsyntax.TemplateExpr:
-		for _, v := range expr.(*hclsyntax.TemplateExpr).Parts {
+		for _, v := range ex.Parts {
 			res, err := processExpr(v)
 			if err != nil {
 				return nil, err
@@ -1228,7 +1226,7 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 	// function call expressions are user defined functions
 	// myfunction(resource.container.base.name)
 	case *hclsyntax.FunctionCallExpr:
-		for _, v := range expr.(*hclsyntax.FunctionCallExpr).Args {
+		for _, v := range ex.Args {
 			res, err := processExpr(v)
 			if err != nil {
 				return nil, err
@@ -1238,7 +1236,7 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 		}
 	// a function can contain args that may also have an expression
 	case *hclsyntax.ScopeTraversalExpr:
-		ref, err := processScopeTraversal(expr.(*hclsyntax.ScopeTraversalExpr))
+		ref, err := processScopeTraversal(ex)
 		if err != nil {
 			return nil, err
 		}
@@ -1249,7 +1247,7 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 		}
 
 	case *hclsyntax.ObjectConsExpr:
-		for _, v := range expr.(*hclsyntax.ObjectConsExpr).Items {
+		for _, v := range ex.Items {
 			res, err := processExpr(v.ValueExpr)
 			if err != nil {
 				return nil, err
@@ -1258,7 +1256,7 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 			resources = append(resources, res...)
 		}
 	case *hclsyntax.TupleConsExpr:
-		for _, v := range expr.(*hclsyntax.TupleConsExpr).Exprs {
+		for _, v := range ex.Exprs {
 			res, err := processExpr(v)
 			if err != nil {
 				return nil, err
@@ -1269,19 +1267,19 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 	// conditional expressions are like if statements
 	// resource.container.base.name == "hello" ? "this" : "that"
 	case *hclsyntax.ConditionalExpr:
-		conditions, err := processExpr(expr.(*hclsyntax.ConditionalExpr).Condition)
+		conditions, err := processExpr(ex.Condition)
 		if err != nil {
 			return nil, err
 		}
 		resources = append(resources, conditions...)
 
-		trueResults, err := processExpr(expr.(*hclsyntax.ConditionalExpr).TrueResult)
+		trueResults, err := processExpr(ex.TrueResult)
 		if err != nil {
 			return nil, err
 		}
 		resources = append(resources, trueResults...)
 
-		falseResults, err := processExpr(expr.(*hclsyntax.ConditionalExpr).FalseResult)
+		falseResults, err := processExpr(ex.FalseResult)
 		if err != nil {
 			return nil, err
 		}
@@ -1291,19 +1289,19 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 	// resource.container.base.name != "hello"
 	// resource.container.base.name > 3
 	case *hclsyntax.BinaryOpExpr:
-		lhs, err := processExpr(expr.(*hclsyntax.BinaryOpExpr).LHS)
+		lhs, err := processExpr(ex.LHS)
 		if err != nil {
 			return nil, err
 		}
 		resources = append(resources, lhs...)
 
-		rhs, err := processExpr(expr.(*hclsyntax.BinaryOpExpr).RHS)
+		rhs, err := processExpr(ex.RHS)
 		if err != nil {
 			return nil, err
 		}
 		resources = append(resources, rhs...)
 	case *hclsyntax.SplatExpr:
-		ref, err := processExpr(expr.(*hclsyntax.SplatExpr).Source)
+		ref, err := processExpr(ex.Source)
 		if err != nil {
 			return nil, err
 		}
@@ -1332,11 +1330,11 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			}
 		} else {
 			// does this exist in the context
-			switch t.(type) {
+			switch tt := t.(type) {
 			case hcl.TraverseAttr:
-				strExpression += "." + t.(hcl.TraverseAttr).Name
+				strExpression += "." + tt.Name
 			case hcl.TraverseIndex:
-				strExpression += "[" + t.(hcl.TraverseIndex).Key.AsBigFloat().String() + "]"
+				strExpression += "[" + tt.Key.AsBigFloat().String() + "]"
 			}
 		}
 	}
@@ -1344,23 +1342,6 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 	// add to the references collection and replace with a nil value
 	// we will resolve these references before processing
 	return strExpression, nil
-}
-
-// recurses through destination object and returns the type of the field marked by path
-// e.g path "volume[1].source" is string
-func findTypeFromInterface(path string, s interface{}) string {
-	// strip the indexes as we are doing the lookup on a empty struct
-	re, _ := regexp.Compile(`\[[0-9]+\]`)
-	stripped := re.ReplaceAllString(path, "")
-
-	value := reflect.ValueOf(s).Type()
-	val, found := lookup.LookupType(value, strings.Split(stripped, "."), false, []string{"hcl", "json"})
-
-	if !found {
-		return ""
-	}
-
-	return val.String()
 }
 
 func (p *Parser) process(c *Config) error {
@@ -1405,7 +1386,7 @@ func (p *Parser) process(c *Config) error {
 		ce.AppendError(e)
 	}
 
-	if len(ce.Errors) > 0 || len(ce.Errors) > 0 {
+	if len(ce.Errors) > 0 {
 		return ce
 	}
 

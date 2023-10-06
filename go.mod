@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/flytam/filenamify v1.1.1
+	github.com/hashicorp/errwrap v1.1.0
 	github.com/hashicorp/go-getter v1.7.0
 	github.com/hashicorp/hcl/v2 v2.17.0
 	github.com/mailgun/raymond/v2 v2.0.48

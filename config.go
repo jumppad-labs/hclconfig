@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
@@ -466,11 +467,7 @@ func (c *Config) walk(wf dag.WalkFunc, reverse bool) []error {
 	w.Update(d)
 	diags := w.Wait()
 	if diags.HasErrors() {
-		for _, d := range diags {
-			if d.Severity() == dag.Error {
-				errs = append(errs, fmt.Errorf(d.Description().Summary))
-			}
-		}
+		errs = append(errs, diags.Err().(errwrap.Wrapper).WrappedErrors()...)
 
 		return errs
 	}
