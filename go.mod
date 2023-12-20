@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0
 	github.com/hashicorp/go-getter v1.7.0
 	github.com/hashicorp/hcl/v2 v2.17.0
-	github.com/mailgun/raymond/v2 v2.0.48
+	github.com/infinytum/raymond/v2 v2.0.5
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.8.1
@@ -39,7 +39,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/net v0.17.0 // indirect

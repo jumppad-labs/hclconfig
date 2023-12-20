@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/mailgun/raymond/v2"
+	"github.com/infinytum/raymond/v2"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
