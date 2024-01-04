@@ -68,18 +68,18 @@ type ResourceMetadata struct {
 
 	// File is the absolute path of the file where the resource is defined
 	// this is an internal property that can not be set with hcl
-	File string `hcl:"file,optional" json:"file"`
+	SourceFile string `hcl:"source_file,optional" json:"source_file"`
 
 	// Line is the starting line number where the resource is located in the
 	// file from where it was originally parsed
-	Line int `hcl:"line,optional" json:"line"`
+	SourceLine int `hcl:"source_line,optional" json:"source_line"`
 
 	// Column is the starting column number where the resource is located in the
 	// file from where it was originally parsed
-	Column int `hcl:"column,optional" json:"column"`
+	SourceColumn int `hcl:"source_column,optional" json:"source_column"`
 
 	// Checksum is the md5 hash of the resource
-	Checksum Checksum `hcl:"checksum,optional" json:"checksum"`
+	SourceChecksum Checksum `hcl:"source_checksum,optional" json:"source_checksum"`
 
 	// Properties holds a collection that can be used to store adhoc data
 	Properties map[string]interface{} `json:"properties,omitempty"`

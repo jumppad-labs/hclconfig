@@ -75,7 +75,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 
 	require.Equal(t, "resource.container.consul", cont.Metadata().ID)
 	require.Equal(t, "consul", cont.Metadata().Name)
-	require.Equal(t, absoluteFolderPath, cont.Metadata().File)
+	require.Equal(t, absoluteFolderPath, cont.Metadata().SourceFile)
 
 	require.Equal(t, "consul", cont.Command[0], "consul")
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
@@ -774,7 +774,7 @@ func TestParserDeserializesJSONCorrectly(t *testing.T) {
 	parsed, err := conf.FindResource("resource.container.base")
 	require.NoError(t, err)
 
-	require.Equal(t, orig.Metadata().File, parsed.Metadata().File)
+	require.Equal(t, orig.Metadata().SourceFile, parsed.Metadata().SourceFile)
 	require.Equal(t, orig.(*structs.Container).Networks[0].Name, parsed.(*structs.Container).Networks[0].Name)
 	require.Equal(t, orig.(*structs.Container).Command, parsed.(*structs.Container).Command)
 	require.Equal(t, orig.(*structs.Container).Resources.CPUPin, parsed.(*structs.Container).Resources.CPUPin)
@@ -855,15 +855,15 @@ func TestParserGeneratesChecksums(t *testing.T) {
 
 	r1, err := c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
-	require.NotEmpty(t, r1.Metadata().Checksum.Parsed)
+	require.NotEmpty(t, r1.Metadata().SourceChecksum.Parsed)
 
 	r2, err := c.FindResource("variable.cpu_resources")
 	require.NoError(t, err)
-	require.NotEmpty(t, r2.Metadata().Checksum.Parsed)
+	require.NotEmpty(t, r2.Metadata().SourceChecksum.Parsed)
 
 	r3, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
-	require.NotEmpty(t, r3.Metadata().Checksum.Parsed)
+	require.NotEmpty(t, r3.Metadata().SourceChecksum.Parsed)
 
 	// parse a second time, the checksums should be equal
 	p = setupParser(t)
@@ -873,15 +873,15 @@ func TestParserGeneratesChecksums(t *testing.T) {
 
 	c1, err := c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
-	require.Equal(t, r1.Metadata().Checksum.Parsed, c1.Metadata().Checksum.Parsed)
+	require.Equal(t, r1.Metadata().SourceChecksum.Parsed, c1.Metadata().SourceChecksum.Parsed)
 
 	c2, err := c.FindResource("variable.cpu_resources")
 	require.NoError(t, err)
-	require.Equal(t, r2.Metadata().Checksum.Parsed, c2.Metadata().Checksum.Parsed)
+	require.Equal(t, r2.Metadata().SourceChecksum.Parsed, c2.Metadata().SourceChecksum.Parsed)
 
 	c3, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
-	require.Equal(t, r3.Metadata().Checksum.Parsed, c3.Metadata().Checksum.Parsed)
+	require.Equal(t, r3.Metadata().SourceChecksum.Parsed, c3.Metadata().SourceChecksum.Parsed)
 }
 
 func TestParserHandlesCyclicalReference(t *testing.T) {
@@ -986,8 +986,8 @@ func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
 
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
-	
-	require.False(t,ce.ContainsErrors())
+
+	require.False(t, ce.ContainsErrors())
 
 	pe := ce.Errors[0].(errors.ParserError)
 	require.Equal(t, pe.Level, errors.ParserErrorLevelWarning)

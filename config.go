@@ -270,13 +270,13 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 		}
 
 		// check if the resource has changed
-		if cr.Metadata().Checksum.Parsed != r.Metadata().Checksum.Parsed {
+		if cr.Metadata().SourceChecksum.Parsed != r.Metadata().SourceChecksum.Parsed {
 			// resource has changes rebuild
 			parseChanged = append(parseChanged, r)
 			continue
 		}
 
-		if cr.Metadata().Checksum.Processed != r.Metadata().Checksum.Processed {
+		if cr.Metadata().SourceChecksum.Processed != r.Metadata().SourceChecksum.Processed {
 			// resource has changes rebuild
 			processChanged = append(processChanged, r)
 			continue

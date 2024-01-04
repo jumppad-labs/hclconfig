@@ -135,9 +135,9 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 			err := p.Parse(c)
 			if err != nil {
 				de := errors.ParserError{}
-				de.Line = rt.Metadata().Line
-				de.Column = rt.Metadata().Column
-				de.Filename = rt.Metadata().File
+				de.Line = rt.Metadata().SourceLine
+				de.Column = rt.Metadata().SourceColumn
+				de.Filename = rt.Metadata().SourceFile
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
 				ce.AppendError(de)
@@ -178,9 +178,9 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 			err := p.Parse(c)
 			if err != nil {
 				de := errors.ParserError{}
-				de.Line = rt.Metadata().Line
-				de.Column = rt.Metadata().Column
-				de.Filename = rt.Metadata().File
+				de.Line = rt.Metadata().SourceLine
+				de.Column = rt.Metadata().SourceColumn
+				de.Filename = rt.Metadata().SourceFile
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
 				ce.AppendError(de)
@@ -410,7 +410,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				panic(err)
 			}
 
-			r.Metadata().Checksum.Parsed = HashString(cs)
+			r.Metadata().SourceChecksum.Parsed = HashString(cs)
 
 			err = decodeBody(ctx, c, file, b, v)
 			if err != nil {
@@ -569,9 +569,9 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), b.Labels[0])
 
 	rt.Metadata().Module = moduleName
-	rt.Metadata().File = file
-	rt.Metadata().Line = b.TypeRange.Start.Line
-	rt.Metadata().Column = b.TypeRange.Start.Column
+	rt.Metadata().SourceFile = file
+	rt.Metadata().SourceLine = b.TypeRange.Start.Line
+	rt.Metadata().SourceColumn = b.TypeRange.Start.Column
 
 	err := decodeBody(ctx, c, file, b, rt)
 	if err != nil {
@@ -797,9 +797,9 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	}
 
 	rt.Metadata().Module = moduleName
-	rt.Metadata().File = file
-	rt.Metadata().Line = b.TypeRange.Start.Line
-	rt.Metadata().Column = b.TypeRange.Start.Column
+	rt.Metadata().SourceFile = file
+	rt.Metadata().SourceLine = b.TypeRange.Start.Line
+	rt.Metadata().SourceColumn = b.TypeRange.Start.Column
 
 	err = decodeBody(ctx, c, file, b, rt)
 	if err != nil {
@@ -1354,7 +1354,7 @@ func (p *Parser) process(c *Config) error {
 	c.walk(createCallback(
 		c,
 		func(r types.Resource) error {
-			r.Metadata().Checksum.Parsed = generateChecksum(r)
+			r.Metadata().SourceChecksum.Parsed = generateChecksum(r)
 			return nil
 		},
 	), false)
@@ -1377,7 +1377,7 @@ func (p *Parser) process(c *Config) error {
 				}
 			}
 
-			r.Metadata().Checksum.Processed = generateChecksum(r)
+			r.Metadata().SourceChecksum.Processed = generateChecksum(r)
 			return nil
 		},
 	), false)
