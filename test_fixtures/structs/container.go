@@ -88,7 +88,7 @@ type Build struct {
 // here as they are overwritten when the resource is processed by the dag
 // ResourceMetadata properties can be set
 func (c *Container) Parse(conf types.Findable) error {
-	c.Properties["status"] = "something"
+	c.ResourceProperties["status"] = "something"
 	return nil
 }
 

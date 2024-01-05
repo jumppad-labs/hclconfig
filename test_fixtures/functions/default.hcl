@@ -45,7 +45,7 @@ resource "container" "default" {
     })
   }
 
-  dns = resource.container.with_networks.created_network_map != null ? values(resource.container.with_networks.created_network_map).*.name : []
+  dns = resource.container.with_networks.created_network_map != null ? values(resource.container.with_networks.created_network_map).*.resource_name : []
 
   entrypoint = values({
     "one" = { "id" = "123" }

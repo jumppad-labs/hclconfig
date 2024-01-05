@@ -27,7 +27,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	// Loop over all resources and add to graph
 	for _, resource := range c.Resources {
 		// ignore variables
-		if resource.Metadata().Type != types.TypeVariable {
+		if resource.Metadata().ResourceType != types.TypeVariable {
 			graph.Add(resource)
 		}
 	}
@@ -37,7 +37,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		hasDeps := false
 
 		// do nothing with variables
-		if resource.Metadata().Type == types.TypeVariable {
+		if resource.Metadata().ResourceType == types.TypeVariable {
 			continue
 		}
 
@@ -65,9 +65,9 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			fqdn, err := types.ParseFQRN(d)
 			if err != nil {
 				pe := errors.ParserError{}
-				pe.Line = resource.Metadata().SourceLine
-				pe.Column = resource.Metadata().SourceColumn
-				pe.Filename = resource.Metadata().SourceFile
+				pe.Line = resource.Metadata().ResourceLine
+				pe.Column = resource.Metadata().ResourceColumn
+				pe.Filename = resource.Metadata().ResourceFile
 				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -81,13 +81,13 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				// "module1" and the reference is "module.module2.resource.container.mine.id"
 				// then the reference should be modified to include the parent reference
 				// "module.module1.module2.resource.container.mine.id"
-				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
+				relFQDN := fqdn.AppendParentModule(resource.Metadata().ResourceModule)
 				deps, err := c.FindModuleResources(relFQDN.String(), true)
 				if err != nil {
 					pe := errors.ParserError{}
-					pe.Line = resource.Metadata().SourceLine
-					pe.Column = resource.Metadata().SourceColumn
-					pe.Filename = resource.Metadata().SourceFile
+					pe.Line = resource.Metadata().ResourceLine
+					pe.Column = resource.Metadata().ResourceColumn
+					pe.Filename = resource.Metadata().ResourceFile
 					pe.Message = fmt.Sprintf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
 					pe.Level = errors.ParserErrorLevelError
 
@@ -106,14 +106,14 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				// "module1" and the reference is "module.module2.resource.container.mine.id"
 				// then the reference should be modified to include the parent reference
 				// "module.module1.module2.resource.container.mine.id"
-				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
+				relFQDN := fqdn.AppendParentModule(resource.Metadata().ResourceModule)
 				dep, err := c.FindResource(relFQDN.String())
 				if err != nil {
 					pe := errors.ParserError{}
-					pe.Line = resource.Metadata().SourceLine
-					pe.Column = resource.Metadata().SourceColumn
-					pe.Filename = resource.Metadata().SourceFile
-					pe.Message = fmt.Sprintf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
+					pe.Line = resource.Metadata().ResourceLine
+					pe.Column = resource.Metadata().ResourceColumn
+					pe.Filename = resource.Metadata().ResourceFile
+					pe.Message = fmt.Sprintf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().ResourceModule, err)
 					pe.Level = errors.ParserErrorLevelError
 
 					return nil, pe
@@ -124,15 +124,15 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		}
 
 		// if this resource is part of a module make it depend on that module
-		if resource.Metadata().Module != "" {
-			fqdnString := fmt.Sprintf("module.%s", resource.Metadata().Module)
+		if resource.Metadata().ResourceModule != "" {
+			fqdnString := fmt.Sprintf("module.%s", resource.Metadata().ResourceModule)
 
 			d, err := c.FindResource(fqdnString)
 			if err != nil {
 				pe := errors.ParserError{}
-				pe.Line = resource.Metadata().SourceLine
-				pe.Column = resource.Metadata().SourceColumn
-				pe.Filename = resource.Metadata().SourceFile
+				pe.Line = resource.Metadata().ResourceLine
+				pe.Column = resource.Metadata().ResourceColumn
+				pe.Filename = resource.Metadata().ResourceFile
 				pe.Message = fmt.Sprintf("unable to find resources parent module: '%s, error: %s", fqdnString, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -173,13 +173,13 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// if this is the root module or is disabled skip or is a variable
-		if (r.Metadata().Type == types.TypeRoot) || r.Metadata().Disabled || r.Metadata().Type == types.TypeVariable {
+		if (r.Metadata().ResourceType == types.TypeRoot) || r.Metadata().Disabled || r.Metadata().ResourceType == types.TypeVariable {
 			return nil
 		}
 
 		bdy, err := c.getBody(r)
 		if err != nil {
-			panic(fmt.Sprintf(`no body found for resource "%s"`, r.Metadata().ID))
+			panic(fmt.Sprintf(`no body found for resource "%s"`, r.Metadata().ResourceID))
 		}
 
 		ctx, err := c.getContext(r)
@@ -194,9 +194,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			fqdn, err := types.ParseFQRN(v)
 			if err != nil {
 				pe := errors.ParserError{}
-				pe.Filename = r.Metadata().SourceFile
-				pe.Line = r.Metadata().SourceLine
-				pe.Column = r.Metadata().SourceColumn
+				pe.Filename = r.Metadata().ResourceFile
+				pe.Line = r.Metadata().ResourceLine
+				pe.Column = r.Metadata().ResourceColumn
 				pe.Message = fmt.Sprintf("error parsing resource link %s", err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -204,12 +204,12 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 
 			// get the value from the linked resource
-			l, err := c.FindRelativeResource(v, r.Metadata().Module)
+			l, err := c.FindRelativeResource(v, r.Metadata().ResourceModule)
 			if err != nil {
 				pe := errors.ParserError{}
-				pe.Filename = r.Metadata().SourceFile
-				pe.Line = r.Metadata().SourceLine
-				pe.Column = r.Metadata().SourceColumn
+				pe.Filename = r.Metadata().ResourceFile
+				pe.Line = r.Metadata().ResourceLine
+				pe.Column = r.Metadata().ResourceColumn
 				pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -220,7 +220,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			// once we have found a resource convert it to a cty type and then
 			// set it on the context
-			switch l.Metadata().Type {
+			switch l.Metadata().ResourceType {
 			case types.TypeLocal:
 				loc := l.(*types.Local)
 				ctyRes = loc.CtyValue
@@ -233,9 +233,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			if err != nil {
 				pe := errors.ParserError{}
-				pe.Filename = r.Metadata().SourceFile
-				pe.Line = r.Metadata().SourceLine
-				pe.Column = r.Metadata().SourceColumn
+				pe.Filename = r.Metadata().ResourceFile
+				pe.Line = r.Metadata().ResourceLine
+				pe.Column = r.Metadata().ResourceColumn
 				pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -248,9 +248,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			err = setContextVariableFromPath(ctx, fqdn.String(), ctyRes)
 			if err != nil {
 				pe := errors.ParserError{}
-				pe.Filename = r.Metadata().SourceFile
-				pe.Line = r.Metadata().SourceLine
-				pe.Column = r.Metadata().SourceColumn
+				pe.Filename = r.Metadata().ResourceFile
+				pe.Line = r.Metadata().ResourceLine
+				pe.Column = r.Metadata().ResourceColumn
 				pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -266,9 +266,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
 			pe := errors.ParserError{}
-			pe.Filename = r.Metadata().SourceFile
-			pe.Line = r.Metadata().SourceLine
-			pe.Column = r.Metadata().SourceColumn
+			pe.Filename = r.Metadata().ResourceFile
+			pe.Line = r.Metadata().ResourceLine
+			pe.Column = r.Metadata().ResourceColumn
 			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
 			pe.Level = errors.ParserErrorLevelWarning
 
@@ -278,16 +278,16 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// if the type is a module the potentially we only just found out that we should be
 		// disabled
 		// as an additional check, set all module resources to disabled if the module is disabled
-		if r.Metadata().Disabled && r.Metadata().Type == types.TypeModule {
+		if r.Metadata().Disabled && r.Metadata().ResourceType == types.TypeModule {
 			// find all dependent resources
-			dr, err := c.FindModuleResources(r.Metadata().ID, true)
+			dr, err := c.FindModuleResources(r.Metadata().ResourceID, true)
 			if err != nil {
 				// should not be here unless an internal error
 				pe := errors.ParserError{}
-				pe.Filename = r.Metadata().SourceFile
-				pe.Line = r.Metadata().SourceLine
-				pe.Column = r.Metadata().SourceColumn
-				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
+				pe.Filename = r.Metadata().ResourceFile
+				pe.Line = r.Metadata().ResourceLine
+				pe.Column = r.Metadata().ResourceColumn
+				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ResourceID, err)
 				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
@@ -304,17 +304,17 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		//
 		// if disabled was set through interpolation, the value has only been set here
 		// we need to handle an additional check
-		if !r.Metadata().Disabled && r.Metadata().Type != types.TypeModule {
+		if !r.Metadata().Disabled && r.Metadata().ResourceType != types.TypeModule {
 
 			// call the callbacks
 			if wf != nil {
 				err := wf(r)
 				if err != nil {
 					pe := errors.ParserError{}
-					pe.Filename = r.Metadata().SourceFile
-					pe.Line = r.Metadata().SourceLine
-					pe.Column = r.Metadata().SourceColumn
-					pe.Message = fmt.Sprintf(`error calling callback for resource "%s" %s`, r.Metadata().ID, err)
+					pe.Filename = r.Metadata().ResourceFile
+					pe.Line = r.Metadata().ResourceLine
+					pe.Column = r.Metadata().ResourceColumn
+					pe.Message = fmt.Sprintf(`error calling callback for resource "%s" %s`, r.Metadata().ResourceID, err)
 					pe.Level = errors.ParserErrorLevelError
 
 					return diags.Append(pe)
@@ -324,7 +324,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		// if the type is a module we need to add the variables to the
 		// context
-		if r.Metadata().Type == types.TypeModule {
+		if r.Metadata().ResourceType == types.TypeModule {
 			mod := r.(*types.Module)
 
 			var mapVars map[string]cty.Value
@@ -340,7 +340,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		// if this is an output or local we need to convert the value into
 		// a go type
-		if r.Metadata().Type == types.TypeOutput {
+		if r.Metadata().ResourceType == types.TypeOutput {
 			o := r.(*types.Output)
 
 			if !o.CtyValue.IsNull() {
@@ -348,7 +348,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 		}
 
-		if r.Metadata().Type == types.TypeLocal {
+		if r.Metadata().ResourceType == types.TypeLocal {
 			o := r.(*types.Local)
 
 			if !o.CtyValue.IsNull() {

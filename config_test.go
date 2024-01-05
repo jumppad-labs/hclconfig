@@ -17,34 +17,34 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	typs[structs.TypeTemplate] = &structs.Template{}
 
 	var1, _ := typs.CreateResource(types.TypeVariable, "var1")
-	var1.Metadata().SourceChecksum = types.Checksum{
+	var1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "123",
 		Processed: "abc",
 	}
 
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
-	net1.Metadata().SourceChecksum = types.Checksum{
+	net1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "234",
 		Processed: "bcd",
 	}
 
 	mod1, _ := typs.CreateResource(types.TypeModule, "module1")
 	mod1.Metadata().DependsOn = []string{"resource.network.cloud"}
-	mod1.Metadata().SourceChecksum = types.Checksum{
+	mod1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "345",
 		Processed: "cde",
 	}
 
 	var2, _ := typs.CreateResource(types.TypeVariable, "var2")
-	var2.Metadata().Module = "module1"
-	var2.Metadata().SourceChecksum = types.Checksum{
+	var2.Metadata().ResourceModule = "module1"
+	var2.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "456",
 		Processed: "def",
 	}
 
 	mod2, _ := typs.CreateResource(types.TypeModule, "module2")
-	mod2.Metadata().Module = "module1"
-	mod2.Metadata().SourceChecksum = types.Checksum{
+	mod2.Metadata().ResourceModule = "module1"
+	mod2.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "567",
 		Processed: "efg",
 	}
@@ -53,50 +53,50 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	// all child resources
 	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con1.Metadata().DependsOn = []string{"module.module1"}
-	con1.Metadata().SourceChecksum = types.Checksum{
+	con1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "678",
 		Processed: "fgh",
 	}
 
 	// con2 is embedded in module1
 	con2, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	con2.Metadata().Module = "module1"
-	con2.Metadata().SourceChecksum = types.Checksum{
+	con2.Metadata().ResourceModule = "module1"
+	con2.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "789",
 		Processed: "ghi",
 	}
 
 	// con3 is loaded from a module inside module2
 	con3, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	con3.Metadata().Module = "module1.module2"
-	con3.Metadata().SourceChecksum = types.Checksum{
+	con3.Metadata().ResourceModule = "module1.module2"
+	con3.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "890",
 		Processed: "hij",
 	}
 
 	// con4 is loaded from a module inside module2
 	con4, _ := typs.CreateResource(structs.TypeContainer, "test_dev2")
-	con4.Metadata().Module = "module1.module2"
+	con4.Metadata().ResourceModule = "module1.module2"
 
 	// depends on would be added relative as a resource
 	// when a resource is defined, it has no idea on its
 	// module
 	con4.Metadata().DependsOn = []string{"resource.container.test_dev"}
-	con4.Metadata().SourceChecksum = types.Checksum{
+	con4.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "90a",
 		Processed: "ijk",
 	}
 
 	out1, _ := typs.CreateResource(types.TypeOutput, "fqdn")
-	out1.Metadata().Module = "module1.module2"
-	out1.Metadata().SourceChecksum = types.Checksum{
+	out1.Metadata().ResourceModule = "module1.module2"
+	out1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "0ab",
 		Processed: "jkl",
 	}
 
 	out2, _ := typs.CreateResource(types.TypeOutput, "out")
 	out2.Metadata().DependsOn = []string{"resource.network.cloud.id", "resource.container.test_dev"}
-	out2.Metadata().SourceChecksum = types.Checksum{
+	out2.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "abc",
 		Processed: "klm",
 	}
@@ -311,7 +311,7 @@ func TestToJSONSerializesJSON(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, len(d), 0)
 
-	require.Contains(t, string(d), `"name": "test_dev"`)
+	require.Contains(t, string(d), `"resource_name": "test_dev"`)
 }
 
 func TestAppendResourcesMerges(t *testing.T) {
@@ -358,9 +358,9 @@ func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 			callSync.Lock()
 
 			calls = append(calls, types.ResourceFQRN{
-				Module:   r.Metadata().Module,
-				Resource: r.Metadata().Name,
-				Type:     r.Metadata().Type,
+				Module:   r.Metadata().ResourceModule,
+				Resource: r.Metadata().ResourceName,
+				Type:     r.Metadata().ResourceType,
 			}.String())
 
 			callSync.Unlock()
@@ -390,9 +390,9 @@ func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 			callSync.Lock()
 
 			calls = append(calls, types.ResourceFQRN{
-				Module:   r.Metadata().Module,
-				Resource: r.Metadata().Name,
-				Type:     r.Metadata().Type,
+				Module:   r.Metadata().ResourceModule,
+				Resource: r.Metadata().ResourceName,
+				Type:     r.Metadata().ResourceType,
 			}.String())
 
 			callSync.Unlock()
@@ -419,14 +419,14 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 		func(r types.Resource) error {
 			callSync.Lock()
 			calls = append(calls, types.ResourceFQRN{
-				Module:   r.Metadata().Module,
-				Resource: r.Metadata().Name,
-				Type:     r.Metadata().Type,
+				Module:   r.Metadata().ResourceModule,
+				Resource: r.Metadata().ResourceName,
+				Type:     r.Metadata().ResourceType,
 			}.String())
 
 			callSync.Unlock()
 
-			if r.Metadata().Name == "cloud" {
+			if r.Metadata().ResourceName == "cloud" {
 				return fmt.Errorf("boom")
 			}
 
@@ -460,7 +460,7 @@ func TestDiffReturnsResourcesAdded(t *testing.T) {
 
 	typs := types.DefaultTypes()
 	var1, _ := typs.CreateResource(types.TypeVariable, "var22")
-	var1.Metadata().SourceChecksum = types.Checksum{
+	var1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "zzz",
 		Processed: "111",
 	}
@@ -481,10 +481,10 @@ func TestDiffReturnsResourcesUpdated(t *testing.T) {
 	new := copyConfig(t, c)
 
 	var1, _ := new.FindResource("variable.var1")
-	var1.Metadata().SourceChecksum.Parsed = "zzz"
+	var1.Metadata().ResourceChecksum.Parsed = "zzz"
 
 	var2, _ := new.FindResource("module.module1.variable.var2")
-	var2.Metadata().SourceChecksum.Processed = "zzz"
+	var2.Metadata().ResourceChecksum.Processed = "zzz"
 
 	changes, err := c.Diff(new)
 	require.NoError(t, err)
@@ -501,7 +501,7 @@ func TestDiffReturnsResourcesRemoved(t *testing.T) {
 	new := copyConfig(t, c)
 
 	var1, _ := new.FindResource("variable.var1")
-	var1.Metadata().SourceChecksum = types.Checksum{
+	var1.Metadata().ResourceChecksum = types.Checksum{
 		Parsed:    "zzz",
 		Processed: "111",
 	}

@@ -163,9 +163,9 @@ func (f *ResourceFQRN) AppendParentModule(parent string) ResourceFQRN {
 // FQDNFromResource returns the ResourceFQDN for the given Resource
 func FQDNFromResource(r Resource) *ResourceFQRN {
 	return &ResourceFQRN{
-		Module:   r.Metadata().Module,
-		Resource: r.Metadata().Name,
-		Type:     r.Metadata().Type,
+		Module:   r.Metadata().ResourceModule,
+		Resource: r.Metadata().ResourceName,
+		Type:     r.Metadata().ResourceType,
 	}
 }
 
