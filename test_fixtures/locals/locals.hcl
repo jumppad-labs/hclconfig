@@ -20,13 +20,13 @@ resource "container" "consul" {
 local "test" {
 
   //value = resource.container.consul.name
-  value = resource.container.consul.name == "consul" ? "yes" : "no"
+  value = resource.container.consul.resource_name == "consul" ? "yes" : "no"
 }
 
 resource "template" "consul_config_update" {
   disabled = false
 
-  source = resource.container.consul.name == "consul" ? "yes" : "no"
+  source = resource.container.consul.resource_name == "consul" ? "yes" : "no"
 
   destination = "./consul.hcl"
 
