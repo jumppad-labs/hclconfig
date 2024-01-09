@@ -74,6 +74,14 @@ func NewConfig() *Config {
 // e.g. to find a cluster named k3s in the module module1
 // r, err := c.FindResource("module.module1.resource.cluster.k3s")
 func (c *Config) FindResource(path string) (types.Resource, error) {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
+	return c.findResource(path)
+}
+
+// local version of FindResource that does not lock the config
+func (c *Config) findResource(path string) (types.Resource, error) {
 	fqdn, err := types.ParseFQRN(path)
 	if err != nil {
 		return nil, err
@@ -97,6 +105,9 @@ func (c *Config) FindResource(path string) (types.Resource, error) {
 }
 
 func (c *Config) FindRelativeResource(path string, parentModule string) (types.Resource, error) {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
 	fqdn, err := types.ParseFQRN(path)
 	if err != nil {
 		return nil, err
@@ -110,7 +121,7 @@ func (c *Config) FindRelativeResource(path string, parentModule string) (types.R
 		fqdn.Module = mod
 	}
 
-	r, err := c.FindResource(fqdn.String())
+	r, err := c.findResource(fqdn.String())
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +131,9 @@ func (c *Config) FindRelativeResource(path string, parentModule string) (types.R
 
 // FindResourcesByType returns the resources from the given type
 func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
 	res := []types.Resource{}
 
 	for _, r := range c.Resources {
@@ -140,6 +154,9 @@ func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 // are also returned
 // if includeSubModules is false only the resources defined in the given module are returned
 func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]types.Resource, error) {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+
 	fqdn, err := types.ParseFQRN(module)
 	if err != nil {
 		return nil, err
@@ -192,7 +209,7 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 		fqdn := types.FQDNFromResource(r).String()
 
 		// does the resource already exist?
-		if _, err := c.FindResource(fqdn); err == nil {
+		if _, err := c.findResource(fqdn); err == nil {
 			return ResourceExistsError{Name: fqdn}
 		}
 
@@ -260,7 +277,7 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 
 	for _, r := range o.Resources {
 		// does the resource exist
-		cr, err := c.FindResource(r.Metadata().ResourceID)
+		cr, err := c.findResource(r.Metadata().ResourceID)
 
 		// check if the resource has been found
 		if err != nil {
@@ -481,7 +498,7 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	// set the ID
 	r.Metadata().ResourceID = fqdn.String()
 
-	rf, err := c.FindResource(fqdn.String())
+	rf, err := c.findResource(fqdn.String())
 	if err == nil && rf != nil {
 		return ResourceExistsError{r.Metadata().ResourceName}
 	}
