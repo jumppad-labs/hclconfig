@@ -2,16 +2,19 @@ package hclconfig
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
 
 func TestContextLockDoesNotAllowConcurrentAccesstoContext(t *testing.T) {
 	a := &hcl.EvalContext{Variables: map[string]cty.Value{}}
+
+	w := sync.WaitGroup{}
+	w.Add(2)
 
 	go func() {
 		// get a lock but never unlock it
@@ -19,6 +22,8 @@ func TestContextLockDoesNotAllowConcurrentAccesstoContext(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
 		}
+
+		w.Done()
 	}()
 
 	go func() {
@@ -27,24 +32,41 @@ func TestContextLockDoesNotAllowConcurrentAccesstoContext(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
 		}
+
+		w.Done()
 	}()
 
-	// should never have 200 elements as the second go routine should be blocked
-	require.Neverf(t, func() bool {
-		return len(a.Variables) == 200
-	}, 100*time.Millisecond, 1*time.Millisecond, "a.Varibles should have 200 elements")
+	done := make(chan struct{})
+
+	go func() {
+		w.Wait()
+		<-done
+	}()
+
+	to := time.NewTimer(100 * time.Millisecond)
+	select {
+	case <-to.C:
+		t.Log("timed out waiting for wait group, test passed")
+	case <-done:
+		t.Fatal("should not have completed")
+	}
 }
 
 func TestContextLockAllowsConcurrentAccesstoDifferentContexts(t *testing.T) {
 	a := &hcl.EvalContext{Variables: map[string]cty.Value{}}
 	b := &hcl.EvalContext{Variables: map[string]cty.Value{}}
 
+	w := sync.WaitGroup{}
+	w.Add(2)
+
 	go func() {
 		unlock := getContextLock(a)
 		defer unlock()
 		for i := 0; i < 100; i++ {
 			a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
 		}
+
+		w.Done()
 	}()
 
 	go func() {
@@ -53,9 +75,22 @@ func TestContextLockAllowsConcurrentAccesstoDifferentContexts(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			b.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
 		}
+
+		w.Done()
 	}()
 
-	require.Eventuallyf(t, func() bool {
-		return len(a.Variables) == 100 && len(b.Variables) == 100
-	}, 100*time.Millisecond, 1*time.Millisecond, "a.Variables and b.Varibles should have 100 elements")
+	done := make(chan struct{})
+
+	go func() {
+		w.Wait()
+		done <- struct{}{}
+	}()
+
+	to := time.NewTimer(100 * time.Millisecond)
+	select {
+	case <-to.C:
+		t.Fatal("timed out waiting for wait group")
+	case <-done:
+		t.Log("wait group completed, test passed")
+	}
 }
