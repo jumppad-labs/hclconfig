@@ -10,7 +10,7 @@ resource "container" "disabled_value" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
-    name       = resource.network.onprem.name
+    name       = resource.network.onprem.meta.name
     ip_address = "10.6.0.200"
   }
 

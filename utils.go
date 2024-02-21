@@ -119,8 +119,8 @@ func castVar(v cty.Value) interface{} {
 func generateChecksum(r types.Resource) string {
 	// first sort the resource links and depends on as these change
 	// depending on the dag process
-	sort.Strings(r.Metadata().DependsOn)
-	sort.Strings(r.Metadata().ResourceLinks)
+	sort.Strings(r.GetDependsOn())
+	sort.Strings(r.Metadata().Links)
 
 	// first convert the object to json
 	json, _ := json.Marshal(r)

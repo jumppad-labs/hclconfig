@@ -50,20 +50,20 @@ resource "template" "consul_config_update" {
 resource "container" "base" {
   // ensure that arrays can also have interpolation
   entrypoint = [
-    resource.network.onprem.resource_id
+    resource.network.onprem.meta.id
   ]
 
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
     id         = 1
-    name       = resource.network.onprem.resource_name
+    name       = resource.network.onprem.meta.name
     ip_address = "10.6.0.200"
   }
 
   network {
     id         = 2
-    name       = resource.network.onprem.resource_name
+    name       = resource.network.onprem.meta.name
     ip_address = "10.6.0.201"
   }
 
@@ -80,7 +80,7 @@ resource "container" "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
-    name       = resource.network.onprem.resource_name
+    name       = resource.network.onprem.meta.name
     ip_address = "10.6.0.200"
     id         = resource.container.base.network[0].id
   }
@@ -121,7 +121,7 @@ resource "container" "consul" {
 
   volume {
     source      = "."
-    destination = "/test2/${env(resource.template.consul_config.resource_name)}"
+    destination = "/test2/${env(resource.template.consul_config.meta.name)}"
   }
 }
 

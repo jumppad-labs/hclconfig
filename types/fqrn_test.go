@@ -10,7 +10,7 @@ var typeTestContainer = "container"
 
 type testContainer struct {
 	// embedded type holding name, etc
-	ResourceMetadata `hcl:",remain"`
+	ResourceBase `hcl:",remain"`
 }
 
 func TestParseFQRNParsesComponents(t *testing.T) {
@@ -251,7 +251,7 @@ func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 	r, err := dt.CreateResource(typeTestContainer, "mytest")
 	require.NoError(t, err)
 
-	r.Metadata().ResourceModule = "mymodule"
+	r.Metadata().Module = "mymodule"
 
 	fqrn := FQDNFromResource(r)
 
@@ -287,7 +287,7 @@ func TestFQRNFromVariableInModuleReturnsCorrectData(t *testing.T) {
 	r, err := dt.CreateResource(TypeVariable, "mytest")
 	require.NoError(t, err)
 
-	r.Metadata().ResourceModule = "mymodule"
+	r.Metadata().Module = "mymodule"
 
 	fqrn := FQDNFromResource(r)
 

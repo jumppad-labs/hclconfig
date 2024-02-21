@@ -20,7 +20,7 @@ type Parsable interface {
 	// as all properties are overwritten when the resource is processed
 	// by the dag and any dependencies are resolved.
 	//
-	// ResourceMetadata can be set by this method as this is not overridden
+	// ResourceBase can be set by this method as this is not overridden
 	// when processed.
 	Parse(config Findable) error
 }
@@ -43,58 +43,64 @@ type Processable interface {
 // Resource is an interface that all
 type Resource interface {
 	// return the resource Metadata
-	Metadata() *ResourceMetadata
+	Metadata() *Meta
+	GetDisabled() bool
+	SetDisabled(bool)
+	GetDependsOn() []string
+	SetDependsOn([]string)
 }
 
-// ResourceMetadata is the embedded type for any config resources
-// it defines common meta data that all resources share
-type ResourceMetadata struct {
+type Meta struct {
 	// ID is the unique id for the resource
 	// this follows the convention module_name.resource_name
 	// i.e module.module1.module2.resource.container.mine
-	ResourceID string `hcl:"resource_id,optional" json:"resource_id"`
+	ID string `hcl:"id,optional" json:"id"`
 
 	// Name is the name of the resource
 	// this is an internal property that is set from the stanza label
-	ResourceName string `hcl:"resource_name,optional" json:"resource_name"`
+	Name string `hcl:"name,optional" json:"name"`
 
 	// Type is the type of resource, this is the text representation of the golang type
 	// this is an internal property that can not be set with hcl
-	ResourceType string `hcl:"resource_type,optional" json:"resource_type"`
+	Type string `hcl:"type,optional" json:"type"`
 
 	// Module is the name of the module if a resource has been loaded from a module
 	// this is an internal property that can not be set with hcl
-	ResourceModule string `hcl:"resource_module,optional" json:"resource_module,omitempty"`
+	Module string `hcl:"module,optional" json:"module,omitempty"`
 
 	// File is the absolute path of the file where the resource is defined
 	// this is an internal property that can not be set with hcl
-	ResourceFile string `hcl:"resource_file,optional" json:"resource_file"`
+	File string `hcl:"file,optional" json:"file"`
 
 	// Line is the starting line number where the resource is located in the
 	// file from where it was originally parsed
-	ResourceLine int `hcl:"resource_line,optional" json:"resource_line"`
+	Line int `hcl:"line,optional" json:"line"`
 
 	// Column is the starting column number where the resource is located in the
 	// file from where it was originally parsed
-	ResourceColumn int `hcl:"resource_column,optional" json:"resource_column"`
+	Column int `hcl:"column,optional" json:"column"`
 
 	// Checksum is the md5 hash of the resource
-	ResourceChecksum Checksum `hcl:"resource_checksum,optional" json:"resource_checksum"`
+	Checksum Checksum `hcl:"checksum,optional" json:"checksum"`
 
 	// Properties holds a collection that can be used to store adhoc data
-	ResourceProperties map[string]interface{} `json:"resource_properties,omitempty"`
+	Properties map[string]interface{} `json:"properties,omitempty"`
 
 	// Linked resources which must be set before this config can be processed
 	// this is an internal property that can not be set with hcl
-	ResourceLinks []string `json:"resource_links,omitempty"`
+	Links []string `json:"links,omitempty"`
+}
 
-	// # User configurable properties
-
+// ResourceBase is the embedded type for any config resources
+// it defines common meta data that all resources share
+type ResourceBase struct {
 	// DependsOn is a user configurable list of dependencies for this resource
 	DependsOn []string `hcl:"depends_on,optional" json:"depends_on,omitempty"`
 
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
+
+	Meta Meta `hcl:"meta,optional" json:"meta,omitempty"`
 }
 
 type Checksum struct {
@@ -108,8 +114,24 @@ type Checksum struct {
 	Processed string `hcl:"processed,optional" json:"processed,omitempty"`
 }
 
-// Metadata is a function that ensures the struct that embeds the ResourceMetadata
+// Metadata is a function that ensures the struct that embeds the ResourceBase
 // struct conforms to the interface Resource
-func (r *ResourceMetadata) Metadata() *ResourceMetadata {
-	return r
+func (r *ResourceBase) Metadata() *Meta {
+	return &r.Meta
+}
+
+func (r *ResourceBase) GetDisabled() bool {
+	return r.Disabled
+}
+
+func (r *ResourceBase) SetDisabled(v bool) {
+	r.Disabled = v
+}
+
+func (r *ResourceBase) GetDependsOn() []string {
+	return r.DependsOn
+}
+
+func (r *ResourceBase) SetDependsOn(v []string) {
+	r.DependsOn = v
 }

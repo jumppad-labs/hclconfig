@@ -10,7 +10,7 @@ const TypeTemplate = "template"
 
 // Template allows the process of user defined templates
 type Template struct {
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Depends []string `hcl:"depends_on,optional" json:"depends,omitempty"`
 

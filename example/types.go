@@ -18,7 +18,7 @@ type Timeouts struct {
 type Config struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	FQN string `hcl:"fqn"`
 
@@ -49,7 +49,7 @@ func (t *Config) Process() error {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`

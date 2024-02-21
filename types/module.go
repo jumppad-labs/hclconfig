@@ -8,7 +8,7 @@ const TypeModule = "module"
 // Module allows Shipyard configuration to be imported from external folder or
 // GitHub repositories
 type Module struct {
-	ResourceMetadata `hcl:",remain"`
+	ResourceBase `hcl:",remain"`
 
 	Source string `hcl:"source" json:"source"`
 

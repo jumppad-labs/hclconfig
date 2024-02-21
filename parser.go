@@ -135,9 +135,9 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 			err := p.Parse(c)
 			if err != nil {
 				de := errors.ParserError{}
-				de.Line = rt.Metadata().ResourceLine
-				de.Column = rt.Metadata().ResourceColumn
-				de.Filename = rt.Metadata().ResourceFile
+				de.Line = rt.Metadata().Line
+				de.Column = rt.Metadata().Column
+				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
 				ce.AppendError(de)
@@ -178,9 +178,9 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 			err := p.Parse(c)
 			if err != nil {
 				de := errors.ParserError{}
-				de.Line = rt.Metadata().ResourceLine
-				de.Column = rt.Metadata().ResourceColumn
-				de.Filename = rt.Metadata().ResourceFile
+				de.Line = rt.Metadata().Line
+				de.Column = rt.Metadata().Column
+				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, types.FQDNFromResource(rt).String(), err)
 
 				ce.AppendError(de)
@@ -220,7 +220,9 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 			return nil, err
 		}
 
-		r, err := p.registeredTypes.CreateResource(mm["resource_type"].(string), mm["resource_name"].(string))
+		meta := mm["meta"].(map[string]interface{})
+
+		r, err := p.registeredTypes.CreateResource(meta["type"].(string), meta["name"].(string))
 		if err != nil {
 			return nil, err
 		}
@@ -410,7 +412,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				panic(err)
 			}
 
-			r.Metadata().ResourceChecksum.Parsed = HashString(cs)
+			r.Metadata().Checksum.Parsed = HashString(cs)
 
 			err = decodeBody(ctx, c, file, b, v)
 			if err != nil {
@@ -421,7 +423,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			c.AppendResource(v)
 
 			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
-			setContextVariableIfMissing(ctx, v.ResourceName, val)
+			setContextVariableIfMissing(ctx, v.Meta.Name, val)
 		}
 	}
 
@@ -500,7 +502,7 @@ func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, pare
 	}
 
 	if parentDisabled {
-		r.Metadata().Disabled = true
+		r.SetDisabled(true)
 		return nil
 	}
 
@@ -511,14 +513,14 @@ func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, pare
 			return fmt.Errorf("unable to read source from module: %s", diags.Error())
 		}
 
-		r.Metadata().Disabled = disabled.True()
+		r.SetDisabled(disabled.True())
 	}
 
 	return nil
 }
 
 func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dependsOn []string) error {
-	r.Metadata().DependsOn = dependsOn
+	r.SetDependsOn(dependsOn)
 
 	if attr, ok := b.Attributes["depends_on"]; ok {
 		dependsOnVal, diags := attr.Expr.Value(ctx)
@@ -534,7 +536,7 @@ func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dep
 				return fmt.Errorf("invalid dependency %s, %s", d.AsString(), err)
 			}
 
-			r.Metadata().DependsOn = append(r.Metadata().DependsOn, d.AsString())
+			r.SetDependsOn(append(r.GetDependsOn(), d.AsString()))
 		}
 	}
 
@@ -568,10 +570,10 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	rt, _ := types.DefaultTypes().CreateResource(string(types.TypeModule), b.Labels[0])
 
-	rt.Metadata().ResourceModule = moduleName
-	rt.Metadata().ResourceFile = file
-	rt.Metadata().ResourceLine = b.TypeRange.Start.Line
-	rt.Metadata().ResourceColumn = b.TypeRange.Start.Column
+	rt.Metadata().Module = moduleName
+	rt.Metadata().File = file
+	rt.Metadata().Line = b.TypeRange.Start.Line
+	rt.Metadata().Column = b.TypeRange.Start.Column
 
 	err := decodeBody(ctx, c, file, b, rt)
 	if err != nil {
@@ -657,8 +659,8 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	// we need to add the module name to all the returned resources
 	for _, r := range moduleConfig.Resources {
 		// ensure the module name has the parent appended to it
-		r.Metadata().ResourceModule = fmt.Sprintf("%s.%s", name, r.Metadata().ResourceModule)
-		r.Metadata().ResourceModule = strings.TrimSuffix(r.Metadata().ResourceModule, ".")
+		r.Metadata().Module = fmt.Sprintf("%s.%s", name, r.Metadata().Module)
+		r.Metadata().Module = strings.TrimSuffix(r.Metadata().Module, ".")
 
 		ctx, err := moduleConfig.getContext(r)
 		if err != nil {
@@ -671,7 +673,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		}
 
 		// set disabled
-		setDisabled(ctx, r, bdy, rt.Metadata().Disabled)
+		setDisabled(ctx, r, bdy, rt.GetDisabled())
 
 		// depends on is a property of the embedded type we need to set this manually
 		err = setDependsOn(ctx, rt, b.Body, dependsOn)
@@ -796,10 +798,10 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		}
 	}
 
-	rt.Metadata().ResourceModule = moduleName
-	rt.Metadata().ResourceFile = file
-	rt.Metadata().ResourceLine = b.TypeRange.Start.Line
-	rt.Metadata().ResourceColumn = b.TypeRange.Start.Column
+	rt.Metadata().Module = moduleName
+	rt.Metadata().File = file
+	rt.Metadata().Line = b.TypeRange.Start.Line
+	rt.Metadata().Column = b.TypeRange.Start.Column
 
 	err = decodeBody(ctx, c, file, b, rt)
 	if err != nil {
@@ -1103,7 +1105,7 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 
 	// set the dependent resources
 	res := p.(types.Resource)
-	res.Metadata().ResourceLinks = uniqueResources
+	res.Metadata().Links = uniqueResources
 
 	return nil
 }
@@ -1162,7 +1164,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 		//fqdnD := types.FQDNFromResource(me)
 		if err == nil {
 			// check the deps on the linked resource
-			for _, cdep := range d.Metadata().ResourceLinks {
+			for _, cdep := range d.Metadata().Links {
 				fqdn, err := types.ParseFQRN(cdep)
 				fqdn.Attribute = ""
 
@@ -1176,15 +1178,15 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 					return nil, &pe
 				}
 
-				if me.Metadata().ResourceName == fqdn.Resource &&
-					me.Metadata().ResourceType == fqdn.Type &&
-					me.Metadata().ResourceModule == fqdn.Module {
+				if me.Metadata().Name == fqdn.Resource &&
+					me.Metadata().Type == fqdn.Type &&
+					me.Metadata().Module == fqdn.Module {
 
 					pe := errors.ParserError{}
 					pe.Column = b.Body.SrcRange.Start.Column
 					pe.Line = b.Body.SrcRange.Start.Line
 					pe.Filename = b.Body.SrcRange.Filename
-					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqdn.String(), d.Metadata().ResourceID)
+					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqdn.String(), d.Metadata().ID)
 					pe.Level = errors.ParserErrorLevelError
 
 					return nil, &pe
@@ -1354,7 +1356,7 @@ func (p *Parser) process(c *Config) error {
 	c.walk(createCallback(
 		c,
 		func(r types.Resource) error {
-			r.Metadata().ResourceChecksum.Parsed = generateChecksum(r)
+			r.Metadata().Checksum.Parsed = generateChecksum(r)
 			return nil
 		},
 	), false)
@@ -1377,7 +1379,7 @@ func (p *Parser) process(c *Config) error {
 				}
 			}
 
-			r.Metadata().ResourceChecksum.Processed = generateChecksum(r)
+			r.Metadata().Checksum.Processed = generateChecksum(r)
 			return nil
 		},
 	), false)

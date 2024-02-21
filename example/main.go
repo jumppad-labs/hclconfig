@@ -18,7 +18,7 @@ func main() {
 	// this function can be used to execute any external work required for the
 	// resource.
 	o.Callback = func(r types.Resource) error {
-		fmt.Printf("  resource '%s' named '%s' has been parsed from the file: %s\n", r.Metadata().ResourceType, r.Metadata().ResourceName, r.Metadata().ResourceFile)
+		fmt.Printf("  resource '%s' named '%s' has been parsed from the file: %s\n", r.Metadata().Type, r.Metadata().Name, r.Metadata().File)
 		return nil
 	}
 
@@ -61,7 +61,7 @@ func main() {
 
 	fmt.Println("## Process config")
 	nc.Walk(func(r types.Resource) error {
-		fmt.Println("  ", r.Metadata().ResourceID)
+		fmt.Println("  ", r.Metadata().ID)
 		return nil
 	}, false)
 
@@ -69,7 +69,7 @@ func main() {
 	fmt.Println("## Process config reverse")
 
 	nc.Walk(func(r types.Resource) error {
-		fmt.Println("  ", r.Metadata().ResourceID)
+		fmt.Println("  ", r.Metadata().ID)
 		return nil
 	}, true)
 
@@ -79,7 +79,7 @@ func printConfig(c *hclconfig.Config) {
 	fmt.Println("## Dump config")
 
 	for _, r := range c.Resources {
-		switch r.Metadata().ResourceType {
+		switch r.Metadata().Type {
 		case "config":
 			t := r.(*Config)
 			fmt.Println(printConfigT(t, 2))
@@ -90,8 +90,8 @@ func printConfig(c *hclconfig.Config) {
 
 		case "output":
 			t := r.(*types.Output)
-			fmt.Printf("  Postgres %s\n", t.ResourceName)
-			fmt.Printf("  Module %s\n", t.ResourceModule)
+			fmt.Printf("  Postgres %s\n", t.Meta.Name)
+			fmt.Printf("  Module %s\n", t.Meta.Module)
 			fmt.Printf("  --- Value: %s\n", t.Value)
 		}
 
@@ -106,9 +106,9 @@ func printConfigT(t *Config, indent int) string {
 		pad += " "
 	}
 
-	fmt.Fprintf(str, "%sConfig %s\n", pad, t.ResourceName)
-	fmt.Fprintf(str, "%sModule %s\n", pad, t.ResourceModule)
-	fmt.Fprintf(str, "%s--- ID: %s\n", pad, t.ResourceID)
+	fmt.Fprintf(str, "%sConfig %s\n", pad, t.Meta.Name)
+	fmt.Fprintf(str, "%sModule %s\n", pad, t.Meta.Module)
+	fmt.Fprintf(str, "%s--- ID: %s\n", pad, t.Meta.ID)
 	fmt.Fprintf(str, "%s--- DBConnectionString: %s\n", pad, t.DBConnectionString)
 	fmt.Fprintf(str, "%s--- Timeouts\n", pad)
 	fmt.Fprintf(str, "%s------ Connection: %d\n", pad, t.Timeouts.Connection)
@@ -133,8 +133,8 @@ func printPostgres(p *PostgreSQL, indent int) string {
 		pad += " "
 	}
 
-	fmt.Fprintf(str, "%sPostgres %s\n", pad, p.ResourceName)
-	fmt.Fprintf(str, "%sModule %s\n", pad, p.ResourceModule)
+	fmt.Fprintf(str, "%sPostgres %s\n", pad, p.Meta.Name)
+	fmt.Fprintf(str, "%sModule %s\n", pad, p.Meta.Module)
 	fmt.Fprintf(str, "%s--- Location: %s\n", pad, p.Location)
 	fmt.Fprintf(str, "%s--- Port: %d\n", pad, p.Port)
 	fmt.Fprintf(str, "%s--- DBName: %s\n", pad, p.DBName)

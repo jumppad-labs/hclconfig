@@ -10,7 +10,7 @@ const TypeContainer = "container"
 // Container defines a structure for creating Docker containers
 type Container struct {
 	// embedded type holding name, etc
-	types.ResourceMetadata `hcl:"rm,remain"`
+	types.ResourceBase `hcl:"rm,remain"`
 
 	Networks   []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"`         // Attach to the correct network // only when Image is specified
 	NetworkObj Network             `hcl:"networkobj,optional" json:"networkobj,omitempty"` // Reference to an object
@@ -86,9 +86,9 @@ type Build struct {
 // Called when resource is read from the file, can be used to validate resource but
 // you can not set any resource properties
 // here as they are overwritten when the resource is processed by the dag
-// ResourceMetadata properties can be set
+// ResourceBase properties can be set
 func (c *Container) Parse(conf types.Findable) error {
-	c.ResourceProperties["status"] = "something"
+	c.Meta.Properties["status"] = "something"
 	return nil
 }
 
@@ -104,8 +104,8 @@ func (c *Container) Process() error {
 	}
 
 	//c.CreatedNetworksMap = map[string]Network{
-	//	"one": Network{ResourceMetadata: types.ResourceMetadata{ID: "one", Name: "test1"}},
-	//	"two": Network{ResourceMetadata: types.ResourceMetadata{ID: "two", Name: "test2"}},
+	//	"one": Network{ResourceBase: types.ResourceBase{ID: "one", Name: "test1"}},
+	//	"two": Network{ResourceBase: types.ResourceBase{ID: "two", Name: "test2"}},
 	//}
 
 	return nil

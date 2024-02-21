@@ -90,13 +90,13 @@ func (c *Config) findResource(path string) (types.Resource, error) {
 	// this is an internal error and should not happen unless there is an issue with a provider
 	// there was, hence why we are here
 	if c.Resources == nil {
-		return nil, fmt.Errorf("unable to find resources, reference to parent config does not exist. Ensure that the object has been added to the config: `config.ResourceInfo.AddChild(type)`")
+		return nil, fmt.Errorf("unable to find resources, reference to parent config does not exist. Ensure that the object has been added to the config: `config.Info.AddChild(type)`")
 	}
 
 	for _, r := range c.Resources {
-		if r.Metadata().ResourceModule == fqdn.Module &&
-			r.Metadata().ResourceType == fqdn.Type &&
-			r.Metadata().ResourceName == fqdn.Resource {
+		if r.Metadata().Module == fqdn.Module &&
+			r.Metadata().Type == fqdn.Type &&
+			r.Metadata().Name == fqdn.Resource {
 			return r, nil
 		}
 	}
@@ -137,7 +137,7 @@ func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 	res := []types.Resource{}
 
 	for _, r := range c.Resources {
-		if r.Metadata().ResourceType == t {
+		if r.Metadata().Type == t {
 			res = append(res, r)
 		}
 	}
@@ -173,11 +173,11 @@ func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]t
 
 	for _, r := range c.Resources {
 		match := false
-		if includeSubModules && strings.HasPrefix(r.Metadata().ResourceModule, moduleString) {
+		if includeSubModules && strings.HasPrefix(r.Metadata().Module, moduleString) {
 			match = true
 		}
 
-		if !includeSubModules && r.Metadata().ResourceModule == moduleString {
+		if !includeSubModules && r.Metadata().Module == moduleString {
 			match = true
 		}
 
@@ -277,7 +277,7 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 
 	for _, r := range o.Resources {
 		// does the resource exist
-		cr, err := c.findResource(r.Metadata().ResourceID)
+		cr, err := c.findResource(r.Metadata().ID)
 
 		// check if the resource has been found
 		if err != nil {
@@ -287,13 +287,13 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 		}
 
 		// check if the resource has changed
-		if cr.Metadata().ResourceChecksum.Parsed != r.Metadata().ResourceChecksum.Parsed {
+		if cr.Metadata().Checksum.Parsed != r.Metadata().Checksum.Parsed {
 			// resource has changes rebuild
 			parseChanged = append(parseChanged, r)
 			continue
 		}
 
-		if cr.Metadata().ResourceChecksum.Processed != r.Metadata().ResourceChecksum.Processed {
+		if cr.Metadata().Checksum.Processed != r.Metadata().Checksum.Processed {
 			// resource has changes rebuild
 			processChanged = append(processChanged, r)
 			continue
@@ -305,7 +305,7 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 	for _, r := range c.Resources {
 		found := false
 		for _, r2 := range o.Resources {
-			if r.Metadata().ResourceID == r2.Metadata().ResourceID {
+			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
 			}
@@ -320,28 +320,28 @@ func (c *Config) Diff(o *Config) (*ResourceDiff, error) {
 	for _, r := range c.Resources {
 		found := false
 		for _, r2 := range new {
-			if r.Metadata().ResourceID == r2.Metadata().ResourceID {
+			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
 			}
 		}
 
 		for _, r2 := range parseChanged {
-			if r.Metadata().ResourceID == r2.Metadata().ResourceID {
+			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
 			}
 		}
 
 		for _, r2 := range processChanged {
-			if r.Metadata().ResourceID == r2.Metadata().ResourceID {
+			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
 			}
 		}
 
 		for _, r2 := range removed {
-			if r.Metadata().ResourceID == r2.Metadata().ResourceID {
+			if r.Metadata().ID == r2.Metadata().ID {
 				found = true
 				break
 			}
@@ -368,9 +368,9 @@ func (c *Config) RemoveResource(rf types.Resource) error {
 
 	pos := -1
 	for i, r := range c.Resources {
-		if rf.Metadata().ResourceName == r.Metadata().ResourceName &&
-			rf.Metadata().ResourceType == r.Metadata().ResourceType &&
-			rf.Metadata().ResourceModule == r.Metadata().ResourceModule {
+		if rf.Metadata().Name == r.Metadata().Name &&
+			rf.Metadata().Type == r.Metadata().Type &&
+			rf.Metadata().Module == r.Metadata().Module {
 			pos = i
 			break
 		}
@@ -420,7 +420,7 @@ func (c *Config) Walk(wf WalkCallback, reverse bool) error {
 			}
 
 			// if this is the root module or is disabled skip
-			if (r.Metadata().ResourceType == types.TypeRoot || r.Metadata().ResourceType == types.TypeModule) || r.Metadata().Disabled {
+			if (r.Metadata().Type == types.TypeRoot || r.Metadata().Type == types.TypeModule) || r.GetDisabled() {
 				return nil
 			}
 
@@ -496,11 +496,11 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	fqdn := types.FQDNFromResource(r)
 
 	// set the ID
-	r.Metadata().ResourceID = fqdn.String()
+	r.Metadata().ID = fqdn.String()
 
 	rf, err := c.findResource(fqdn.String())
 	if err == nil && rf != nil {
-		return ResourceExistsError{r.Metadata().ResourceName}
+		return ResourceExistsError{r.Metadata().Name}
 	}
 
 	c.Resources = append(c.Resources, r)

@@ -11,7 +11,7 @@ resource "container" "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
-    name       = resource.network.onprem.resource_name
+    name       = resource.network.onprem.meta.name
     ip_address = "10.6.0.200"
   }
 
@@ -29,7 +29,7 @@ resource "container" "consul" {
 }
 
 output "container_name" {
-  value = resource.container.consul.resource_name
+  value = resource.container.consul.meta.name
 }
 
 output "container_resources_cpu" {
@@ -45,7 +45,7 @@ output "combined_list" {
 
 output "combined_map" {
   value = {
-    name = resource.container.consul.resource_name
+    name = resource.container.consul.meta.name
     cpu  = resource.container.consul.resources.cpu
   }
 }

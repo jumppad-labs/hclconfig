@@ -69,7 +69,7 @@ Resources to be parsed are defined as Go structs that implement the Resource int
 type Config struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	ID string `hcl:"id"`
 
@@ -104,7 +104,7 @@ func (t *Config) Parse() error {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`
@@ -222,7 +222,7 @@ fmt.Println("db_connection_string", c.db_connection_string) // = postgresql://ad
 To create types that can be converted from HCL your top level resource needs to embed the
 following type into your structs.
 
-``types.ResourceMetadata `hcl:",remain"` ``
+``types.ResourceBase `hcl:",remain"` ``
 
 The struct tag `` `hcl:",remain"` ``, must be included with this type as it tells the HCL parser
 to unfold the default properties such as `disabled` and `depends_on` from your custom type.
@@ -238,7 +238,7 @@ the `PostgresSQL` struct will result in a parser error.
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location"`
 }
@@ -252,7 +252,7 @@ the previous example has been modified to make `location` optional.
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location,optional"`
 }
@@ -275,7 +275,7 @@ This can be seen in the following code sample.
 
 ```go
 type Config struct {
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	DBConnectionString string `hcl:"db_connection_string"`
 
@@ -297,7 +297,7 @@ resource "config" "myconfig" {
 }
 ```
 
-The `Timeout` type used by the field `Timeout` does not need to embed `ResourceMetadata`
+The `Timeout` type used by the field `Timeout` does not need to embed `ResourceBase`
 as it is not a top level resource but all other struct tags that define blocks and
 optional parameters are required.
 
@@ -307,7 +307,7 @@ To make child blocks optional you simply need to change the Field type to a refe
 
 ```go
 type Config struct {
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	DBConnectionString string `hcl:"db_connection_string"`
 
@@ -334,7 +334,7 @@ slice.
 
 ```go
 type Config struct {
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	DBConnectionString string `hcl:"db_connection_string"`
 
@@ -373,10 +373,10 @@ resource.
 
 ```go
 type Config struct {
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
   // Other structs can be referenced by defining the type
-  // to the other struct, the referenced type must implemented types.ResourceMetadata
+  // to the other struct, the referenced type must implemented types.ResourceBase
 	MainDBConnection PostgreSQL `hcl:"main_db_connection"`
   
   // It is also possible to reference arrays of structs 
@@ -391,7 +391,7 @@ type Config struct {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location,optional"`
 }
@@ -901,7 +901,7 @@ to compute the value of the attribute `connection_string`.
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`
@@ -930,7 +930,7 @@ For example, given the following custom resources
 type Config struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	ID string `hcl:"id"`
 
@@ -955,7 +955,7 @@ func (t *Config) Process() error {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceMetadata `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`

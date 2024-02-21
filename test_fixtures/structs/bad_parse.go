@@ -11,7 +11,7 @@ const TypeParseError = "parse_error"
 
 type ParseError struct {
 	// embedded type holding name, etc
-	types.ResourceMetadata `hcl:"rm,remain"`
+	types.ResourceBase `hcl:"rm,remain"`
 }
 
 func (c *ParseError) Parse(conf types.Findable) error {

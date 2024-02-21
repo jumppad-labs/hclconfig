@@ -73,9 +73,9 @@ func TestParseFileProcessesResources(t *testing.T) {
 
 	cont := r.(*structs.Container)
 
-	require.Equal(t, "resource.container.consul", cont.Metadata().ResourceID)
-	require.Equal(t, "consul", cont.Metadata().ResourceName)
-	require.Equal(t, absoluteFolderPath, cont.Metadata().ResourceFile)
+	require.Equal(t, "resource.container.consul", cont.Metadata().ID)
+	require.Equal(t, "consul", cont.Metadata().Name)
+	require.Equal(t, absoluteFolderPath, cont.Metadata().File)
 
 	require.Equal(t, "consul", cont.Command[0], "consul")
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
@@ -103,7 +103,7 @@ func TestParseFileCallsParseFunction(t *testing.T) {
 	require.NotNil(t, r)
 
 	cont := r.(*structs.Container)
-	require.Equal(t, "something", cont.ResourceProperties["status"])
+	require.Equal(t, "something", cont.Meta.Properties["status"])
 }
 
 func TestParseFileSetsLinks(t *testing.T) {
@@ -127,17 +127,17 @@ func TestParseFileSetsLinks(t *testing.T) {
 	// this enables us to build a graph of objects and later set these fields to the correct
 	// reference values
 	cont := r.(*structs.Container)
-	require.Len(t, cont.ResourceLinks, 9)
+	require.Len(t, cont.Meta.Links, 9)
 
-	require.Contains(t, cont.ResourceLinks, "resource.network.onprem.resource_name")
-	require.Contains(t, cont.ResourceLinks, "resource.container.base.dns")
-	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.cpu_pin")
-	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.memory")
-	require.Contains(t, cont.ResourceLinks, "resource.container.base.resources.user")
-	require.Contains(t, cont.ResourceLinks, "resource.container.base.network[0].id")
-	require.Contains(t, cont.ResourceLinks, "resource.container.base.network[1].name")
-	require.Contains(t, cont.ResourceLinks, "resource.template.consul_config.destination")
-	require.Contains(t, cont.ResourceLinks, "resource.template.consul_config.resource_name")
+	require.Contains(t, cont.Meta.Links, "resource.network.onprem.meta.name")
+	require.Contains(t, cont.Meta.Links, "resource.container.base.dns")
+	require.Contains(t, cont.Meta.Links, "resource.container.base.resources.cpu_pin")
+	require.Contains(t, cont.Meta.Links, "resource.container.base.resources.memory")
+	require.Contains(t, cont.Meta.Links, "resource.container.base.resources.user")
+	require.Contains(t, cont.Meta.Links, "resource.container.base.network[0].id")
+	require.Contains(t, cont.Meta.Links, "resource.container.base.network[1].name")
+	require.Contains(t, cont.Meta.Links, "resource.template.consul_config.destination")
+	require.Contains(t, cont.Meta.Links, "resource.template.consul_config.meta.name")
 }
 
 func TestParseResolvesArrayReferences(t *testing.T) {
@@ -416,7 +416,8 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 
 	// check element can be obtained from a map of values
 	// returned in the output
-	require.Equal(t, "base", cont.(*types.Output).Value.(map[string]interface{})["resource_name"])
+	meta := cont.(*types.Output).Value.(map[string]interface{})["meta"].(map[string]interface{})
+	require.Equal(t, "base", meta["name"])
 }
 
 func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
@@ -485,7 +486,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	callSync := sync.Mutex{}
 	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
-		calls = append(calls, r.Metadata().ResourceID)
+		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
 
 		return nil
@@ -499,11 +500,11 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
-	require.True(t, r.Metadata().Disabled)
+	require.True(t, r.GetDisabled())
 
 	r, err = c.FindResource("resource.container.disabled_variable")
 	require.NoError(t, err)
-	require.True(t, r.Metadata().Disabled)
+	require.True(t, r.GetDisabled())
 
 	require.Len(t, calls, 0)
 }
@@ -519,7 +520,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	callSync := sync.Mutex{}
 	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
-		calls = append(calls, r.Metadata().ResourceID)
+		calls = append(calls, r.Metadata().ID)
 		callSync.Unlock()
 
 		return nil
@@ -532,11 +533,11 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 
 	r, err := c.FindResource("module.disabled.resource.container.enabled")
 	require.NoError(t, err)
-	require.True(t, r.Metadata().Disabled)
+	require.True(t, r.GetDisabled())
 
 	r, err = c.FindResource("module.disabled.sub.resource.container.enabled")
 	require.NoError(t, err)
-	require.True(t, r.Metadata().Disabled)
+	require.True(t, r.GetDisabled())
 
 	require.Len(t, calls, 0)
 }
@@ -652,7 +653,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		callSync.Lock()
 
 		//fmt.Println(r.Metadata().ID, r.Metadata().DependsOn)
-		calls = append(calls, r.Metadata().ResourceID)
+		calls = append(calls, r.Metadata().ID)
 
 		callSync.Unlock()
 
@@ -726,14 +727,14 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 		callSync.Lock()
 
 		calls = append(calls, types.ResourceFQRN{
-			Module:   r.Metadata().ResourceModule,
-			Resource: r.Metadata().ResourceName,
-			Type:     r.Metadata().ResourceType,
+			Module:   r.Metadata().Module,
+			Resource: r.Metadata().Name,
+			Type:     r.Metadata().Type,
 		}.String())
 
 		callSync.Unlock()
 
-		if r.Metadata().ResourceName == "base" {
+		if r.Metadata().Name == "base" {
 			return fmt.Errorf("container base error")
 		}
 
@@ -774,7 +775,7 @@ func TestParserDeserializesJSONCorrectly(t *testing.T) {
 	parsed, err := conf.FindResource("resource.container.base")
 	require.NoError(t, err)
 
-	require.Equal(t, orig.Metadata().ResourceFile, parsed.Metadata().ResourceFile)
+	require.Equal(t, orig.Metadata().File, parsed.Metadata().File)
 	require.Equal(t, orig.(*structs.Container).Networks[0].Name, parsed.(*structs.Container).Networks[0].Name)
 	require.Equal(t, orig.(*structs.Container).Command, parsed.(*structs.Container).Command)
 	require.Equal(t, orig.(*structs.Container).Resources.CPUPin, parsed.(*structs.Container).Resources.CPUPin)
@@ -855,15 +856,15 @@ func TestParserGeneratesChecksums(t *testing.T) {
 
 	r1, err := c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
-	require.NotEmpty(t, r1.Metadata().ResourceChecksum.Parsed)
+	require.NotEmpty(t, r1.Metadata().Checksum.Parsed)
 
 	r2, err := c.FindResource("variable.cpu_resources")
 	require.NoError(t, err)
-	require.NotEmpty(t, r2.Metadata().ResourceChecksum.Parsed)
+	require.NotEmpty(t, r2.Metadata().Checksum.Parsed)
 
 	r3, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
-	require.NotEmpty(t, r3.Metadata().ResourceChecksum.Parsed)
+	require.NotEmpty(t, r3.Metadata().Checksum.Parsed)
 
 	// parse a second time, the checksums should be equal
 	p = setupParser(t)
@@ -873,15 +874,15 @@ func TestParserGeneratesChecksums(t *testing.T) {
 
 	c1, err := c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
-	require.Equal(t, r1.Metadata().ResourceChecksum.Parsed, c1.Metadata().ResourceChecksum.Parsed)
+	require.Equal(t, r1.Metadata().Checksum.Parsed, c1.Metadata().Checksum.Parsed)
 
 	c2, err := c.FindResource("variable.cpu_resources")
 	require.NoError(t, err)
-	require.Equal(t, r2.Metadata().ResourceChecksum.Parsed, c2.Metadata().ResourceChecksum.Parsed)
+	require.Equal(t, r2.Metadata().Checksum.Parsed, c2.Metadata().Checksum.Parsed)
 
 	c3, err := c.FindResource("output.ip_address_1")
 	require.NoError(t, err)
-	require.Equal(t, r3.Metadata().ResourceChecksum.Parsed, c3.Metadata().ResourceChecksum.Parsed)
+	require.Equal(t, r3.Metadata().Checksum.Parsed, c3.Metadata().Checksum.Parsed)
 }
 
 func TestParserHandlesCyclicalReference(t *testing.T) {
