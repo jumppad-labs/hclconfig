@@ -30,6 +30,10 @@ resource "postgres" "other1" {
 }
 
 resource "postgres" "other2" {
+  depends_on = ["resource.postgres.other1"]
+  disabled   = false
+
+  id       = "lekker.broodje"
   location = "2.other.location"
   port     = 5432
   db_name  = "other2"
@@ -38,6 +42,8 @@ resource "postgres" "other2" {
   // by values set by the environment variables HCL_db_username and HCL_db_password
   username = variable.db_username
   password = variable.db_password
+
+  erik_is_a = "a Dutchman"
 }
 
 resource "config" "myapp" {
@@ -64,6 +70,26 @@ resource "config" "myapp" {
     // optional parameter tls_handshake not specified
     // TLSHandshake = 10
   }
+}
+
+output "erik" {
+  value = resource.postgres.other2.erik_is_a
+}
+
+output "id" {
+  value = resource.postgres.other2.id
+}
+
+output "disabled" {
+  value = resource.postgres.other2.disabled
+}
+
+output "depends_on" {
+  value = resource.postgres.other2.depends_on
+}
+
+output "meta_id" {
+  value = resource.postgres.other2.meta.id
 }
 
 // modules can use a git ref to be remotely downloaded from the source

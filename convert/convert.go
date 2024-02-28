@@ -1,6 +1,8 @@
 package convert
 
 import (
+	"fmt"
+
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/gocty"
@@ -18,6 +20,24 @@ func GoToCtyValue(val interface{}) (cty.Value, error) {
 	}
 
 	if r, ok := val.(types.Resource); ok {
+		ctyMap := ctyVal.AsValueMap()
+
+		// add disabled to the parent
+		ctyMap["disabled"] = cty.BoolVal(r.GetDisabled())
+
+		// add depends_on to the parent
+		depTyp, err := gocty.ImpliedType(r.GetDependsOn())
+		if err != nil {
+			return cty.False, err
+		}
+
+		dep, err := gocty.ToCtyValue(r.GetDependsOn(), depTyp)
+		if err != nil {
+			return cty.False, fmt.Errorf("unable to convert depends_on to cty: %s", err)
+		}
+		ctyMap["depends_on"] = dep
+
+		// add the meta properties to the parent
 		typ, err := gocty.ImpliedType(r.Metadata())
 		if err != nil {
 			return cty.False, err
@@ -28,14 +48,8 @@ func GoToCtyValue(val interface{}) (cty.Value, error) {
 			return cty.False, err
 		}
 
-		objMap := ctyVal.AsValueMap()
-		metaMap := metaVal.AsValueMap()
-
-		for k, v := range metaMap {
-			objMap[k] = v
-		}
-
-		ctyVal = cty.ObjectVal(objMap)
+		ctyMap["meta"] = metaVal
+		ctyVal = cty.ObjectVal(ctyMap)
 	}
 
 	return ctyVal, nil

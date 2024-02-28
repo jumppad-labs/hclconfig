@@ -191,7 +191,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// all linked values should now have been processed as the graph
 		// will have handled them first
 		for _, v := range r.Metadata().Links {
-			fqdn, err := types.ParseFQRN(v)
+			fqrn, err := types.ParseFQRN(v)
 			if err != nil {
 				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File
@@ -243,9 +243,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 
 			// remove the attributes and to get a pure resource ref
-			fqdn.Attribute = ""
+			fqrn.Attribute = ""
 
-			err = setContextVariableFromPath(ctx, fqdn.String(), ctyRes)
+			err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
 			if err != nil {
 				pe := errors.ParserError{}
 				pe.Filename = r.Metadata().File

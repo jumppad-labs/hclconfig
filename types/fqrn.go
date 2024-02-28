@@ -47,7 +47,7 @@ type ResourceFQRN struct {
 //
 // get the "module" resource called module1 in the root "module"
 // // module1
-func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
+func ParseFQRN(fqrn string) (*ResourceFQRN, error) {
 	moduleName := ""
 	typeName := ""
 	resourceName := ""
@@ -55,21 +55,21 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 
 	// first split on the resource, module, or output
 	r := regexp.MustCompile(`^(module.(?P<modules>.*)\.)?(?:(?P<resource>(resource|output|local|variable))\.(?P<attributes>(.*)))|(?P<onlymodules>.*)`)
-	match := r.FindStringSubmatch(fqdn)
+	match := r.FindStringSubmatch(fqrn)
 	results := map[string]string{}
 	for i, name := range match {
 		results[r.SubexpNames()[i]] = name
 	}
 
 	if len(results) < 2 {
-		return nil, fmt.Errorf(formatErrorString(fqdn))
+		return nil, fmt.Errorf(formatErrorString(fqrn))
 	}
 
 	switch results["resource"] {
 	case "resource":
 		resourceParts := strings.Split(results["attributes"], ".")
 		if len(resourceParts) < 2 {
-			return nil, fmt.Errorf(formatErrorString(fqdn))
+			return nil, fmt.Errorf(formatErrorString(fqrn))
 		}
 
 		typeName = resourceParts[0]
@@ -105,7 +105,7 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 	case "variable":
 		varParts := strings.Split(results["attributes"], ".")
 		if len(varParts) != 1 {
-			return nil, fmt.Errorf(formatErrorString(fqdn))
+			return nil, fmt.Errorf(formatErrorString(fqrn))
 		}
 
 		typeName = TypeVariable
@@ -114,7 +114,7 @@ func ParseFQRN(fqdn string) (*ResourceFQRN, error) {
 
 	default:
 		if results["onlymodules"] == "" || !strings.HasPrefix(results["onlymodules"], "module.") {
-			return nil, fmt.Errorf(formatErrorString(fqdn))
+			return nil, fmt.Errorf(formatErrorString(fqrn))
 		}
 
 		//module1.module2

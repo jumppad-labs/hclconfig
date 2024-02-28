@@ -45,12 +45,19 @@ func (t *Config) Process() error {
 	return nil
 }
 
+type DBCommon struct {
+	types.ResourceBase `hcl:",remain"`
+	ErikIsA            string `hcl:"erik_is_a,optional"`
+}
+
 // PostgreSQL defines the Resource `postgres`
 type PostgreSQL struct {
+
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	DBCommon `hcl:",remain"`
 
+	ID       string `hcl:"id,optional"`
 	Location string `hcl:"location"`
 	Port     int    `hcl:"port"`
 	DBName   string `hcl:"db_name"`
