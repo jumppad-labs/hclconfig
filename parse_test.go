@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
@@ -1007,4 +1008,77 @@ func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
 
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
+}
+
+func TestParseDoesNotOverwiteWithMeta(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/embedded/config.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := NewParser(nil)
+	p.RegisterType(embedded.TypeContainer, &embedded.Container{})
+	p.RegisterType(embedded.TypeSidecar, &embedded.Sidecar{})
+
+	c, err := p.ParseFile(f)
+	require.NoError(t, err)
+
+	r1, err := c.FindResource("resource.container.mine")
+	require.NoError(t, err)
+
+	// test that when the meta is set it does not overwrite any
+	// existing fields when they have the same name
+	cont := r1.(*embedded.Container)
+	require.Equal(t, "resource.container.mine", cont.Meta.ID)
+	require.Equal(t, "mycontainer", cont.ID)
+}
+
+func TestParseHandlesCommonTypes(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/embedded/config.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := NewParser(nil)
+	p.RegisterType(embedded.TypeContainer, &embedded.Container{})
+	p.RegisterType(embedded.TypeSidecar, &embedded.Sidecar{})
+
+	c, err := p.ParseFile(f)
+	require.NoError(t, err)
+
+	r1, err := c.FindResource("resource.container.mine")
+	require.NoError(t, err)
+
+	cont := r1.(*embedded.Container)
+
+	// test embedded properties
+	require.Equal(t, "mine", cont.Meta.Name)
+	require.Equal(t, "mycontainer", cont.ID)
+	require.Contains(t, cont.Entrypoint, "echo")
+	require.Contains(t, cont.Command, "hello")
+	require.Equal(t, "value", cont.Env["NAME"])
+	require.Contains(t, cont.DNS, "container-dns")
+	require.True(t, cont.Privileged)
+	require.Equal(t, 5, cont.MaxRestartCount)
+
+	// test specific properties
+	require.Equal(t, "mycontainer", cont.ContainerID)
+
+	r2, err := c.FindResource("resource.sidecar.mine")
+	require.NoError(t, err)
+
+	side := r2.(*embedded.Sidecar)
+
+	// test embedded properties
+	require.Equal(t, "mine", side.Meta.Name)
+	require.Equal(t, "mycontainer", side.ID)
+	require.Contains(t, side.Entrypoint, "echo")
+	require.Contains(t, side.Command, "hello")
+	require.Equal(t, "value", side.Env["NAME"])
+	require.Contains(t, side.DNS, "container-dns")
+	require.False(t, side.Privileged)
+	require.Equal(t, 3, side.MaxRestartCount)
+
+	// test specific properties
+	require.Equal(t, "mysidecar", side.SidecarID)
 }

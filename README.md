@@ -441,6 +441,43 @@ in the normal go way.
   fmt.Println("loc other 2", conf.OtherDBConnections[1].Location)
 ```
 
+### Defining shared fields for resources
+It is common that you might have two resources that are similar but have some 
+differences. For example, you might have two `database`, `postgres` and `mysql`
+that share some common fields like `location` and `port` but have some differences
+that are specific to the implementation.
+
+To enable code reuse you can define a `shared` struct that contains the common fields
+and then embed this struct into the `postgres` and `mysql` structs.
+
+To enable this you define a common type that embed the `ResourceBase` type and
+then you can embed this type into the `postgres` and `mysql` types.
+Note: you must use the `hcl:",remain"` tag to ensure that the fields from the shared
+type.
+
+```go
+type DB struct {
+	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
+	// add the methods from the `Resource` interface
+	types.ResourceBase `hcl:",remain"`
+
+	Location string `hcl:"location,optional"`
+	Port     int    `hcl:"port,optional"`
+}
+
+type PostgreSQL struct {
+  DB `hcl:",remain"`
+
+  MaxLocks int `hcl:"max_locks"`
+}
+
+type MySQL struct {
+  DB `hcl:",remain"`
+
+  CacheSize int `hcl:"cache_size"`
+}
+```
+
 ## Variables
 
 Variables allow dynamic values to be set in your configuration, they are defined
