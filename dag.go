@@ -58,7 +58,10 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 		// add links to dependencies
 		// this is here for now as we might need to process these two lists separately
-		resource.SetDependsOn(append(resource.GetDependsOn(), resource.Metadata().Links...))
+		// resource.SetDependsOn(append(resource.GetDependsOn(), resource.Metadata().Links...))
+		for _, d := range resource.Metadata().Links {
+			resource.AddDependency(d)
+		}
 
 		for _, d := range resource.GetDependsOn() {
 			var err error

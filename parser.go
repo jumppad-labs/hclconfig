@@ -520,7 +520,9 @@ func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, pare
 }
 
 func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dependsOn []string) error {
-	r.SetDependsOn(dependsOn)
+	for _, d := range dependsOn {
+		r.AddDependency(d)
+	}
 
 	if attr, ok := b.Attributes["depends_on"]; ok {
 		dependsOnVal, diags := attr.Expr.Value(ctx)
@@ -536,7 +538,7 @@ func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dep
 				return fmt.Errorf("invalid dependency %s, %s", d.AsString(), err)
 			}
 
-			r.SetDependsOn(append(r.GetDependsOn(), d.AsString()))
+			r.AddDependency(d.AsString())
 		}
 	}
 
