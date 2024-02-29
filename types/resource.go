@@ -46,8 +46,8 @@ type Resource interface {
 	Metadata() *Meta
 	GetDisabled() bool
 	SetDisabled(bool)
-	GetDependsOn() []string
-	SetDependsOn([]string)
+	GetDependencies() []string
+	SetDependencies([]string)
 	AddDependency(string)
 }
 
@@ -129,11 +129,11 @@ func (r *ResourceBase) SetDisabled(v bool) {
 	r.Disabled = v
 }
 
-func (r *ResourceBase) GetDependsOn() []string {
+func (r *ResourceBase) GetDependencies() []string {
 	return r.DependsOn
 }
 
-func (r *ResourceBase) SetDependsOn(v []string) {
+func (r *ResourceBase) SetDependencies(v []string) {
 	r.DependsOn = v
 }
 

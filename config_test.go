@@ -95,7 +95,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	}
 
 	out2, _ := typs.CreateResource(types.TypeOutput, "out")
-	out2.SetDependsOn([]string{"resource.network.cloud.id", "resource.container.test_dev"})
+	out2.SetDependencies([]string{"resource.network.cloud.id", "resource.container.test_dev"})
 	out2.Metadata().Checksum = types.Checksum{
 		Parsed:    "abc",
 		Processed: "klm",

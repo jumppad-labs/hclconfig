@@ -63,7 +63,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			resource.AddDependency(d)
 		}
 
-		for _, d := range resource.GetDependsOn() {
+		for _, d := range resource.GetDependencies() {
 			var err error
 			fqdn, err := types.ParseFQRN(d)
 			if err != nil {
