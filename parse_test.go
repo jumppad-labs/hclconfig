@@ -887,8 +887,8 @@ func TestParserGeneratesChecksums(t *testing.T) {
 	require.Equal(t, r3.Metadata().Checksum.Parsed, c3.Metadata().Checksum.Parsed)
 }
 
-func TestParserHandlesCyclicalReference(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/cyclical/cyclical.hcl")
+func TestParserCyclicalReferenceReturnsError(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/cyclical/fail/cyclical.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -899,6 +899,18 @@ func TestParserHandlesCyclicalReference(t *testing.T) {
 	require.Error(t, err)
 
 	require.ErrorContains(t, err, "'resource.container.one' depends on 'resource.network.two'")
+}
+
+func TestParserNoCyclicalReferenceReturns(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/cyclical/pass/cyclical.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.NoError(t, err)
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {

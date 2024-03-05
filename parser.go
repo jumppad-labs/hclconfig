@@ -1166,8 +1166,14 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 		if err == nil {
 			// check the deps on the linked resource
 			for _, cdep := range d.Metadata().Links {
-				fqdn, err := resources.ParseFQRN(cdep)
-				fqdn.Attribute = ""
+
+				fqrn, err := resources.ParseFQRN(cdep)
+				fqrn.Attribute = ""
+
+				// append the parent module to the link as they are relative
+				if d.Metadata().Module != "" {
+					fqrn.Module = d.Metadata().Module
+				}
 
 				if err != nil {
 					pe := errors.ParserError{}
@@ -1179,15 +1185,15 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 					return nil, &pe
 				}
 
-				if me.Metadata().Name == fqdn.Resource &&
-					me.Metadata().Type == fqdn.Type &&
-					me.Metadata().Module == fqdn.Module {
+				if me.Metadata().Name == fqrn.Resource &&
+					me.Metadata().Type == fqrn.Type &&
+					me.Metadata().Module == fqrn.Module {
 
 					pe := errors.ParserError{}
 					pe.Column = b.Body.SrcRange.Start.Column
 					pe.Line = b.Body.SrcRange.Start.Line
 					pe.Filename = b.Body.SrcRange.Filename
-					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqdn.String(), d.Metadata().ID)
+					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqrn.String(), d.Metadata().ID)
 					pe.Level = errors.ParserErrorLevelError
 
 					return nil, &pe
