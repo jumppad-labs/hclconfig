@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/jumppad-labs/hclconfig"
+	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -89,7 +90,7 @@ func printConfig(c *hclconfig.Config) {
 			fmt.Println(printPostgres(t, 2))
 
 		case "output":
-			t := r.(*types.Output)
+			t := r.(*resources.Output)
 			fmt.Printf("  Postgres %s\n", t.Meta.Name)
 			fmt.Printf("  Module %s\n", t.Meta.Module)
 			fmt.Printf("  --- Value: %s\n", t.Value)
