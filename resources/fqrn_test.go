@@ -1,8 +1,9 @@
-package types
+package resources
 
 import (
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -10,7 +11,7 @@ var typeTestContainer = "container"
 
 type testContainer struct {
 	// embedded type holding name, etc
-	ResourceBase `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 }
 
 func TestParseFQRNParsesComponents(t *testing.T) {
@@ -245,7 +246,7 @@ func TestParseFQRNWithIndexAndModuleReturnsCorrectData(t *testing.T) {
 }
 
 func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
-	dt := DefaultTypes()
+	dt := DefaultResources()
 	dt[typeTestContainer] = &testContainer{}
 
 	r, err := dt.CreateResource(typeTestContainer, "mytest")
@@ -253,7 +254,7 @@ func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 
 	r.Metadata().Module = "mymodule"
 
-	fqrn := FQDNFromResource(r)
+	fqrn := FQRNFromResource(r)
 
 	require.Equal(t, "mymodule", fqrn.Module)
 	require.Equal(t, typeTestContainer, fqrn.Type)
@@ -264,14 +265,14 @@ func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 }
 
 func TestFQRNFromVariableReturnsCorrectData(t *testing.T) {
-	dt := DefaultTypes()
+	dt := DefaultResources()
 
 	r, err := dt.CreateResource(TypeVariable, "mytest")
 	require.NoError(t, err)
 
 	//r.Metadata().Module = "mymodule"
 
-	fqrn := FQDNFromResource(r)
+	fqrn := FQRNFromResource(r)
 
 	require.Equal(t, "", fqrn.Module)
 	require.Equal(t, TypeVariable, fqrn.Type)
@@ -282,14 +283,14 @@ func TestFQRNFromVariableReturnsCorrectData(t *testing.T) {
 }
 
 func TestFQRNFromVariableInModuleReturnsCorrectData(t *testing.T) {
-	dt := DefaultTypes()
+	dt := DefaultResources()
 
 	r, err := dt.CreateResource(TypeVariable, "mytest")
 	require.NoError(t, err)
 
 	r.Metadata().Module = "mymodule"
 
-	fqrn := FQDNFromResource(r)
+	fqrn := FQRNFromResource(r)
 
 	require.Equal(t, "mymodule", fqrn.Module)
 	require.Equal(t, TypeVariable, fqrn.Type)

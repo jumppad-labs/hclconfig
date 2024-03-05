@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/jumppad-labs/hclconfig/types"
@@ -157,7 +158,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
-	out := r.(*types.Output)
+	out := r.(*resources.Output)
 	require.Equal(t, "10.6.0.200", out.Value)
 
 	// check variable has been interpolated
@@ -165,14 +166,14 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
-	out = r.(*types.Output)
+	out = r.(*resources.Output)
 	require.Equal(t, "10.7.0.201", out.Value)
 
 	r, err = c.FindResource("output.ip_addresses")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
-	out = r.(*types.Output)
+	out = r.(*resources.Output)
 	require.Equal(t, "10.6.0.200", out.Value.([]interface{})[0].(string))
 	require.Equal(t, "10.7.0.201", out.Value.([]interface{})[1].(string))
 	require.Equal(t, float64(12), out.Value.([]interface{})[2].(float64))
@@ -275,34 +276,34 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 
 	r, err = c.FindResource("output.splat")
 	require.NoError(t, err)
-	cont := r.(*types.Output)
+	cont := r.(*resources.Output)
 	require.Equal(t, "/cache", cont.Value.([]interface{})[0])
 	require.Equal(t, "/cache2", cont.Value.([]interface{})[1])
 
 	r, err = c.FindResource("output.splat_with_null")
 	require.NoError(t, err)
-	cont = r.(*types.Output)
+	cont = r.(*resources.Output)
 	require.Equal(t, "test1", cont.Value.([]interface{})[0])
 	require.Equal(t, "test2", cont.Value.([]interface{})[1])
 
 	r, err = c.FindResource("output.function")
 	require.NoError(t, err)
-	cont = r.(*types.Output)
+	cont = r.(*resources.Output)
 	require.Equal(t, float64(2), cont.Value)
 
 	r, err = c.FindResource("output.binary")
 	require.NoError(t, err)
-	cont = r.(*types.Output)
+	cont = r.(*resources.Output)
 	require.Equal(t, false, cont.Value)
 
 	r, err = c.FindResource("output.condition")
 	require.NoError(t, err)
-	cont = r.(*types.Output)
+	cont = r.(*resources.Output)
 	require.Equal(t, "/cache", cont.Value)
 
 	r, err = c.FindResource("output.template")
 	require.NoError(t, err)
-	cont = r.(*types.Output)
+	cont = r.(*resources.Output)
 	require.Equal(t, "abc/2", cont.Value)
 }
 
@@ -373,20 +374,20 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 
 	// check output value from module is equal to the module variable
 	// which is set as an interpolated value of the container base
-	require.Equal(t, float64(4096), cont.(*types.Output).Value)
+	require.Equal(t, float64(4096), cont.(*resources.Output).Value)
 
 	cont, err = c.FindResource("output.module2_container_resources_cpu")
 	require.NoError(t, err)
 
 	// check output value from module is equal to the module variable
 	// which is set as the variable for the config
-	require.Equal(t, float64(512), cont.(*types.Output).Value)
+	require.Equal(t, float64(512), cont.(*resources.Output).Value)
 
 	cont, err = c.FindResource("output.module3_container_resources_cpu")
 	require.NoError(t, err)
 
 	// check the output variable is set to the default value for the module
-	require.Equal(t, float64(2048), cont.(*types.Output).Value)
+	require.Equal(t, float64(2048), cont.(*resources.Output).Value)
 
 	cont, err = c.FindResource("output.module1_from_list_1")
 	require.NoError(t, err)
@@ -396,8 +397,8 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 
 	// check an element can be obtained from a list of values
 	// returned from a output
-	require.Equal(t, float64(0), cont.(*types.Output).Value)
-	require.Equal(t, float64(4096), cont2.(*types.Output).Value)
+	require.Equal(t, float64(0), cont.(*resources.Output).Value)
+	require.Equal(t, float64(4096), cont2.(*resources.Output).Value)
 
 	// check an element can be obtained from a map of values
 	// returned from a output
@@ -409,15 +410,15 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 
 	// check element can be obtained from a map of values
 	// returned in the output
-	require.Equal(t, "consul", cont.(*types.Output).Value)
-	require.Equal(t, float64(4096), cont2.(*types.Output).Value)
+	require.Equal(t, "consul", cont.(*resources.Output).Value)
+	require.Equal(t, float64(4096), cont2.(*resources.Output).Value)
 
 	cont, err = c.FindResource("output.object")
 	require.NoError(t, err)
 
 	// check element can be obtained from a map of values
 	// returned in the output
-	meta := cont.(*types.Output).Value.(map[string]interface{})["meta"].(map[string]interface{})
+	meta := cont.(*resources.Output).Value.(map[string]interface{})["meta"].(map[string]interface{})
 	require.Equal(t, "base", meta["name"])
 }
 
@@ -727,7 +728,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
-		calls = append(calls, types.ResourceFQRN{
+		calls = append(calls, resources.FQRN{
 			Module:   r.Metadata().Module,
 			Resource: r.Metadata().Name,
 			Type:     r.Metadata().Type,
