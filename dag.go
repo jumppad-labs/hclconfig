@@ -300,29 +300,6 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 		}
 
-		// if the config implements the processable interface call the resource process method
-		// and the resource is not disabled
-		//
-		// if disabled was set through interpolation, the value has only been set here
-		// we need to handle an additional check
-		if !r.GetDisabled() && r.Metadata().Type != resources.TypeModule {
-
-			// call the callbacks
-			if wf != nil {
-				err := wf(r)
-				if err != nil {
-					pe := errors.ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`error calling callback for resource "%s" %s`, r.Metadata().ID, err)
-					pe.Level = errors.ParserErrorLevelError
-
-					return diags.Append(pe)
-				}
-			}
-		}
-
 		// if the type is a module we need to add the variables to the
 		// context
 		if r.Metadata().Type == resources.TypeModule {
@@ -354,6 +331,28 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			if !o.CtyValue.IsNull() {
 				o.Value = castVar(o.CtyValue)
+			}
+		}
+
+		// if the config implements the processable interface call the resource process method
+		// and the resource is not disabled
+		//
+		// if disabled was set through interpolation, the value has only been set here
+		// we need to handle an additional check
+		if !r.GetDisabled() {
+			// call the callbacks
+			if wf != nil {
+				err := wf(r)
+				if err != nil {
+					pe := errors.ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`error calling callback for resource "%s" %s`, r.Metadata().ID, err)
+					pe.Level = errors.ParserErrorLevelError
+
+					return diags.Append(pe)
+				}
 			}
 		}
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
@@ -541,7 +542,8 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, r.GetDisabled())
 
-	require.Len(t, calls, 0)
+	// should only call once for the containing module
+	require.Len(t, calls, 1)
 }
 
 func TestGetNameAndIndexReturnsCorrectDetails(t *testing.T) {
@@ -654,8 +656,10 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o.Callback = func(r types.Resource) error {
 		callSync.Lock()
 
-		//fmt.Println(r.Metadata().ID, r.Metadata().DependsOn)
 		calls = append(calls, r.Metadata().ID)
+
+		// add a fake delay
+		time.Sleep(10 * time.Millisecond)
 
 		callSync.Unlock()
 
@@ -749,7 +753,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	require.Error(t, err)
 
 	// only 7 of the resources should be created, none of the descendants of base
-	require.Len(t, calls, 8)
+	require.Len(t, calls, 9)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
