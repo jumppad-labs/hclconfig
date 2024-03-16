@@ -46,8 +46,9 @@ type Resource interface {
 	Metadata() *Meta
 	GetDisabled() bool
 	SetDisabled(bool)
-	GetDependsOn() []string
-	SetDependsOn([]string)
+	GetDependencies() []string
+	SetDependencies([]string)
+	AddDependency(string)
 }
 
 type Meta struct {
@@ -128,10 +129,28 @@ func (r *ResourceBase) SetDisabled(v bool) {
 	r.Disabled = v
 }
 
-func (r *ResourceBase) GetDependsOn() []string {
+func (r *ResourceBase) GetDependencies() []string {
 	return r.DependsOn
 }
 
-func (r *ResourceBase) SetDependsOn(v []string) {
+func (r *ResourceBase) SetDependencies(v []string) {
 	r.DependsOn = v
+}
+
+func (r *ResourceBase) AddDependency(v string) {
+	r.DependsOn = appendIfNotContains(r.DependsOn, v)
+}
+
+func appendIfNotContains(list []string, value string) []string {
+	contains := false
+	for _, item := range list {
+		if value == item {
+			contains = true
+		}
+	}
+
+	if !contains {
+		list = append(list, value)
+	}
+	return list
 }

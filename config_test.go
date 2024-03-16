@@ -29,8 +29,9 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 		Processed: "bcd",
 	}
 
-	mod1, _ := typs.CreateResource(resources.TypeModule, "module1")
-	mod1.SetDependsOn([]string{"resource.network.cloud"})
+	mod1, _ := typs.CreateResource(types.TypeModule, "module1")
+	mod1.AddDependency("resource.network.cloud")
+
 	mod1.Metadata().Checksum = types.Checksum{
 		Parsed:    "345",
 		Processed: "cde",
@@ -53,7 +54,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	// depending on a module should return all resources and
 	// all child resources
 	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	con1.SetDependsOn([]string{"module.module1"})
+	con1.AddDependency("module.module1")
 	con1.Metadata().Checksum = types.Checksum{
 		Parsed:    "678",
 		Processed: "fgh",
@@ -82,7 +83,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	// depends on would be added relative as a resource
 	// when a resource is defined, it has no idea on its
 	// module
-	con4.SetDependsOn([]string{"resource.container.test_dev"})
+	con4.AddDependency("resource.container.test_dev")
 	con4.Metadata().Checksum = types.Checksum{
 		Parsed:    "90a",
 		Processed: "ijk",
@@ -95,8 +96,9 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 		Processed: "jkl",
 	}
 
-	out2, _ := typs.CreateResource(resources.TypeOutput, "out")
-	out2.SetDependsOn([]string{"resource.network.cloud.id", "resource.container.test_dev"})
+	out2, _ := typs.CreateResource(types.TypeOutput, "out")
+	out2.SetDependencies([]string{"resource.network.cloud.id", "resource.container.test_dev"})
+
 	out2.Metadata().Checksum = types.Checksum{
 		Parsed:    "abc",
 		Processed: "klm",
