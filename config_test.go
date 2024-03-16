@@ -29,7 +29,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 		Processed: "bcd",
 	}
 
-	mod1, _ := typs.CreateResource(types.TypeModule, "module1")
+	mod1, _ := typs.CreateResource(resources.TypeModule, "module1")
 	mod1.AddDependency("resource.network.cloud")
 
 	mod1.Metadata().Checksum = types.Checksum{
@@ -96,7 +96,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 		Processed: "jkl",
 	}
 
-	out2, _ := typs.CreateResource(types.TypeOutput, "out")
+	out2, _ := typs.CreateResource(resources.TypeOutput, "out")
 	out2.SetDependencies([]string{"resource.network.cloud.id", "resource.container.test_dev"})
 
 	out2.Metadata().Checksum = types.Checksum{

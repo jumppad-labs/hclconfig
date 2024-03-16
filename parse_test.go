@@ -509,7 +509,8 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, r.GetDisabled())
 
-	require.Len(t, calls, 0)
+	// should have only be called for the variable
+	require.Len(t, calls, 1)
 }
 
 func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
@@ -542,8 +543,8 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, r.GetDisabled())
 
-	// should only call once for the containing module
-	require.Len(t, calls, 1)
+	// should only called for the containing module and variables
+	require.Len(t, calls, 3)
 }
 
 func TestGetNameAndIndexReturnsCorrectDetails(t *testing.T) {
@@ -752,8 +753,8 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
 
-	// only 7 of the resources should be created, none of the descendants of base
-	require.Len(t, calls, 9)
+	// only 13 of the resources and variables should be created, none of the descendants of base
+	require.Len(t, calls, 13)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
