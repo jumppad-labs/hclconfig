@@ -1368,6 +1368,19 @@ func (p *Parser) process(c *Config) error {
 		},
 	), false)
 
+	// variables are not added to the dag so we need to process these
+	// separately
+	vars, err := c.FindResourcesByType(resources.TypeVariable)
+	if err == nil {
+		for _, v := range vars {
+			if p.options.Callback != nil {
+				if err := p.options.Callback(v); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	// now re-run this time with the callback and the Process function
 	// to calculate a final checksum after any computed properties have been
 	// set

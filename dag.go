@@ -174,7 +174,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// if this is the root module or is disabled skip or is a variable
-		if (r.Metadata().Type == resources.TypeRoot) || r.GetDisabled() || r.Metadata().Type == resources.TypeVariable {
+		if (r.Metadata().Type == resources.TypeRoot) || r.GetDisabled() {
 			return nil
 		}
 
