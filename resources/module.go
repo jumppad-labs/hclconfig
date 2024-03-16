@@ -1,6 +1,9 @@
-package types
+package resources
 
-import "github.com/hashicorp/hcl/v2"
+import (
+	"github.com/hashicorp/hcl/v2"
+	"github.com/jumppad-labs/hclconfig/types"
+)
 
 // TypeModule is the resource string for a Module resource
 const TypeModule = "module"
@@ -8,7 +11,7 @@ const TypeModule = "module"
 // Module allows Shipyard configuration to be imported from external folder or
 // GitHub repositories
 type Module struct {
-	ResourceBase `hcl:",remain"`
+	types.ResourceBase `hcl:",remain"`
 
 	Source string `hcl:"source" json:"source"`
 

@@ -1,20 +1,21 @@
-package types
+package resources
 
 import (
 	"reflect"
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCreateResouceReturnsNotRegisteredError(t *testing.T) {
-	rt := RegisteredTypes{}
+	rt := types.RegisteredTypes{}
 	_, err := rt.CreateResource("foo", "bar")
 	require.Error(t, err)
 }
 
 func TestDefaultTypes(t *testing.T) {
-	dt := DefaultTypes()
+	dt := DefaultResources()
 
 	require.Equal(t, reflect.TypeOf(dt["variable"]), reflect.TypeOf(&Variable{}))
 	require.Equal(t, reflect.TypeOf(dt["local"]), reflect.TypeOf(&Local{}))
@@ -23,7 +24,7 @@ func TestDefaultTypes(t *testing.T) {
 }
 
 func TestCreateResourceCreatesType(t *testing.T) {
-	dt := DefaultTypes()
+	dt := DefaultResources()
 
 	r, e := dt.CreateResource(TypeVariable, "test")
 	require.NoError(t, e)

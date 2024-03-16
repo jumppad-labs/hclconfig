@@ -1,13 +1,15 @@
-package types
+package resources
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/jumppad-labs/hclconfig/types"
 )
 
-// ResourceFQRN is the fully qualified resource name
-type ResourceFQRN struct {
+// FQRN is the fully qualified resource name
+type FQRN struct {
 	// Name of the module
 	Module string
 	// Type of the resource
@@ -47,7 +49,7 @@ type ResourceFQRN struct {
 //
 // get the "module" resource called module1 in the root "module"
 // // module1
-func ParseFQRN(fqrn string) (*ResourceFQRN, error) {
+func ParseFQRN(fqrn string) (*FQRN, error) {
 	moduleName := ""
 	typeName := ""
 	resourceName := ""
@@ -130,7 +132,7 @@ func ParseFQRN(fqrn string) (*ResourceFQRN, error) {
 		typeName = TypeModule
 	}
 
-	return &ResourceFQRN{
+	return &FQRN{
 		Module:    moduleName,
 		Type:      typeName,
 		Resource:  resourceName,
@@ -144,8 +146,8 @@ func formatErrorString(fqdn string) string {
 
 // AppendParentModule creates a new FQRN by adding the parent module
 // to the reference.
-func (f *ResourceFQRN) AppendParentModule(parent string) ResourceFQRN {
-	newFQRN := ResourceFQRN{}
+func (f *FQRN) AppendParentModule(parent string) FQRN {
+	newFQRN := FQRN{}
 
 	newFQRN.Module = f.Module
 	if parent != "" {
@@ -160,16 +162,16 @@ func (f *ResourceFQRN) AppendParentModule(parent string) ResourceFQRN {
 	return newFQRN
 }
 
-// FQDNFromResource returns the ResourceFQDN for the given Resource
-func FQDNFromResource(r Resource) *ResourceFQRN {
-	return &ResourceFQRN{
+// FQRNFromResource returns the ResourceFQDN for the given Resource
+func FQRNFromResource(r types.Resource) *FQRN {
+	return &FQRN{
 		Module:   r.Metadata().Module,
 		Resource: r.Metadata().Name,
 		Type:     r.Metadata().Type,
 	}
 }
 
-func (f ResourceFQRN) String() string {
+func (f FQRN) String() string {
 	modulePart := ""
 	if f.Module != "" {
 		modulePart = fmt.Sprintf("module.%s.", f.Module)

@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/silas/dag"
 )
@@ -82,7 +83,7 @@ func (c *Config) FindResource(path string) (types.Resource, error) {
 
 // local version of FindResource that does not lock the config
 func (c *Config) findResource(path string) (types.Resource, error) {
-	fqdn, err := types.ParseFQRN(path)
+	fqdn, err := resources.ParseFQRN(path)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func (c *Config) FindRelativeResource(path string, parentModule string) (types.R
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
-	fqdn, err := types.ParseFQRN(path)
+	fqdn, err := resources.ParseFQRN(path)
 	if err != nil {
 		return nil, err
 	}
@@ -157,12 +158,12 @@ func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]t
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
-	fqdn, err := types.ParseFQRN(module)
+	fqdn, err := resources.ParseFQRN(module)
 	if err != nil {
 		return nil, err
 	}
 
-	if fqdn.Type != types.TypeModule {
+	if fqdn.Type != resources.TypeModule {
 		return nil, fmt.Errorf("resource %s is not a module reference", module)
 	}
 
@@ -206,7 +207,7 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 	defer c.sync.Unlock()
 
 	for _, r := range new.Resources {
-		fqdn := types.FQDNFromResource(r).String()
+		fqdn := resources.FQRNFromResource(r).String()
 
 		// does the resource already exist?
 		if _, err := c.findResource(fqdn); err == nil {
@@ -420,7 +421,7 @@ func (c *Config) Walk(wf WalkCallback, reverse bool) error {
 			}
 
 			// if this is the root module or is disabled skip
-			if (r.Metadata().Type == types.TypeRoot || r.Metadata().Type == types.TypeModule) || r.GetDisabled() {
+			if (r.Metadata().Type == resources.TypeRoot || r.Metadata().Type == resources.TypeModule) || r.GetDisabled() {
 				return nil
 			}
 
@@ -493,7 +494,7 @@ func (c *Config) walk(wf dag.WalkFunc, reverse bool) []error {
 }
 
 func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
-	fqdn := types.FQDNFromResource(r)
+	fqdn := resources.FQRNFromResource(r)
 
 	// set the ID
 	r.Metadata().ID = fqdn.String()

@@ -19,17 +19,6 @@ func NewTypeNotRegisteredError(t string) *ErrTypeNotRegistered {
 
 type RegisteredTypes map[string]Resource
 
-// DefaultTypes is a collection of the default config types
-func DefaultTypes() RegisteredTypes {
-	return RegisteredTypes{
-		"variable": &Variable{},
-		"output":   &Output{},
-		"local":    &Local{},
-		"module":   &Module{},
-		"root":     &Root{},
-	}
-}
-
 // CreateResource creates a new instance of a resource from one of the registered types.
 func (r RegisteredTypes) CreateResource(resourceType, resourceName string) (Resource, error) {
 	// check that the type exists
