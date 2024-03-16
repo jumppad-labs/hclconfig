@@ -26,12 +26,12 @@ func GoToCtyValue(val interface{}) (cty.Value, error) {
 		ctyMap["disabled"] = cty.BoolVal(r.GetDisabled())
 
 		// add depends_on to the parent
-		depTyp, err := gocty.ImpliedType(r.GetDependsOn())
+		depTyp, err := gocty.ImpliedType(r.GetDependencies())
 		if err != nil {
 			return cty.False, err
 		}
 
-		dep, err := gocty.ToCtyValue(r.GetDependsOn(), depTyp)
+		dep, err := gocty.ToCtyValue(r.GetDependencies(), depTyp)
 		if err != nil {
 			return cty.False, fmt.Errorf("unable to convert depends_on to cty: %s", err)
 		}
