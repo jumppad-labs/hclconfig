@@ -44,6 +44,8 @@ type ParserOptions struct {
 	VariableEnvPrefix string
 	// location of any downloaded modules
 	ModuleCache string
+	// default registry to use when fetching modules
+	DefaultRegistry string
 	// credentials to use with the registries
 	RegistryCredentials map[string]string
 	// Callback executed when the parser reads a resource stanza, callbacks are
@@ -648,7 +650,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	fi, serr := os.Stat(moduleSrc)
 	if serr != nil || !fi.IsDir() {
 		moduleURL := src.AsString()
+
 		parts := strings.Split(moduleURL, "/")
+
+		// if there are 2 parts (namespace, module), check if the default registry is set
+		if len(parts) == 2 && p.options.DefaultRegistry != "" {
+			parts = append([]string{p.options.DefaultRegistry}, parts...)
+		}
 
 		// if there are 3 parts (registry, namespace, module) it could be a registry
 		if len(parts) == 3 {
