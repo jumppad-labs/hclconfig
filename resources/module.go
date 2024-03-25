@@ -13,7 +13,8 @@ const TypeModule = "module"
 type Module struct {
 	types.ResourceBase `hcl:",remain"`
 
-	Source string `hcl:"source" json:"source"`
+	Source  string `hcl:"source" json:"source"`
+	Version string `hcl:"version,optional" json:"version,omitempty"`
 
 	Variables interface{} `hcl:"variables,optional" json:"variables,omitempty"`
 
