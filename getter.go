@@ -60,6 +60,9 @@ func (g *GoGetter) Get(src, dest string, ignoreCache bool) (string, error) {
 	output, err := filenamify.Filenamify(src, filenamify.Options{
 		Replacement: "_",
 	})
+	if err != nil {
+		return "", err
+	}
 
 	downloadPath := path.Join(dest, output)
 
