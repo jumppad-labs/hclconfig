@@ -36,9 +36,7 @@ type Config struct {
 }
 
 type Credential struct {
-	Username string `hcl:"username,optional" json:"username,omitempty"`
-	Password string `hcl:"password,optional" json:"password,omitempty"`
-	Token    string `hcl:"token,optional" json:"token,omitempty"`
+	Token string `hcl:"token,optional" json:"token,omitempty"`
 }
 
 type Module struct {
