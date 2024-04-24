@@ -1100,3 +1100,38 @@ func TestParseHandlesCommonTypes(t *testing.T) {
 	// test specific properties
 	require.Equal(t, "mysidecar", side.SidecarID)
 }
+
+func TestParseParsesToResourceBase(t *testing.T) {
+	// Test that when PrimativesOnly is set the configuration is parsed
+	// into ResouceBase not registered types
+
+	f, pathErr := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	o := DefaultOptions()
+	o.PrimativesOnly = true
+
+	p := NewParser(o)
+
+	c, err := p.ParseFile(f)
+	require.NoError(t, err)
+
+	require.NotNil(t, c)
+
+	// check we have a Resousece base for the container
+	r, err := c.FindResource("module.consul_1.resource.container.consul")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.Equal(t, "consul", r.Metadata().Name)
+	require.Equal(t, "container", r.Metadata().Type)
+	require.Equal(t, "resource.network.onprem.meta.name", r.Metadata().Links[0])
+
+	r, err = c.FindResource("module.consul_2.resource.container.consul")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.Equal(t, "consul", r.Metadata().Name)
+	require.Equal(t, "container", r.Metadata().Type)
+	require.Equal(t, "resource.network.onprem.meta.name", r.Metadata().Links[0])
+}

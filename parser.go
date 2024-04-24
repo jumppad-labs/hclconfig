@@ -55,6 +55,13 @@ type ParserOptions struct {
 	// you to set the dependent properties of resource 'b' before resource 'a'
 	// consumes them.
 	Callback WalkCallback
+
+	// PrimativesOnly will parse a structure including modules:
+	// * registered types for the resources are not loaded, all resources are
+	//   parsed as ResourceBase, custom properties are discarded
+	// * the graph of resources is not walked, any interpolated properties
+	//   are not resolved.
+	PrimativesOnly bool
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -158,6 +165,11 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return nil, ce
 	}
 
+	// do not walk the dag when we are only dealing with primatives
+	if p.options.PrimativesOnly {
+		return c, nil
+	}
+
 	// process the files and resolve dependency
 	return c, p.process(c)
 }
@@ -199,6 +211,11 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 
 	if len(ce.Errors) > 0 {
 		return nil, ce
+	}
+
+	// do not walk the dag when we are only dealing with primatives
+	if p.options.PrimativesOnly {
+		return c, nil
 	}
 
 	// process the files and resolve dependency
@@ -423,7 +440,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 			r.Metadata().Checksum.Parsed = HashString(cs)
 
-			err = decodeBody(ctx, c, file, b, v)
+			err = decodeBody(ctx, c, file, b, v, false)
 			if err != nil {
 				return err
 			}
@@ -586,7 +603,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt.Metadata().Line = b.TypeRange.Start.Line
 	rt.Metadata().Column = b.TypeRange.Start.Column
 
-	err := decodeBody(ctx, c, file, b, rt)
+	err := decodeBody(ctx, c, file, b, rt, false)
 	if err != nil {
 		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -798,6 +815,8 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	var rt types.Resource
 	var err error
 
+	ignoreErrors := false
+
 	switch b.Type {
 	case types.TypeResource:
 		// if the type is resource there should be two labels, one for the type and one for the name
@@ -822,15 +841,29 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return &de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
-		if err != nil {
-			de := errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = fmt.Sprintf("unable to create resource '%s' %s", b.Type, err)
+		// PrimativesOnly parse to ResourceBase
+		if p.options.PrimativesOnly {
+			rt = &types.ResourceBase{
+				Meta: types.Meta{
+					Name:       name,
+					Type:       b.Labels[0],
+					Properties: map[string]interface{}{},
+				},
+			}
 
-			return &de
+			// ignore any errors when parsing
+			ignoreErrors = true
+		} else {
+			rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
+			if err != nil {
+				de := errors.ParserError{}
+				de.Line = b.TypeRange.Start.Line
+				de.Column = b.TypeRange.Start.Column
+				de.Filename = file
+				de.Message = fmt.Sprintf("unable to create resource '%s' %s", b.Type, err)
+
+				return &de
+			}
 		}
 
 	case resources.TypeLocal:
@@ -907,7 +940,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	rt.Metadata().Line = b.TypeRange.Start.Line
 	rt.Metadata().Column = b.TypeRange.Start.Column
 
-	err = decodeBody(ctx, c, file, b, rt)
+	err = decodeBody(ctx, c, file, b, rt, ignoreErrors)
 	if err != nil {
 		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -1169,7 +1202,7 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	return ctx
 }
 
-func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}) error {
+func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}, ignoreErrors bool) error {
 	dr, err := getDependentResources(b, ctx, config, p, "")
 	if err != nil {
 		return err
@@ -1203,7 +1236,11 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 			pe.Message = fmt.Sprintf("unable to decode body, %s", err)
 			pe.Level = errors.ParserErrorLevelError
 
-			return &pe
+			// if ignore errors is false return the parsing error, otherwise
+			// swallow it
+			if !ignoreErrors {
+				return &pe
+			}
 		}
 	}
 
