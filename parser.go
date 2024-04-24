@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/registry"
 	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
@@ -43,6 +44,10 @@ type ParserOptions struct {
 	VariableEnvPrefix string
 	// location of any downloaded modules
 	ModuleCache string
+	// default registry to use when fetching modules
+	DefaultRegistry string
+	// credentials to use with the registries
+	RegistryCredentials map[string]string
 	// Callback executed when the parser reads a resource stanza, callbacks are
 	// executed based on a directed acyclic graph. If resource 'a' references
 	// a property defined in resource 'b', i.e 'resource.a.myproperty' then the
@@ -68,9 +73,12 @@ func DefaultOptions() *ParserOptions {
 	cacheDir = filepath.Join(cacheDir, ".hclconfig", "cache")
 	os.MkdirAll(cacheDir, os.ModePerm)
 
+	registryCredentials := map[string]string{}
+
 	return &ParserOptions{
-		ModuleCache:       cacheDir,
-		VariableEnvPrefix: "HCL_VAR_",
+		ModuleCache:         cacheDir,
+		VariableEnvPrefix:   "HCL_VAR_",
+		RegistryCredentials: registryCredentials,
 	}
 }
 
@@ -593,7 +601,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	setDisabled(ctx, rt, b.Body, false)
 
 	derr := setDependsOn(ctx, rt, b.Body, dependsOn)
-	if err != nil {
+	if derr != nil {
 		de := errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
@@ -618,24 +626,117 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		return []error{&de}
 	}
 
-	// src could be a github module or a relative folder
+	version := "latest"
+	if b.Body.Attributes["version"] != nil {
+		v, diags := b.Body.Attributes["version"].Expr.Value(ctx)
+		if diags.HasErrors() {
+			de := errors.ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Level = errors.ParserErrorLevelError
+			de.Message = fmt.Sprintf("unable to read version from module: %s", diags.Error())
+
+			return []error{&de}
+		}
+		version = v.AsString()
+	}
+
+	// src could be a registry url, github repository or a relative folder
 	// first check if it is a folder, we need to make it absolute relative to the current file
 	dir := path.Dir(file)
 	moduleSrc := path.Join(dir, src.AsString())
 
 	fi, serr := os.Stat(moduleSrc)
 	if serr != nil || !fi.IsDir() {
+		moduleURL := src.AsString()
+
+		parts := strings.Split(moduleURL, "/")
+
+		// if there are 2 parts (namespace, module), check if the default registry is set
+		if len(parts) == 2 && p.options.DefaultRegistry != "" {
+			parts = append([]string{p.options.DefaultRegistry}, parts...)
+		}
+
+		// if there are 3 parts (registry, namespace, module) it could be a registry
+		if len(parts) == 3 {
+			host := parts[0]
+			namespace := parts[1]
+			name := parts[2]
+
+			// check if the registry has credentials
+			var token string
+			if _, ok := p.options.RegistryCredentials[host]; ok {
+				token = p.options.RegistryCredentials[host]
+			}
+
+			// if we can't create a registry, it is not a module registry so we can ignore the error
+			r, err := registry.New(host, token)
+			if err == nil {
+				// get all available versions of the module from the registry
+				// check if the requested version exists
+				versions, err := r.GetModuleVersions(namespace, name)
+				if err != nil {
+					de := errors.ParserError{}
+					de.Line = b.TypeRange.Start.Line
+					de.Column = b.TypeRange.Start.Column
+					de.Filename = file
+					de.Message = err.Error()
+
+					return []error{&de}
+				}
+
+				// if no version is set, use latest
+				if version == "latest" {
+					version = versions.Latest
+				} else {
+					// otherwise check the version exists
+					versionExists := false
+					for _, v := range versions.Versions {
+						if v.Version == version {
+							versionExists = true
+							break
+						}
+					}
+
+					if !versionExists {
+						de := errors.ParserError{}
+						de.Line = b.TypeRange.Start.Line
+						de.Column = b.TypeRange.Start.Column
+						de.Filename = file
+						de.Message = fmt.Sprintf(`version "%s" does not exist for module "%s/%s" in registry "%s"`, version, namespace, name, host)
+
+						return []error{&de}
+					}
+				}
+
+				module, err := r.GetModule(namespace, name, version)
+				if err == nil {
+					// if we get back a module url from the registry,
+					// set the source to the returned url
+					moduleURL = module.DownloadURL
+				} else {
+					de := errors.ParserError{}
+					de.Line = b.TypeRange.Start.Line
+					de.Column = b.TypeRange.Start.Column
+					de.Filename = file
+					de.Message = fmt.Sprintf(`unable to fetch module "%s/%s" from registry "%s": %s`, namespace, name, host, err)
+
+					return []error{&de}
+				}
+			}
+		}
 
 		// is not a directory fetch from source using go getter
 		gg := NewGoGetter()
 
-		mp, err := gg.Get(src.AsString(), p.options.ModuleCache, false)
+		mp, err := gg.Get(moduleURL, p.options.ModuleCache, false)
 		if err != nil {
 			de := errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Message = fmt.Sprintf(`unable to fetch remote module "%s" %s`, src.AsString(), err)
+			de.Message = fmt.Sprintf(`unable to fetch remote module "%s": %s`, src.AsString(), err)
 
 			return []error{&de}
 		}
