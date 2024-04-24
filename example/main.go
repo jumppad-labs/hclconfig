@@ -23,6 +23,8 @@ func main() {
 		return nil
 	}
 
+	// o.PrimativesOnly = true
+
 	p := hclconfig.NewParser(o)
 	// register the types
 	p.RegisterType("config", &Config{})

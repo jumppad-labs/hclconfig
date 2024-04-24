@@ -206,12 +206,12 @@
     "line": 32,
     "column": 1,
     "checksum": {
-     "parsed": "5c33565c0829b1bcae875425a97c3761",
-     "processed": "912bbcc0eb80d01e02a64754759053c5"
+     "parsed": "3c945b869e745e489f549553e8754d17",
+     "processed": "b95cdf496ac766f2b1eb19d0a5fb6dfe"
     }
    },
-   "ErikIsA": "cunt",
-   "ID": "bollocks",
+   "ErikIsA": "a Dutchman",
+   "ID": "lekker.broodje",
    "Location": "2.other.location",
    "Port": 5432,
    "DBName": "other2",
@@ -222,12 +222,8 @@
   {
    "depends_on": [
     "resource.postgres.mydb",
-    "resource.postgres.mydb",
-    "resource.postgres.mydb.connection_string",
     "resource.postgres.mydb.connection_string",
     "resource.postgres.other1",
-    "resource.postgres.other1",
-    "resource.postgres.other2",
     "resource.postgres.other2"
    ],
    "meta": {
@@ -238,8 +234,8 @@
     "line": 49,
     "column": 1,
     "checksum": {
-     "parsed": "e7c772d4d7a637ae05242c7a0c405746",
-     "processed": "e2e2b4c65c6490c87a007919caa0ebbd"
+     "parsed": "c35b4158cc71c98364afb12749858cbb",
+     "processed": "59afe25a2a561d5671e43e297dce1d6f"
     },
     "links": [
      "resource.postgres.mydb",
@@ -248,7 +244,7 @@
      "resource.postgres.other2"
     ]
    },
-   "FQN": "myapp_85",
+   "FQN": "myapp_88",
    "DBConnectionString": "postgresql://admin:password@localhost:5432/mydatabase",
    "MainDBConnection": {
     "meta": {
@@ -307,12 +303,12 @@
       "line": 32,
       "column": 1,
       "checksum": {
-       "parsed": "5c33565c0829b1bcae875425a97c3761",
-       "processed": "912bbcc0eb80d01e02a64754759053c5"
+       "parsed": "3c945b869e745e489f549553e8754d17",
+       "processed": "b95cdf496ac766f2b1eb19d0a5fb6dfe"
       }
      },
-     "ErikIsA": "cunt",
-     "ID": "bollocks",
+     "ErikIsA": "a Dutchman",
+     "ID": "lekker.broodje",
      "Location": "2.other.location",
      "Port": 5432,
      "DBName": "other2",
@@ -329,7 +325,6 @@
   },
   {
    "depends_on": [
-    "resource.postgres.other2.erik_is_a",
     "resource.postgres.other2.erik_is_a"
    ],
    "meta": {
@@ -340,19 +335,18 @@
     "line": 75,
     "column": 1,
     "checksum": {
-     "parsed": "3196e15bc16fd1cb04de7b5398596107",
-     "processed": "3f74383c8c94cfcfa82dc8467dc3194e"
+     "parsed": "9ccdd4be83c29c8ddf8977d980ee7ca0",
+     "processed": "c167339556b24fbd3411bbaec334513b"
     },
     "links": [
      "resource.postgres.other2.erik_is_a"
     ]
    },
    "CtyValue": {},
-   "value": "cunt"
+   "value": "a Dutchman"
   },
   {
    "depends_on": [
-    "resource.postgres.other2.id",
     "resource.postgres.other2.id"
    ],
    "meta": {
@@ -363,19 +357,18 @@
     "line": 79,
     "column": 1,
     "checksum": {
-     "parsed": "1d6eb4ed4a5e9a8c8c97b5f580ed0692",
-     "processed": "680708169f3e4072fbaaec7eb143e94e"
+     "parsed": "12426ed5b842a99dd483040c359ddf4b",
+     "processed": "a456884b98f64b755d75f36119fbfd6a"
     },
     "links": [
      "resource.postgres.other2.id"
     ]
    },
    "CtyValue": {},
-   "value": "bollocks"
+   "value": "lekker.broodje"
   },
   {
    "depends_on": [
-    "resource.postgres.other2.disabled",
     "resource.postgres.other2.disabled"
    ],
    "meta": {
@@ -386,8 +379,8 @@
     "line": 83,
     "column": 1,
     "checksum": {
-     "parsed": "d29d947cfb180125362dbf2893149443",
-     "processed": "b67f494847bcc3565280d5b049a94156"
+     "parsed": "d444310d7519e2452c9fe1d583a034ad",
+     "processed": "c803e78038b7c8cc5741974fc33d4eb4"
     },
     "links": [
      "resource.postgres.other2.disabled"
@@ -398,7 +391,6 @@
   },
   {
    "depends_on": [
-    "resource.postgres.other2.depends_on",
     "resource.postgres.other2.depends_on"
    ],
    "meta": {
@@ -409,8 +401,8 @@
     "line": 87,
     "column": 1,
     "checksum": {
-     "parsed": "64f2358688763d26e5c147ae8c4efcbd",
-     "processed": "231bd455907c2351d8fca4566fb3740c"
+     "parsed": "c5c73f12fa4b1815cbdaf4c107f9e556",
+     "processed": "62df74a8813aeb4d1df43b2618a9b351"
     },
     "links": [
      "resource.postgres.other2.depends_on"
@@ -423,7 +415,6 @@
   },
   {
    "depends_on": [
-    "resource.postgres.other2.meta.id",
     "resource.postgres.other2.meta.id"
    ],
    "meta": {
@@ -434,8 +425,8 @@
     "line": 91,
     "column": 1,
     "checksum": {
-     "parsed": "2178bdd4ad723119854ab530f7e8ee07",
-     "processed": "0e336eb012a9498c645864078d74d2b8"
+     "parsed": "ddd39ab226125fc514af5f8b2677f6d0",
+     "processed": "8989bac9d104565a9c8a1f22dba728e6"
     },
     "links": [
      "resource.postgres.other2.meta.id"
@@ -452,7 +443,10 @@
     "file": "./config.hcl",
     "line": 106,
     "column": 1,
-    "checksum": {}
+    "checksum": {
+     "parsed": "2de88a24ccb2576b0b6df716f7edebbb",
+     "processed": "b99dbfb0f72cc3e7b8383157c4c16877"
+    }
    },
    "source": "../example/modules/db",
    "variables": {
@@ -470,12 +464,12 @@
             "Start": {
              "Line": 110,
              "Column": 5,
-             "Byte": 2780
+             "Byte": 2792
             },
             "End": {
              "Line": 110,
              "Column": 16,
-             "Byte": 2791
+             "Byte": 2803
             }
            }
           }
@@ -485,12 +479,12 @@
           "Start": {
            "Line": 110,
            "Column": 5,
-           "Byte": 2780
+           "Byte": 2792
           },
           "End": {
            "Line": 110,
            "Column": 16,
-           "Byte": 2791
+           "Byte": 2803
           }
          }
         },
@@ -505,12 +499,12 @@
            "Start": {
             "Line": 110,
             "Column": 20,
-            "Byte": 2795
+            "Byte": 2807
            },
            "End": {
             "Line": 110,
             "Column": 24,
-            "Byte": 2799
+            "Byte": 2811
            }
           }
          }
@@ -520,12 +514,12 @@
          "Start": {
           "Line": 110,
           "Column": 19,
-          "Byte": 2794
+          "Byte": 2806
          },
          "End": {
           "Line": 110,
           "Column": 25,
-          "Byte": 2800
+          "Byte": 2812
          }
         }
        }
@@ -541,12 +535,12 @@
             "Start": {
              "Line": 111,
              "Column": 5,
-             "Byte": 2805
+             "Byte": 2817
             },
             "End": {
              "Line": 111,
              "Column": 16,
-             "Byte": 2816
+             "Byte": 2828
             }
            }
           }
@@ -556,12 +550,12 @@
           "Start": {
            "Line": 111,
            "Column": 5,
-           "Byte": 2805
+           "Byte": 2817
           },
           "End": {
            "Line": 111,
            "Column": 16,
-           "Byte": 2816
+           "Byte": 2828
           }
          }
         },
@@ -576,12 +570,12 @@
            "Start": {
             "Line": 111,
             "Column": 20,
-            "Byte": 2820
+            "Byte": 2832
            },
            "End": {
             "Line": 111,
             "Column": 28,
-            "Byte": 2828
+            "Byte": 2840
            }
           }
          }
@@ -591,12 +585,12 @@
          "Start": {
           "Line": 111,
           "Column": 19,
-          "Byte": 2819
+          "Byte": 2831
          },
          "End": {
           "Line": 111,
           "Column": 29,
-          "Byte": 2829
+          "Byte": 2841
          }
         }
        }
@@ -607,12 +601,12 @@
       "Start": {
        "Line": 109,
        "Column": 15,
-       "Byte": 2774
+       "Byte": 2786
       },
       "End": {
        "Line": 112,
        "Column": 4,
-       "Byte": 2833
+       "Byte": 2845
       }
      },
      "OpenRange": {
@@ -620,12 +614,12 @@
       "Start": {
        "Line": 109,
        "Column": 15,
-       "Byte": 2774
+       "Byte": 2786
       },
       "End": {
        "Line": 109,
        "Column": 16,
-       "Byte": 2775
+       "Byte": 2787
       }
      }
     },
@@ -634,12 +628,12 @@
      "Start": {
       "Line": 109,
       "Column": 3,
-      "Byte": 2762
+      "Byte": 2774
      },
      "End": {
       "Line": 112,
       "Column": 4,
-      "Byte": 2833
+      "Byte": 2845
      }
     },
     "NameRange": {
@@ -647,12 +641,12 @@
      "Start": {
       "Line": 109,
       "Column": 3,
-      "Byte": 2762
+      "Byte": 2774
      },
      "End": {
       "Line": 109,
       "Column": 12,
-      "Byte": 2771
+      "Byte": 2783
      }
     }
    },
@@ -900,7 +894,6 @@
   },
   {
    "depends_on": [
-    "resource.postgres.mydb.connection_string",
     "resource.postgres.mydb.connection_string"
    ],
    "meta": {
@@ -912,8 +905,8 @@
     "line": 22,
     "column": 1,
     "checksum": {
-     "parsed": "3fad45ab2546d3e55737db3b7df3c0a1",
-     "processed": "f8f4b4f4c1678cca90d2b872468e7634"
+     "parsed": "04c6ff2994127be04bc6f6e93d3c6da9",
+     "processed": "3af01c9404580c0083fcbe4b9dd6d483"
     },
     "links": [
      "resource.postgres.mydb.connection_string"
@@ -924,7 +917,6 @@
   },
   {
    "depends_on": [
-    "module.mymodule_2.output.connection_string",
     "module.mymodule_2.output.connection_string"
    ],
    "meta": {
@@ -935,8 +927,8 @@
     "line": 121,
     "column": 1,
     "checksum": {
-     "parsed": "795f44d31bc67af4c5e4725fde1e6c33",
-     "processed": "839902e038e06f22c3c37fc4d8dbbc1d"
+     "parsed": "ecd31d1aa54124628f79b91cc54634cf",
+     "processed": "1559fde5c7727ed35d745fd6efe9388c"
     },
     "links": [
      "module.mymodule_2.output.connection_string"
