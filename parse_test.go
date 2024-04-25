@@ -1134,4 +1134,21 @@ func TestParseParsesToResourceBase(t *testing.T) {
 	require.Equal(t, "consul", r.Metadata().Name)
 	require.Equal(t, "container", r.Metadata().Type)
 	require.Equal(t, "resource.network.onprem.meta.name", r.Metadata().Links[0])
+
+	r, err = c.FindResource("module.consul_2")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.Equal(t, "consul_2", r.Metadata().Name)
+	require.Equal(t, "module", r.Metadata().Type)
+
+	m1 := r.(*resources.Module)
+	require.Equal(t, "../single", m1.Source)
+	require.Equal(t, "latest", m1.Version)
+
+	r, err = c.FindResource("module.consul_2.output.container_name")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	o1 := r.(*resources.Output)
+	require.Equal(t, "This is the name of the container", o1.Description)
 }
