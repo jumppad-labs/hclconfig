@@ -659,6 +659,9 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		version = v.AsString()
 	}
 
+	rt.(*resources.Module).Source = src.AsString()
+	rt.(*resources.Module).Version = version
+
 	// src could be a registry url, github repository or a relative folder
 	// first check if it is a folder, we need to make it absolute relative to the current file
 	dir := path.Dir(file)
@@ -948,6 +951,16 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Filename = file
 		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
 		return &de
+	}
+
+	// if we have an output, get the description
+	// this is only needed when parsing primatives as
+	// this value is normally set during walk
+	if rt.Metadata().Type == resources.TypeOutput && b.Body.Attributes["description"] != nil {
+		desc, diags := b.Body.Attributes["description"].Expr.Value(ctx)
+		if !diags.HasErrors() {
+			rt.(*resources.Output).Description = desc.AsString()
+		}
 	}
 
 	// disabled is a property of the embedded type we need to add this manually

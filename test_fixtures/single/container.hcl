@@ -30,6 +30,7 @@ resource "container" "consul" {
 
 output "container_name" {
   value = resource.container.consul.meta.name
+  description = "This is the name of the container"
 }
 
 output "container_resources_cpu" {
