@@ -53,14 +53,14 @@ func (p ParserError) Error() string {
 		codeline := wordwrap.WrapString(lines[i], 70)
 		codelines := strings.Split(codeline, "\n")
 
-		if i == p.Line {
+		if i == p.Line-1 {
 			err.WriteString(fmt.Sprintf("\033[1m  %5d | %s\033[0m\n", i+1, codelines[0]))
 		} else {
 			err.WriteString(fmt.Sprintf("\033[2m  %5d | %s\033[0m\n", i+1, codelines[0]))
 		}
 
 		for _, l := range codelines[1:] {
-			if i == p.Line {
+			if i == p.Line-1 {
 				err.WriteString(fmt.Sprintf("\033[1m        : %s\033[0m\n", l))
 			} else {
 				err.WriteString(fmt.Sprintf("\033[2m        : %s\033[0m\n", l))
