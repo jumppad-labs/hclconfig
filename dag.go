@@ -274,6 +274,8 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			pe.Line = r.Metadata().Line
 			pe.Column = r.Metadata().Column
 			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
+			// this error is set as warning as it is possible that the resource has
+			// interpolation that is not yet resolved
 			pe.Level = errors.ParserErrorLevelWarning
 
 			return diags.Append(pe)

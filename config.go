@@ -33,7 +33,7 @@ type ResourceNotFoundError struct {
 }
 
 func (e ResourceNotFoundError) Error() string {
-	return fmt.Sprintf("Resource not found: %s", e.Name)
+	return fmt.Sprintf("resource not found: %s", e.Name)
 }
 
 // ResourceExistsError is thrown when a resource already exists in the resource list
@@ -42,7 +42,7 @@ type ResourceExistsError struct {
 }
 
 func (e ResourceExistsError) Error() string {
-	return fmt.Sprintf("Resource already exists: %s", e.Name)
+	return fmt.Sprintf("resource already exists: %s", e.Name)
 }
 
 // New creates a new Config
