@@ -993,7 +993,47 @@ func TestParseFileReturnsConfigErrorWhenResourceParseError(t *testing.T) {
 	require.Len(t, ce.Errors, 1)
 }
 
-func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
+func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/process_error/bad_format.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	require.True(t, ce.ContainsErrors())
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, pe.Level, errors.ParserErrorLevelError)
+}
+
+func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
+	f, pathErr := filepath.Abs("./test_fixtures/process_error/function_error.hcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p := setupParser(t)
+
+	_, err := p.ParseFile(f)
+	require.IsType(t, err, &errors.ConfigError{})
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	require.True(t, ce.ContainsErrors())
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, pe.Level, errors.ParserErrorLevelError)
+}
+
+func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T) {
 	f, pathErr := filepath.Abs("./test_fixtures/process_error/bad_interpolation.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
@@ -1009,7 +1049,7 @@ func TestParseFileReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
 
 	require.False(t, ce.ContainsErrors())
 
-	pe := ce.Errors[0].(errors.ParserError)
+	pe := ce.Errors[0].(*errors.ParserError)
 	require.Equal(t, pe.Level, errors.ParserErrorLevelWarning)
 }
 

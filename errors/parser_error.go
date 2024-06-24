@@ -22,7 +22,7 @@ type ParserError struct {
 }
 
 // Error pretty prints the error message as a string
-func (p ParserError) Error() string {
+func (p *ParserError) Error() string {
 	err := strings.Builder{}
 	err.WriteString("Error:\n")
 

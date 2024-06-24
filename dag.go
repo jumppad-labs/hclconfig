@@ -68,7 +68,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			var err error
 			fqdn, err := resources.ParseFQRN(d)
 			if err != nil {
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Line = resource.Metadata().Line
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
@@ -88,7 +88,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
 				deps, err := c.FindModuleResources(relFQDN.String(), true)
 				if err != nil {
-					pe := errors.ParserError{}
+					pe := &errors.ParserError{}
 					pe.Line = resource.Metadata().Line
 					pe.Column = resource.Metadata().Column
 					pe.Filename = resource.Metadata().File
@@ -113,7 +113,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
 				dep, err := c.FindResource(relFQDN.String())
 				if err != nil {
-					pe := errors.ParserError{}
+					pe := &errors.ParserError{}
 					pe.Line = resource.Metadata().Line
 					pe.Column = resource.Metadata().Column
 					pe.Filename = resource.Metadata().File
@@ -133,7 +133,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 			d, err := c.FindResource(fqdnString)
 			if err != nil {
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Line = resource.Metadata().Line
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
@@ -197,7 +197,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		for _, v := range r.Metadata().Links {
 			fqrn, err := resources.ParseFQRN(v)
 			if err != nil {
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -210,7 +210,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			// get the value from the linked resource
 			l, err := c.FindRelativeResource(v, r.Metadata().Module)
 			if err != nil {
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -236,7 +236,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 
 			if err != nil {
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -251,7 +251,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
 			if err != nil {
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -269,14 +269,30 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
-			pe := errors.ParserError{}
+			pe := &errors.ParserError{}
 			pe.Filename = r.Metadata().File
 			pe.Line = r.Metadata().Line
 			pe.Column = r.Metadata().Column
 			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
 			// this error is set as warning as it is possible that the resource has
 			// interpolation that is not yet resolved
-			pe.Level = errors.ParserErrorLevelWarning
+
+			// check the error types and determine if we should set a warning or error
+			level := errors.ParserErrorLevelWarning
+
+			for _, e := range diag.Errs() {
+				err, ok := e.(*hcl.Diagnostic)
+				if !ok {
+					continue
+				}
+
+				if err.Summary == "Error in function call" {
+					level = errors.ParserErrorLevelError
+					break
+				}
+			}
+
+			pe.Level = level
 
 			return diags.Append(pe)
 		}
@@ -289,7 +305,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			dr, err := c.FindModuleResources(r.Metadata().ID, true)
 			if err != nil {
 				// should not be here unless an internal error
-				pe := errors.ParserError{}
+				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
@@ -349,7 +365,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			if wf != nil {
 				err := wf(r)
 				if err != nil {
-					pe := errors.ParserError{}
+					pe := &errors.ParserError{}
 					pe.Filename = r.Metadata().File
 					pe.Line = r.Metadata().Line
 					pe.Column = r.Metadata().Column

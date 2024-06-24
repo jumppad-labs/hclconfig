@@ -46,14 +46,9 @@ func (p *ConfigError) ContainsErrors() bool {
 
 // isParserError returns if the error is a parser error with LevelError
 func isParserError(err error) bool {
-		if pe, ok := err.(*ParserError); ok && pe.Level != ParserErrorLevelError {
-			return false
-		}
-		
-		if pe, ok := err.(ParserError); ok && pe.Level != ParserErrorLevelError {
-			return false
-		}
-
+	if pe, ok := err.(*ParserError); ok && pe.Level != ParserErrorLevelError {
+		return false
+	}
 	return true
 }
 
