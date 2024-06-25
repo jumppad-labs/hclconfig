@@ -7,7 +7,7 @@ toolchain go1.22.2
 require (
 	github.com/flytam/filenamify v1.2.0
 	github.com/hashicorp/errwrap v1.1.0
-	github.com/hashicorp/go-getter v1.7.4
+	github.com/hashicorp/go-getter v1.7.5
 	github.com/hashicorp/hcl/v2 v2.20.0
 	github.com/infinytum/raymond/v2 v2.0.5
 	github.com/mitchellh/go-wordwrap v1.0.1
