@@ -369,7 +369,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 					pe.Filename = r.Metadata().File
 					pe.Line = r.Metadata().Line
 					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`error calling callback for resource "%s" %s`, r.Metadata().ID, err)
+					pe.Message = fmt.Sprintf(`unable to create resource "%s": %s`, r.Metadata().ID, err)
 					pe.Level = errors.ParserErrorLevelError
 
 					return diags.Append(pe)
