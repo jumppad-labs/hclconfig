@@ -20,7 +20,6 @@ import (
 	"github.com/jumppad-labs/hclconfig/registry"
 	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/types"
-	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
@@ -1534,8 +1533,8 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 			resources = append(resources, ref...)
 		}
 
-	default:
-		pretty.Println(expr)
+		//default:
+		//	pretty.Println(expr)
 	}
 
 	return resources, nil
