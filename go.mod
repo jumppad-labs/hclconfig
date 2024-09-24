@@ -10,6 +10,7 @@ require (
 	github.com/hashicorp/go-getter v1.7.5
 	github.com/hashicorp/hcl/v2 v2.21.0
 	github.com/infinytum/raymond/v2 v2.0.5
+	github.com/kr/pretty v0.2.1
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.9.0
@@ -43,6 +44,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/kr/text v0.1.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

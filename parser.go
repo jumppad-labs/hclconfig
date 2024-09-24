@@ -20,6 +20,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/registry"
 	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
@@ -1418,6 +1419,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 // something = resource.mine.attr
 // something = resource.mine.array.0.attr
 // something = env(resource.mine.attr)
+// something = "${resource.mine.attr}"
 // something = "testing/${resource.mine.attr}"
 // something = "testing/${env(resource.mine.attr)}"
 // something = resource.mine.attr == "abc" ? resource.mine.attr : "abc"
@@ -1436,6 +1438,14 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 
 			resources = append(resources, res...)
 		}
+	case *hclsyntax.TemplateWrapExpr:
+		res, err := processExpr(ex.Wrapped)
+		if err != nil {
+			return nil, err
+		}
+
+		resources = append(resources, res...)
+
 	// function call expressions are user defined functions
 	// myfunction(resource.container.base.name)
 	case *hclsyntax.FunctionCallExpr:
@@ -1524,8 +1534,8 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 			resources = append(resources, ref...)
 		}
 
-		//default:
-		//	pretty.Println(expr)
+	default:
+		pretty.Println(expr)
 	}
 
 	return resources, nil

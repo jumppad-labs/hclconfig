@@ -20,7 +20,8 @@ type Container struct {
 	Command    []string          `hcl:"command,optional" json:"command,omitempty"`       // command to use when starting the container
 	Env        map[string]string `hcl:"env,optional" json:"env,omitempty"`               // environment variables to set when starting the container
 	Volumes    []Volume          `hcl:"volume,block" json:"volumes,omitempty"`           // volumes to attach to the container
-	DNS        []string          `hcl:"dns,optional" json:"dns,omitempty"`               // Add custom DNS servers to the container
+	Ports      []Port            `hcl:"port,block" json:"port,omitempty"`
+	DNS        []string          `hcl:"dns,optional" json:"dns,omitempty"` // Add custom DNS servers to the container
 
 	Privileged bool `hcl:"privileged,optional" json:"privileged,omitempty"` // run the container in privileged mode?
 
@@ -57,6 +58,11 @@ type Resources struct {
 	CPUPin []int  `hcl:"cpu_pin,optional" json:"cpu_pin,omitempty" mapstructure:"cpu_pin"` // pin the container to one or more cpu cores
 	Memory int    `hcl:"memory,optional" json:"memory,omitempty"`                          // max memory the container can consume in MB
 	User   string `hcl:"user,optional" json:"user,omitempty"`
+}
+
+type Port struct {
+	Local  int `hcl:"local" json:"local"`   // source path on the local machine for the volume
+	Remote int `hcl:"remote" json:"remote"` // path to mount the volume inside the container
 }
 
 // Volume defines a folder, Docker volume, or temp folder to mount to the Container
