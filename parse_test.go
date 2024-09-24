@@ -306,6 +306,34 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	require.NoError(t, err)
 	cont = r.(*resources.Output)
 	require.Equal(t, "abc/2", cont.Value)
+
+	r, err = c.FindResource("output.index")
+	require.NoError(t, err)
+	cont = r.(*resources.Output)
+	require.Equal(t, "images.volume.shipyard.run", cont.Value)
+
+	r, err = c.FindResource("output.index_interpolated")
+	require.NoError(t, err)
+	cont = r.(*resources.Output)
+	require.Equal(t, "root/images.volume.shipyard.run", cont.Value)
+
+}
+
+func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/interpolation/string.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.container4")
+	require.NoError(t, err)
+	con := r.(*structs.Container)
+	require.Equal(t, "8500", con.Env["port_string"])
 }
 
 func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {

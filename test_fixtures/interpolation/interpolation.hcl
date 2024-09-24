@@ -20,10 +20,24 @@ resource "container" "consul" {
     destination = "/cache2"
     type        = "volume2"
   }
+
+  port {
+    local  = 8500
+    remote = 8500
+  }
 }
+
 
 output "function" {
   value = len(resource.container.consul.volume)
+}
+
+output "index" {
+  value = resource.container.consul.volume.0.source
+}
+
+output "index_interpolated" {
+  value = "root/${resource.container.consul.volume.0.source}"
 }
 
 output "splat" {
