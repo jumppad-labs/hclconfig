@@ -19,10 +19,11 @@ import (
 )
 
 func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
-	os.Setenv("SHIPYARD_CONFIG", "/User/yamcha/.shipyard")
+	home := os.Getenv("HOME")
+	os.Setenv("HOME", t.TempDir())
 
 	t.Cleanup(func() {
-		os.Unsetenv("SHIPYARD_CONFIG")
+		os.Setenv("HOME", home)
 	})
 
 	o := DefaultOptions()
@@ -383,6 +384,25 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	// check interpolation value
 	require.Equal(t, "onprem", cont.(*structs.Container).Networks[0].Name)
 
+}
+
+func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+
+	// the remote module should be cached
+	require.DirExists(t, filepath.Join(p.options.ModuleCache, "github.com_jumppad-labs_hclconfig_test_fixtures_single"))
+
+	// the local module should not be cached
+	require.NoDirExists(t, filepath.Join(p.options.ModuleCache, "single"))
 }
 
 func TestParseModuleCreatesOutputs(t *testing.T) {
