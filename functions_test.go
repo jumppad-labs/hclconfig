@@ -173,8 +173,6 @@ func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
 		os.Unsetenv("MYENV")
 	})
 
-	home, _ := os.UserHomeDir()
-
 	p := setupParser(t)
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -183,6 +181,8 @@ func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
 	require.NoError(t, err)
 
 	cont := r.(*structs.Container)
+
+	home, _ := os.UserHomeDir()
 
 	require.Equal(t, "3", cont.Env["len_string"])
 	require.Equal(t, "2", cont.Env["len_collection"])
@@ -210,8 +210,6 @@ func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
 		os.Unsetenv("MYENV")
 	})
 
-	home, _ := os.UserHomeDir()
-
 	p := setupParser(t)
 	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
 
@@ -222,6 +220,8 @@ func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
 	require.NoError(t, err)
 
 	cont := r.(*structs.Container)
+
+	home, _ := os.UserHomeDir()
 
 	require.Equal(t, "3", cont.Env["len_string"])
 	require.Equal(t, "2", cont.Env["len_collection"])
