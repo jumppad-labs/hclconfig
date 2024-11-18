@@ -82,6 +82,8 @@ func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
 		fallthrough
 	case reflect.Uint:
 		outParam = function.StaticReturnType(cty.Number)
+	case reflect.Bool:
+		outParam = function.StaticReturnType(cty.Bool)
 	default:
 		return function.Function{}, fmt.Errorf("type %v is not a valid cyt type, only primative types like string and basic numbers are supported", rf.Out(0).Kind())
 	}
@@ -130,6 +132,8 @@ func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
 						val, _ := bf.Float64()
 						in = append(in, reflect.ValueOf(float64(val)))
 					}
+				case cty.Bool:
+					in = append(in, reflect.ValueOf(a.True()))
 				}
 			}
 
@@ -176,6 +180,12 @@ func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
 					} else {
 						return cty.NumberFloatVal(out[0].Float()), out[1].Interface().(error)
 					}
+				}
+			case cty.Bool:
+				if out[1].Interface() == nil {
+					return cty.BoolVal(out[0].Bool()), nil
+				} else {
+					return cty.BoolVal(out[0].Bool()), out[1].Interface().(error)
 				}
 			}
 
