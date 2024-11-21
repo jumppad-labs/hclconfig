@@ -40,6 +40,14 @@ type Processable interface {
 	Process() error
 }
 
+type Validatable interface {
+	// Validate is called by the parser when the graph of resources is walked.
+	//
+	// Returning an error from Validate stops the processing of other resources
+	// and terminates all parsing.
+	Validate() error
+}
+
 // Resource is an interface that all
 type Resource interface {
 	// return the resource Metadata

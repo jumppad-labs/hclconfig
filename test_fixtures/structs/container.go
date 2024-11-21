@@ -1,6 +1,8 @@
 package structs
 
 import (
+	"errors"
+
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -12,7 +14,7 @@ type Container struct {
 	// embedded type holding name, etc
 	types.ResourceBase `hcl:"rm,remain"`
 
-	Default string `hcl:"default,optional" json:"default,omitempty" default:"hello world"` // A default value
+	Default string `hcl:"default,optional" json:"default,omitempty" default:"hello world" validate:"eq=hello world"` // A default value
 
 	Networks   []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"`         // Attach to the correct network // only when Image is specified
 	NetworkObj Network             `hcl:"networkobj,optional" json:"networkobj,omitempty"` // Reference to an object
@@ -116,5 +118,12 @@ func (c *Container) Process() error {
 	//	"two": Network{ResourceBase: types.ResourceBase{ID: "two", Name: "test2"}},
 	//}
 
+	return nil
+}
+
+func (c *Container) Validate() error {
+	if c.Default != "hello world" {
+		return errors.New("the Default field should be set to the default value of \"hello world\"")
+	}
 	return nil
 }
