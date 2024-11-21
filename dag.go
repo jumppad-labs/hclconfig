@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/creasty/defaults"
+	"github.com/go-playground/validator/v10"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 
@@ -378,6 +379,51 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 					return diags.Append(pe)
 				}
+			}
+		}
+
+		err = validate.Struct(r)
+		if err != nil {
+			for _, err := range err.(validator.ValidationErrors) {
+				/*
+					TODO:
+					improve the error message using the following fields:
+
+					err.Namespace()       // the struct name
+					err.Field()           // the field name
+					err.StructNamespace() // the struct name with struct name e.g. Struct.Field
+					err.StructField()     // the field name
+					err.Tag()             // the operator of the validation
+					err.ActualTag()       // the operator of the validation
+					err.Kind()            // the type of the value
+					err.Type()            // the type of the value
+					err.Value()           // the value that failed the validation
+					err.Param()           // the value passed into the tag
+				*/
+
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`value for "%s" on resource "%s" is invalid. value "%s" failed validation "%s %s"`, err.Field(), r.Metadata().ID, err.Value(), err.Tag(), err.Param())
+				pe.Level = errors.ParserErrorLevelError
+
+				diags = diags.Append(pe)
+			}
+
+			return diags
+		}
+
+		if p, ok := r.(types.Validatable); ok {
+			if err := p.Validate(); err != nil {
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`resource "%s" is invalid: %s`, r.Metadata().ID, err)
+				pe.Level = errors.ParserErrorLevelError
+
+				return diags.Append(pe)
 			}
 		}
 
