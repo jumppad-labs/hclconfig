@@ -12,6 +12,8 @@ type Container struct {
 	// embedded type holding name, etc
 	types.ResourceBase `hcl:"rm,remain"`
 
+	Default string `hcl:"default,optional" json:"default,omitempty" default:"hello world"` // A default value
+
 	Networks   []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"`         // Attach to the correct network // only when Image is specified
 	NetworkObj Network             `hcl:"networkobj,optional" json:"networkobj,omitempty"` // Reference to an object
 
