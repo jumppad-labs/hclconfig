@@ -192,11 +192,11 @@ func TestParseSetsDefaultValues(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	// check variable has been interpolated
 	r, err := c.FindResource("resource.container.default")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
+	// check default values have been set
 	cont := r.(*structs.Container)
 	require.Equal(t, "hello world", cont.Default)
 }
