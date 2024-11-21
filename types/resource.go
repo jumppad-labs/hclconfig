@@ -49,7 +49,6 @@ type Resource interface {
 	GetDependencies() []string
 	SetDependencies([]string)
 	AddDependency(string)
-	SetDefaults()
 }
 
 type Meta struct {
@@ -141,8 +140,6 @@ func (r *ResourceBase) SetDependencies(v []string) {
 func (r *ResourceBase) AddDependency(v string) {
 	r.DependsOn = appendIfNotContains(r.DependsOn, v)
 }
-
-func (r *ResourceBase) SetDefaults() {}
 
 func appendIfNotContains(list []string, value string) []string {
 	contains := false
