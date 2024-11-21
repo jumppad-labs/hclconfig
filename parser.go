@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/creasty/defaults"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -161,8 +160,6 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 
 				ce.AppendError(de)
 			}
-
-			defaults.Set(p)
 		}
 	}
 
