@@ -11,7 +11,7 @@ const TypeOutput = "output"
 type Output struct {
 	types.ResourceBase `hcl:",remain"`
 
-	CtyValue    cty.Value   `hcl:"value,optional"` // value of the output
-	Value       interface{} `json:"value"`
-	Description string      `hcl:"description,optional" json:"description,omitempty"` // description for the output
+	CtyValue    cty.Value `hcl:"value,optional"` // value of the output
+	Value       any       `json:"value"`
+	Description string    `hcl:"description,optional" json:"description,omitempty"` // description for the output
 }

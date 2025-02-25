@@ -8,7 +8,7 @@ import (
 	"github.com/zclconf/go-cty/cty/gocty"
 )
 
-func GoToCtyValue(val interface{}) (cty.Value, error) {
+func GoToCtyValue(val any) (cty.Value, error) {
 	typ, err := gocty.ImpliedType(val)
 	if err != nil {
 		return cty.False, err
@@ -55,6 +55,6 @@ func GoToCtyValue(val interface{}) (cty.Value, error) {
 	return ctyVal, nil
 }
 
-func CtyToGo(val cty.Value, target interface{}) error {
+func CtyToGo(val cty.Value, target any) error {
 	return gocty.FromCtyValue(val, target)
 }

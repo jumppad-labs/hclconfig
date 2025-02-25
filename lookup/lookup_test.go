@@ -465,7 +465,7 @@ type MyStruct struct {
 	Map         map[string]int `json:"jsontagmap" hcl:"hcltagmap"`
 	Nested      *MyStruct
 	StructSlice []*MyStruct
-	Interface   interface{}
+	Interface   any
 	Slice       []string
 }
 
@@ -485,11 +485,11 @@ var structFixture = MyStruct{
 
 var emptyFixture = structs.Container{}
 
-var mapComplexFixture = map[string]interface{}{
-	"map": map[string]interface{}{
+var mapComplexFixture = map[string]any{
+	"map": map[string]any{
 		"bar": 1,
 	},
-	"list": []map[string]interface{}{
+	"list": []map[string]any{
 		{"baz": 1},
 		{"baz": 2},
 		{"baz": 3},

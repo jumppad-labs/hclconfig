@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -64,14 +65,14 @@ func ParseFQRN(fqrn string) (*FQRN, error) {
 	}
 
 	if len(results) < 2 {
-		return nil, fmt.Errorf(formatErrorString(fqrn))
+		return nil, errors.New(formatErrorString(fqrn))
 	}
 
 	switch results["resource"] {
 	case "resource":
 		resourceParts := strings.Split(results["attributes"], ".")
 		if len(resourceParts) < 2 {
-			return nil, fmt.Errorf(formatErrorString(fqrn))
+			return nil, errors.New(formatErrorString(fqrn))
 		}
 
 		typeName = resourceParts[0]
@@ -107,7 +108,7 @@ func ParseFQRN(fqrn string) (*FQRN, error) {
 	case "variable":
 		varParts := strings.Split(results["attributes"], ".")
 		if len(varParts) != 1 {
-			return nil, fmt.Errorf(formatErrorString(fqrn))
+			return nil, errors.New(formatErrorString(fqrn))
 		}
 
 		typeName = TypeVariable
@@ -116,7 +117,7 @@ func ParseFQRN(fqrn string) (*FQRN, error) {
 
 	default:
 		if results["onlymodules"] == "" || !strings.HasPrefix(results["onlymodules"], "module.") {
-			return nil, fmt.Errorf(formatErrorString(fqrn))
+			return nil, errors.New(formatErrorString(fqrn))
 		}
 
 		//module1.module2

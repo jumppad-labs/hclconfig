@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"strings"
 
-	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type Schema struct {
@@ -95,7 +96,7 @@ func createDynamicType(s *Schema) reflect.Type {
 		t := getType(f.Type)
 		if t != nil {
 			field := reflect.StructField{
-				Name: strings.Title(f.Name),
+				Name: cases.Title(language.English).String(f.Name),
 				Type: getType(f.Type),
 				Tag:  reflect.StructTag(fmt.Sprintf(`hcl:"%s,optional"`, f.Name)),
 			}
