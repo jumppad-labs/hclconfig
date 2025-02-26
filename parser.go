@@ -3,6 +3,7 @@ package hclconfig
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path"
 	"path/filepath"
@@ -452,7 +453,26 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			// add the variable to the context
 			c.AppendResource(v)
 
-			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
+			// set the default value if not set
+			var val cty.Value
+			attr, ok := v.Default.(*hcl.Attribute)
+			if ok {
+				val, _ = attr.Expr.Value(ctx)
+			} else {
+				switch v.Type {
+				case "string":
+					val = cty.StringVal("")
+				case "number":
+					val = cty.NumberVal(big.NewFloat(0))
+				case "bool":
+					val = cty.BoolVal(false)
+				case "object":
+					val = cty.ObjectVal(map[string]cty.Value{})
+				default:
+					val = cty.ListVal([]cty.Value{})
+				}
+			}
+
 			setContextVariableIfMissing(ctx, v.Meta.Name, val)
 		}
 	}

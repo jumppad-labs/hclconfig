@@ -90,6 +90,49 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.NotNil(t, r)
 }
 
+func TestParseFileProcessesVariables(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/variables/variables.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	v, err := c.FindResource("variable.typed")
+	require.NoError(t, err)
+	require.NotNil(t, v)
+	require.Equal(t, "number", v.(*resources.Variable).Type)
+
+	v, err = c.FindResource("variable.default")
+	require.NoError(t, err)
+	require.NotNil(t, v)
+	require.Equal(t, "string", v.(*resources.Variable).Type)
+
+	// check variable has been interpolated
+	r, err := c.FindResource("resource.container.consul")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	cont := r.(*structs.Container)
+	require.Equal(t, 0, cont.Resources.CPU)
+	require.Equal(t, "test", cont.Volumes[0].Destination)
+
+	// require.Equal(t, "resource.container.consul", cont.Metadata().ID)
+	// require.Equal(t, "consul", cont.Metadata().Name)
+	// require.Equal(t, absoluteFolderPath, cont.Metadata().File)
+
+	// require.Equal(t, "consul", cont.Command[0], "consul")
+	// require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
+	// require.Equal(t, 2048, cont.Resources.CPU)
+
+	// r, err = c.FindResource("resource.container.base")
+	// require.NoError(t, err)
+	// require.NotNil(t, r)
+}
+
 func TestParseFileCallsParseFunction(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
 	if err != nil {
