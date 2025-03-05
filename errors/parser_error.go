@@ -2,7 +2,9 @@ package errors
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/mitchellh/go-wordwrap"
@@ -11,8 +13,27 @@ import (
 const ParserErrorLevelError = "error"
 const ParserErrorLevelWarning = "warning"
 
+type ParserErrorType string
+
+const (
+	ParserErrorTypeNotFound ParserErrorType = "not_found"
+
+	ParserErrorTypeParseFile      ParserErrorType = "parse_file"
+	ParserErrorTypeParseBody      ParserErrorType = "parse_body"
+	ParserErrorTypeParseAttribute ParserErrorType = "parse_attribute"
+	ParserErrorTypeParseResource  ParserErrorType = "parse_resource"
+
+	ParserErrorTypeDependency ParserErrorType = "dependency"
+	ParserErrorTypeContext    ParserErrorType = "context"
+
+	ParserErrorTypeDownload       ParserErrorType = "download"
+	ParserErrorTypeCreateResource ParserErrorType = "create_resource"
+	ParserErrorTypeAddResource    ParserErrorType = "add_resource"
+)
+
 // ParserError is a detailed error that is returned from the parser
 type ParserError struct {
+	Type     ParserErrorType
 	Filename string
 	Line     int
 	Column   int
@@ -24,27 +45,55 @@ type ParserError struct {
 // Error pretty prints the error message as a string
 func (p *ParserError) Error() string {
 	err := strings.Builder{}
-	err.WriteString("Error:\n")
+	err.WriteString(p.Level + ": " + string(p.Type) + "\n")
 
 	errLines := strings.Split(wordwrap.WrapString(p.Message, 80), "\n")
 	for _, l := range errLines {
 		err.WriteString("  " + l + "\n")
 	}
 
+	err.WriteString("  " + p.Filename + "\n")
+
+	// <error>: <filename>:<line>,<from-column>-<to-column>: <error details>
+	// e.g. `unable to decode body: /exec_module/module/module.hcl:9,3-8: Unsupported argument;
+	// An argument named "image" is not expected here., and 1 other diagnostic(s)`
+	msgRegex, _ := regexp.Compile(`^(?P<error>.*): (?P<file>.*):(?P<line>\d+),(?P<start>\d+)-(?P<end>\d+): (?P<details>.*)$`)
+	matches := msgRegex.FindStringSubmatch(p.Message)
+
+	errFile := p.Filename
+	errLine := p.Line
+	errStart := p.Column
+	errEnd := p.Column
+
+	if len(matches) > 0 {
+		parts := make(map[string]string)
+		for i, name := range msgRegex.SubexpNames() {
+			if i != 0 && name != "" {
+				parts[name] = matches[i]
+			}
+		}
+
+		// errMsg := parts["error"]
+		errFile = parts["file"]
+		errLine, _ = strconv.Atoi(parts["line"])
+		errStart, _ = strconv.Atoi(parts["start"])
+		errEnd, _ = strconv.Atoi(parts["end"])
+	}
+
 	err.WriteString("\n")
 
-	err.WriteString("  " + fmt.Sprintf("%s:%d,%d\n", p.Filename, p.Line, p.Column))
+	err.WriteString("  " + fmt.Sprintf("%s:%d,%d-%d\n", errFile, errLine, errStart, errEnd))
 	// process the file
-	file, _ := ioutil.ReadFile(wordwrap.WrapString(p.Filename, 80))
+	file, _ := os.ReadFile(wordwrap.WrapString(errFile, 80))
 
 	lines := strings.Split(string(file), "\n")
 
-	startLine := p.Line - 3
+	startLine := errLine - 3
 	if startLine < 0 {
 		startLine = 0
 	}
 
-	endLine := p.Line + 2
+	endLine := errLine + 2
 	if endLine >= len(lines) {
 		endLine = len(lines) - 1
 	}
@@ -53,14 +102,14 @@ func (p *ParserError) Error() string {
 		codeline := wordwrap.WrapString(lines[i], 70)
 		codelines := strings.Split(codeline, "\n")
 
-		if i == p.Line-1 {
+		if i == errLine-1 {
 			err.WriteString(fmt.Sprintf("\033[1m  %5d | %s\033[0m\n", i+1, codelines[0]))
 		} else {
 			err.WriteString(fmt.Sprintf("\033[2m  %5d | %s\033[0m\n", i+1, codelines[0]))
 		}
 
 		for _, l := range codelines[1:] {
-			if i == p.Line-1 {
+			if i == errLine-1 {
 				err.WriteString(fmt.Sprintf("\033[1m        : %s\033[0m\n", l))
 			} else {
 				err.WriteString(fmt.Sprintf("\033[2m        : %s\033[0m\n", l))

@@ -74,6 +74,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				pe.Filename = resource.Metadata().File
 				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeDependency
 
 				return nil, pe
 			}
@@ -94,6 +95,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 					pe.Filename = resource.Metadata().File
 					pe.Message = fmt.Sprintf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
 					pe.Level = errors.ParserErrorLevelError
+					pe.Type = errors.ParserErrorTypeNotFound
 
 					return nil, pe
 				}
@@ -119,6 +121,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 					pe.Filename = resource.Metadata().File
 					pe.Message = fmt.Sprintf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
 					pe.Level = errors.ParserErrorLevelError
+					pe.Type = errors.ParserErrorTypeNotFound
 
 					return nil, pe
 				}
@@ -139,6 +142,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				pe.Filename = resource.Metadata().File
 				pe.Message = fmt.Sprintf("unable to find resources parent module: '%s, error: %s", fqdnString, err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeNotFound
 
 				return nil, pe
 			}
@@ -203,6 +207,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf("error parsing resource link %s", err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeParseResource
 
 				return diags.Append(pe)
 			}
@@ -216,6 +221,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeNotFound
 
 				return diags.Append(pe)
 			}
@@ -242,6 +248,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeContext
 
 				return diags.Append(pe)
 			}
@@ -257,6 +264,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeContext
 
 				return diags.Append(pe)
 			}
@@ -274,6 +282,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			pe.Line = r.Metadata().Line
 			pe.Column = r.Metadata().Column
 			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
+			pe.Type = errors.ParserErrorTypeParseBody
 			// this error is set as warning as it is possible that the resource has
 			// interpolation that is not yet resolved
 
@@ -311,6 +320,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
 				pe.Level = errors.ParserErrorLevelError
+				pe.Type = errors.ParserErrorTypeNotFound
 
 				return diags.Append(pe)
 			}
@@ -371,6 +381,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 					pe.Column = r.Metadata().Column
 					pe.Message = fmt.Sprintf(`unable to create resource "%s": %s`, r.Metadata().ID, err)
 					pe.Level = errors.ParserErrorLevelError
+					pe.Type = errors.ParserErrorTypeCreateResource
 
 					return diags.Append(pe)
 				}

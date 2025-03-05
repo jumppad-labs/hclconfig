@@ -157,6 +157,7 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 				de.Filename = rt.Metadata().File
 				de.Level = errors.ParserErrorLevelError
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, resources.FQRNFromResource(rt).String(), err)
+				de.Type = errors.ParserErrorTypeParseResource
 
 				ce.AppendError(de)
 			}
@@ -206,6 +207,7 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 				de.Column = rt.Metadata().Column
 				de.Filename = rt.Metadata().File
 				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, resources.FQRNFromResource(rt).String(), err)
+				de.Type = errors.ParserErrorTypeParseResource
 
 				ce.AppendError(de)
 			}
@@ -359,6 +361,7 @@ func (p *Parser) loadVariablesFromFile(ctx *hcl.EvalContext, path string) error 
 		de.Filename = path
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+		de.Type = errors.ParserErrorTypeParseFile
 	}
 
 	attrs, _ := f.Body.JustAttributes()
@@ -422,6 +425,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		de.Level = errors.ParserErrorLevelError
 		de.Filename = file
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+		de.Type = errors.ParserErrorTypeParseFile
 
 		return de
 	}
@@ -472,6 +476,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		de.Column = diag[0].Subject.Start.Line
 		de.Filename = file
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+		de.Type = errors.ParserErrorTypeParseFile
 
 		// check the error types and determine if we should set a warning or error
 		level := errors.ParserErrorLevelWarning
@@ -506,6 +511,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
 			de.Message = fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type)
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return []error{de}
 		}
@@ -536,6 +542,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelWarning
 			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return []error{de}
 		}
@@ -602,6 +609,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = `invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`
+		de.Type = errors.ParserErrorTypeParseResource
 
 		return []error{de}
 	}
@@ -614,6 +622,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = err.Error()
+		de.Type = errors.ParserErrorTypeParseResource
 
 		return []error{de}
 	}
@@ -633,6 +642,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("error creating resource: %s", err)
+		de.Type = errors.ParserErrorTypeCreateResource
 
 		return []error{de}
 	}
@@ -647,6 +657,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = derr.Error()
+		de.Type = errors.ParserErrorTypeDependency
 
 		return []error{de}
 	}
@@ -660,6 +671,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = "no source property set for module resource"
+		de.Type = errors.ParserErrorTypeParseResource
 
 		return []error{de}
 	}
@@ -674,6 +686,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("unable to read source from module: %s", diags.Error())
+		de.Type = errors.ParserErrorTypeParseResource
 
 		return []error{de}
 	}
@@ -688,6 +701,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = fmt.Sprintf("unable to read version from module: %s", diags.Error())
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return []error{de}
 		}
@@ -738,6 +752,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 					de.Filename = file
 					de.Level = errors.ParserErrorLevelError
 					de.Message = err.Error()
+					de.Type = errors.ParserErrorTypeParseResource
 
 					return []error{de}
 				}
@@ -762,6 +777,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 						de.Filename = file
 						de.Level = errors.ParserErrorLevelError
 						de.Message = fmt.Sprintf(`version "%s" does not exist for module "%s/%s" in registry "%s"`, version, namespace, name, host)
+						de.Type = errors.ParserErrorTypeParseResource
 
 						return []error{de}
 					}
@@ -779,6 +795,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 					de.Filename = file
 					de.Level = errors.ParserErrorLevelError
 					de.Message = fmt.Sprintf(`unable to fetch module "%s/%s" from registry "%s": %s`, namespace, name, host, err)
+					de.Type = errors.ParserErrorTypeDownload
 
 					return []error{de}
 				}
@@ -796,6 +813,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = fmt.Sprintf(`unable to fetch remote module "%s": %s`, src.AsString(), err)
+			de.Type = errors.ParserErrorTypeDownload
 
 			return []error{de}
 		}
@@ -869,6 +887,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = `"invalid formatting for 'resource' stanza, resources should have a name and a type, i.e. 'resource "type" "name" {}'`
 			de.Level = errors.ParserErrorLevelError
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return de
 		}
@@ -881,6 +900,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Message = de.Error()
 			de.Level = errors.ParserErrorLevelError
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return de
 		}
@@ -906,6 +926,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 				de.Filename = file
 				de.Message = fmt.Sprintf("unable to create resource '%s' %s", b.Type, err)
 				de.Level = errors.ParserErrorLevelError
+				de.Type = errors.ParserErrorTypeCreateResource
 
 				return de
 			}
@@ -920,6 +941,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = `invalid formatting for 'local' stanza, resources should have a name and a type, i.e. 'local "name" {}'`
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return de
 		}
@@ -932,6 +954,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = err.Error()
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return de
 		}
@@ -944,6 +967,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = fmt.Sprintf(`unable to create local, this error should never happen %s`, err)
+			de.Type = errors.ParserErrorTypeCreateResource
 
 			return de
 		}
@@ -957,6 +981,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = `invalid formatting for 'output' stanza, resources should have a name and a type, i.e. 'output "name" {}'`
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return de
 		}
@@ -969,6 +994,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = err.Error()
+			de.Type = errors.ParserErrorTypeParseResource
 
 			return de
 		}
@@ -981,6 +1007,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelError
 			de.Message = fmt.Sprintf(`unable to create output, this error should never happen %s`, err)
+			de.Type = errors.ParserErrorTypeCreateResource
 
 			return de
 		}
@@ -999,6 +1026,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
+		de.Type = errors.ParserErrorTypeCreateResource
 		return de
 	}
 
@@ -1024,6 +1052,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf(`unable to set depends_on, %s`, err)
+		de.Type = errors.ParserErrorTypeDependency
 
 		return de
 	}
@@ -1036,6 +1065,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf(`unable to add resource "%s" to config %s`, resources.FQRNFromResource(rt).String(), err)
+		de.Type = errors.ParserErrorTypeAddResource
 
 		return de
 	}
@@ -1299,6 +1329,7 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 			pe.Filename = b.Body.SrcRange.Filename
 			pe.Message = fmt.Sprintf("unable to decode body, %s", err)
 			pe.Level = errors.ParserErrorLevelError
+			pe.Type = errors.ParserErrorTypeParseBody
 
 			// if ignore errors is false return the parsing error, otherwise
 			// swallow it
@@ -1331,6 +1362,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 			pe.Filename = b.Body.SrcRange.Filename
 			pe.Message = fmt.Sprintf("unable to process attribute %s, %s", a.Name, err)
 			pe.Level = errors.ParserErrorLevelError
+			pe.Type = errors.ParserErrorTypeParseAttribute
 
 			return nil, pe
 		}
@@ -1386,6 +1418,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 					pe.Filename = b.Body.SrcRange.Filename
 					pe.Message = fmt.Sprintf("dependency %s, is not a valid resource", cdep)
 					pe.Level = errors.ParserErrorLevelError
+					pe.Type = errors.ParserErrorTypeDependency
 					return nil, pe
 				}
 
@@ -1399,6 +1432,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 					pe.Filename = b.Body.SrcRange.Filename
 					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqrn.String(), d.Metadata().ID)
 					pe.Level = errors.ParserErrorLevelError
+					pe.Type = errors.ParserErrorTypeDependency
 
 					return nil, pe
 				}
