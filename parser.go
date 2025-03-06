@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -25,6 +26,8 @@ import (
 )
 
 var rootContext *hcl.EvalContext
+
+var validate *validator.Validate
 
 type ResourceTypeNotExistError struct {
 	Type string
@@ -103,6 +106,8 @@ func NewParser(options *ParserOptions) *Parser {
 	if o == nil {
 		o = DefaultOptions()
 	}
+
+	validate = validator.New(validator.WithRequiredStructEnabled())
 
 	return &Parser{options: *o, registeredTypes: resources.DefaultResources(), registeredFunctions: map[string]function.Function{}}
 }
