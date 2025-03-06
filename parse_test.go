@@ -181,6 +181,26 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 	require.Equal(t, float64(12), out.Value.([]interface{})[2].(float64))
 }
 
+func TestParseSetsDefaultValues(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/defaults/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.default")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	// check default values have been set
+	cont := r.(*structs.Container)
+	require.Equal(t, "hello world", cont.Default)
+}
+
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
 	require.NoError(t, err)

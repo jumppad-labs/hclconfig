@@ -3,6 +3,7 @@ package hclconfig
 import (
 	"fmt"
 
+	"github.com/creasty/defaults"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 
@@ -266,6 +267,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// resources
 		ul := getContextLock(ctx)
 		defer ul()
+
+		// if there are defaults defined on the resource set them
+		defaults.Set(r)
 
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
