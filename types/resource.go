@@ -85,7 +85,7 @@ type Meta struct {
 	Checksum Checksum `hcl:"checksum,optional" json:"checksum"`
 
 	// Properties holds a collection that can be used to store adhoc data
-	Properties map[string]interface{} `json:"properties,omitempty"`
+	Properties map[string]any `json:"properties,omitempty"`
 
 	// Linked resources which must be set before this config can be processed
 	// this is an internal property that can not be set with hcl

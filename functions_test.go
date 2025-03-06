@@ -82,7 +82,7 @@ func TestCreateFunctionCallsFunction(t *testing.T) {
 func TestCreateFunctionHandlesInputParams(t *testing.T) {
 	type testCase struct {
 		name string
-		f    interface{}
+		f    any
 	}
 
 	cases := []testCase{

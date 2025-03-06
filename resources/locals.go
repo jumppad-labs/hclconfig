@@ -11,6 +11,6 @@ const TypeLocal = "local"
 type Local struct {
 	types.ResourceBase `hcl:",remain"`
 
-	CtyValue cty.Value   `hcl:"value,optional"` // value of the output
-	Value    interface{} `json:"value"`
+	CtyValue cty.Value `hcl:"value,optional"` // value of the output
+	Value    any       `json:"value"`
 }

@@ -15,8 +15,8 @@ import (
 
 // ParseVars converts a map[string]cty.Value into map[string]interface
 // where the interface are generic go types like string, number, bool, slice, map
-func ParseVars(value map[string]cty.Value) map[string]interface{} {
-	vars := map[string]interface{}{}
+func ParseVars(value map[string]cty.Value) map[string]any {
+	vars := map[string]any{}
 
 	for k, v := range value {
 		vars[k] = castVar(v)
@@ -69,7 +69,7 @@ func HashString(in string) string {
 // Sharif dont like it
 // Rock the cast var
 // Rock the cast var
-func castVar(v cty.Value) interface{} {
+func castVar(v cty.Value) any {
 	if v.Type() == cty.String {
 		return v.AsString()
 	} else if v.Type() == cty.Bool {
@@ -87,7 +87,7 @@ func castVar(v cty.Value) interface{} {
 
 		return ParseVars(v.AsValueMap())
 	} else if v.Type().IsTupleType() || v.Type().IsListType() {
-		vars := []interface{}{}
+		vars := []any{}
 
 		if v.IsNull() {
 			return vars
