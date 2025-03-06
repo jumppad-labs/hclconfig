@@ -363,7 +363,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 35)
+	require.Len(t, c.Resources, 39)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -417,7 +417,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 35)
+	require.Len(t, c.Resources, 39)
 
 	cont, err := c.FindResource("output.module1_container_resources_cpu")
 	require.NoError(t, err)

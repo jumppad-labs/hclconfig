@@ -102,7 +102,7 @@ func (c *Config) findResource(path string) (types.Resource, error) {
 		}
 	}
 
-	return nil, ResourceNotFoundError{path}
+	return nil, ResourceNotFoundError{fqdn.StringWithoutAttribute()}
 }
 
 func (c *Config) FindRelativeResource(path string, parentModule string) (types.Resource, error) {

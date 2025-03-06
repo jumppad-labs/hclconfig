@@ -74,17 +74,10 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				// then the reference should be modified to include the parent reference
 				// "module.module1.module2.resource.container.mine.id"
 				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
-				deps, err := c.FindModuleResources(relFQDN.String(), true)
-				if err != nil {
-					pe := &errors.ParserError{}
-					pe.Line = resource.Metadata().Line
-					pe.Column = resource.Metadata().Column
-					pe.Filename = resource.Metadata().File
-					pe.Message = fmt.Sprintf("unable to find resources for module: %s, error: %s", fqdn.Module, err)
-					pe.Level = errors.ParserErrorLevelError
 
-					return nil, pe
-				}
+				// we ignore the error here as it may be possible that the module depends on
+				// disabled resources
+				deps, _ := c.FindModuleResources(relFQDN.String(), true)
 
 				for _, dep := range deps {
 					dependencies[dep] = true
@@ -99,17 +92,10 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				// then the reference should be modified to include the parent reference
 				// "module.module1.module2.resource.container.mine.id"
 				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
-				dep, err := c.FindResource(relFQDN.String())
-				if err != nil {
-					pe := &errors.ParserError{}
-					pe.Line = resource.Metadata().Line
-					pe.Column = resource.Metadata().Column
-					pe.Filename = resource.Metadata().File
-					pe.Message = fmt.Sprintf("unable to find dependent resource in module: '%s', error: '%s'", resource.Metadata().Module, err)
-					pe.Level = errors.ParserErrorLevelError
 
-					return nil, pe
-				}
+				// we ignore the error here as it may be possible that the module depends on
+				// disabled resources
+				dep, _ := c.FindResource(relFQDN.String())
 
 				dependencies[dep] = true
 			}
@@ -125,7 +111,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				pe.Line = resource.Metadata().Line
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
-				pe.Message = fmt.Sprintf("unable to find resources parent module: '%s, error: %s", fqdnString, err)
+				pe.Message = fmt.Sprintf("unable to find parent module: '%s, error: %s", fqdnString, err)
 				pe.Level = errors.ParserErrorLevelError
 
 				return nil, pe
@@ -177,6 +163,37 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		ctx, err := c.getContext(r)
 		if err != nil {
 			panic("no context found for resource")
+		}
+
+		// first we need to check if the resource is disabled
+		// this might be set by an interpolated value
+		// if this is disabled we ignore the resource
+		if attr, ok := bdy.Attributes["disabled"]; ok {
+			expr, err := processExpr(attr.Expr)
+
+			if err != nil {
+				panic(err)
+			}
+
+			if len(expr) > 0 {
+				// This expression could be a reference to another resource or it could be a
+				// function or a conditional statement. We need to evaluate the expression
+				// to determine if the resource should be disabled
+
+				//l, err := c.FindRelativeResource(expr[0], r.Metadata().Module)
+				//if err != nil {
+				//	pe := &errors.ParserError{}
+				//	pe.Filename = r.Metadata().File
+				//	pe.Line = r.Metadata().Line
+				//	pe.Column = r.Metadata().Column
+				//	pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
+				//	pe.Level = errors.ParserErrorLevelError
+
+				//	return diags.Append(pe)
+				//}
+
+			}
+
 		}
 
 		// attempt to set the values in the resource links to the resource attribute
