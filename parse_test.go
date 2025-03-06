@@ -2,6 +2,7 @@ package hclconfig
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -488,6 +489,49 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 
 	cont := r.(*structs.Container)
 	require.Equal(t, 2048, cont.Resources.CPU)
+}
+
+func TestModuleDisabledCanBeOverriden(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	calls := []string{}
+	o := DefaultOptions()
+	o.Callback = func(r types.Resource) error {
+		log.Printf("callback: %s", r.Metadata().ID)
+		calls = append(calls, r.Metadata().ID)
+
+		return nil
+	}
+
+	p := setupParser(t, o)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// test disabled overrides are set
+	r, err := c.FindResource("module.consul_2.resource.container.sidecar")
+	require.NoError(t, err)
+
+	// check disabled has been interpolated
+	cont := r.(*structs.Container)
+	require.False(t, cont.Disabled)
+
+	// check that the module resources callbacks are called
+	require.Contains(t, calls, "module.consul_2.resource.container.sidecar")
+
+	// test disabled is maintainerd
+	r, err = c.FindResource("module.consul_1.resource.container.sidecar")
+	require.NoError(t, err)
+
+	// check disabled has been interpolated
+	cont = r.(*structs.Container)
+	require.True(t, cont.Disabled)
+
+	// check that the module resources callbacks are called
+	require.NotContains(t, calls, "module.consul_1.resource.container.sidecar")
 }
 
 func TestParseContainerWithNoNameReturnsError(t *testing.T) {

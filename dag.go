@@ -42,18 +42,6 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			continue
 		}
 
-		// we might not yet know if the resource is disabled, this could be due
-		// to the value being set from a variable or an interpolated value
-
-		// if disabled ignore any dependencies
-		if resource.GetDisabled() {
-			// add all disabled resources to the root
-			//fmt.Println("connect", "root", "to", resource.Metadata().ID)
-
-			graph.Connect(dag.BasicEdge(root, resource))
-			continue
-		}
-
 		// use a map to keep a unique list
 		dependencies := map[types.Resource]bool{}
 
@@ -177,7 +165,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// if this is the root module or is disabled skip or is a variable
-		if (r.Metadata().Type == resources.TypeRoot) || r.GetDisabled() {
+		if r.Metadata().Type == resources.TypeRoot {
 			return nil
 		}
 
@@ -297,8 +285,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			return diags.Append(pe)
 		}
 
-		// if the type is a module the potentially we only just found out that we should be
+		// if the type is a module then potentially we only just found out that we should be
 		// disabled
+
 		// as an additional check, set all module resources to disabled if the module is disabled
 		if r.GetDisabled() && r.Metadata().Type == resources.TypeModule {
 			// find all dependent resources

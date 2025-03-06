@@ -30,6 +30,7 @@ module "consul_2" {
   source = "../single"
   variables = {
     cpu_resources = variable.default_cpu
+    enabled       = true
   }
 }
 
