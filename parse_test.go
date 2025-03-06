@@ -201,6 +201,47 @@ func TestParseSetsDefaultValues(t *testing.T) {
 	require.Equal(t, "hello world", cont.Default)
 }
 
+func TestParseErrorInvalidValues(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/validate/invalid/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err)
+
+	configError, ok := err.(*errors.ConfigError)
+	require.True(t, ok)
+	require.True(t, configError.ContainsErrors())
+
+	require.Len(t, configError.Errors, 1)
+
+	parserError := configError.Errors[0].(*errors.ParserError)
+	require.Equal(t, parserError.Message, "value for \"Default\" on resource \"resource.container.invalid\" is invalid. value \"hello computer\" failed validation \"eq hello world\"")
+}
+
+func TestParseNoErrorValidValues(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/validate/valid/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.valid")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	// check default values have been set
+	cont := r.(*structs.Container)
+	require.Equal(t, "hello world", cont.Default)
+}
+
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
 	require.NoError(t, err)
