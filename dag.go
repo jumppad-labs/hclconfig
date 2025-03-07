@@ -196,7 +196,16 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 				// now we need to evaluate the expression
 				var isDisabled bool
-				gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+				if err := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled); err != nil {
+					pe := &errors.ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`unable to decode disabled expression: %s`, err)
+					pe.Level = errors.ParserErrorLevelError
+
+					return diags.Append(pe)
+				}
 				r.SetDisabled(isDisabled)
 			}
 		}
