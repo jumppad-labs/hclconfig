@@ -168,104 +168,46 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// first we need to check if the resource is disabled
 		// this might be set by an interpolated value
 		// if this is disabled we ignore the resource
+		//
+		// This expression could be a reference to another resource or it could be a
+		// function or a conditional statement. We need to evaluate the expression
+		// to determine if the resource should be disabled
 		if attr, ok := bdy.Attributes["disabled"]; ok {
 			expr, err := processExpr(attr.Expr)
 
+			// need to handle this error
 			if err != nil {
-				panic(err)
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, err)
+				pe.Level = errors.ParserErrorLevelError
+
+				return diags.Append(pe)
 			}
 
 			if len(expr) > 0 {
-				// This expression could be a reference to another resource or it could be a
-				// function or a conditional statement. We need to evaluate the expression
-				// to determine if the resource should be disabled
+				// first we need to build the context for the expression
+				err := setContextVariablesFromList(c, r, expr, ctx)
+				if err != nil {
+					return diags.Append(err)
+				}
 
-				//l, err := c.FindRelativeResource(expr[0], r.Metadata().Module)
-				//if err != nil {
-				//	pe := &errors.ParserError{}
-				//	pe.Filename = r.Metadata().File
-				//	pe.Line = r.Metadata().Line
-				//	pe.Column = r.Metadata().Column
-				//	pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
-				//	pe.Level = errors.ParserErrorLevelError
-
-				//	return diags.Append(pe)
-				//}
-
-			}
-
-		}
-
-		// attempt to set the values in the resource links to the resource attribute
-		// all linked values should now have been processed as the graph
-		// will have handled them first
-		for _, v := range r.Metadata().Links {
-			fqrn, err := resources.ParseFQRN(v)
-			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf("error parsing resource link %s", err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return diags.Append(pe)
-			}
-
-			// get the value from the linked resource
-			l, err := c.FindRelativeResource(v, r.Metadata().Module)
-			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return diags.Append(pe)
-			}
-
-			var ctyRes cty.Value
-
-			// once we have found a resource convert it to a cty type and then
-			// set it on the context
-			switch l.Metadata().Type {
-			case resources.TypeLocal:
-				loc := l.(*resources.Local)
-				ctyRes = loc.CtyValue
-			case resources.TypeOutput:
-				out := l.(*resources.Output)
-				ctyRes = out.CtyValue
-			default:
-				ctyRes, err = convert.GoToCtyValue(l)
-			}
-
-			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return diags.Append(pe)
-			}
-
-			// remove the attributes and to get a pure resource ref
-			fqrn.Attribute = ""
-
-			err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
-			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return diags.Append(pe)
+				// now we need to evaluate the expression
+				var isDisabled bool
+				gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+				r.SetDisabled(isDisabled)
 			}
 		}
+
+		// if the resource is disabled we need to skip the resource
+		if r.GetDisabled() {
+			return nil
+		}
+
+		// set the context variables from the linked resources
+		setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 
 		// Process the raw resource now we have the context from the linked
 		// resources
@@ -385,4 +327,84 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		return nil
 	}
+}
+
+// setContextVariablesFromList sets the context variables from a list of resource links
+//
+// for example: given the values ["module.module1.module2.resource.container.mine.id"]
+// the context variable "module.module1.module2.resource.container.mine.id" will be set to the
+// value defined by the resource of type container with the name mine and the attribute id
+func setContextVariablesFromList(c *Config, r types.Resource, values []string, ctx *hcl.EvalContext) *errors.ParserError {
+	// attempt to set the values in the resource links to the resource attribute
+	// all linked values should now have been processed as the graph
+	// will have handled them first
+	for _, v := range values {
+		fqrn, err := resources.ParseFQRN(v)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf("error parsing resource link %s", err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+
+		// get the value from the linked resource
+		l, err := c.FindRelativeResource(v, r.Metadata().Module)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+
+		var ctyRes cty.Value
+
+		// once we have found a resource convert it to a cty type and then
+		// set it on the context
+		switch l.Metadata().Type {
+		case resources.TypeLocal:
+			loc := l.(*resources.Local)
+			ctyRes = loc.CtyValue
+		case resources.TypeOutput:
+			out := l.(*resources.Output)
+			ctyRes = out.CtyValue
+		default:
+			ctyRes, err = convert.GoToCtyValue(l)
+		}
+
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+
+		// remove the attributes and to get a pure resource ref
+		fqrn.Attribute = ""
+
+		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+	}
+
+	return nil
 }

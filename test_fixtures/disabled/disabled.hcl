@@ -47,7 +47,7 @@ resource "container" "disabled_variable" {
 
 ## This resource sets disabled based on another resource
 resource "container" "disabled_variable_deps" {
-  disabled = resource.container.disabled_variable.meta.disabled
+  disabled = resource.container.disabled_variable.disabled
 
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
