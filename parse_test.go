@@ -383,7 +383,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 35)
+	require.Len(t, c.Resources, 39)
 
 	// check resource has been created
 	cont, err := c.FindResource("module.consul_1.resource.container.consul")
@@ -437,7 +437,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	require.Len(t, c.Resources, 35)
+	require.Len(t, c.Resources, 39)
 
 	cont, err := c.FindResource("output.module1_container_resources_cpu")
 	require.NoError(t, err)
@@ -517,11 +517,16 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	callbackMutext := sync.Mutex{}
+
 	calls := []string{}
 	o := DefaultOptions()
 	o.Callback = func(r types.Resource) error {
+		callbackMutext.Lock()
 		log.Printf("callback: %s", r.Metadata().ID)
 		calls = append(calls, r.Metadata().ID)
+
+		callbackMutext.Unlock()
 
 		return nil
 	}
@@ -611,7 +616,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-	require.Equal(t, 3, c.ResourceCount())
+	require.Equal(t, 4, c.ResourceCount())
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
@@ -865,8 +870,8 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
 
-	// only 13 of the resources and variables should be created, none of the descendants of base
-	require.Len(t, calls, 13)
+	// only 16 of the resources and variables should be created, none of the descendants of base
+	require.Len(t, calls, 16)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
