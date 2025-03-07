@@ -543,29 +543,6 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
-func setDisabled(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, parentDisabled bool) error {
-	if b == nil {
-		return nil
-	}
-
-	if parentDisabled {
-		r.SetDisabled(true)
-		return nil
-	}
-
-	if attr, ok := b.Attributes["disabled"]; ok {
-
-		disabled, diags := attr.Expr.Value(ctx)
-		if diags.HasErrors() {
-			return fmt.Errorf("unable to read source from module: %s", diags.Error())
-		}
-
-		r.SetDisabled(disabled.True())
-	}
-
-	return nil
-}
-
 func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dependsOn []string) error {
 	for _, d := range dependsOn {
 		r.AddDependency(d)
@@ -635,8 +612,6 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 		return []error{de}
 	}
-
-	setDisabled(ctx, rt, b.Body, false)
 
 	derr := setDependsOn(ctx, rt, b.Body, dependsOn)
 	if derr != nil {
@@ -834,9 +809,6 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 			panic("no body found for resource")
 		}
 
-		// set disabled
-		setDisabled(ctx, r, bdy, rt.GetDisabled())
-
 		// depends on is a property of the embedded type we need to set this manually
 		err = setDependsOn(ctx, rt, b.Body, dependsOn)
 		if err != nil {
@@ -1010,9 +982,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			rt.(*resources.Output).Description = desc.AsString()
 		}
 	}
-
-	// disabled is a property of the embedded type we need to add this manually
-	setDisabled(ctx, rt, b.Body, disabled)
 
 	// depends on is a property of the embedded type we need to set this manually
 	err = setDependsOn(ctx, rt, b.Body, dependsOn)

@@ -6,8 +6,11 @@ resource "network" "onprem" {
   subnet = "10.6.0.0/16"
 }
 
-resource "container" "consul" {
+variable "enabled" {
+  default = false
+}
 
+resource "container" "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
@@ -28,8 +31,12 @@ resource "container" "consul" {
 
 }
 
+resource "container" "sidecar" {
+  disabled = !variable.enabled
+}
+
 output "container_name" {
-  value = resource.container.consul.meta.name
+  value       = resource.container.consul.meta.name
   description = "This is the name of the container"
 }
 

@@ -197,3 +197,24 @@ func (f FQRN) String() string {
 
 	return fmt.Sprintf("%sresource.%s.%s%s", modulePart, f.Type, f.Resource, attrPart)
 }
+
+func (f FQRN) StringWithoutAttribute() string {
+	modulePart := ""
+	if f.Module != "" {
+		modulePart = fmt.Sprintf("module.%s.", f.Module)
+	}
+
+	if f.Type == TypeOutput || f.Type == TypeLocal || f.Type == TypeVariable {
+		return fmt.Sprintf("%s%s.%s", modulePart, f.Type, f.Resource)
+	}
+
+	if f.Type == TypeModule {
+		if f.Module == "" {
+			return fmt.Sprintf("module.%s", f.Resource)
+		}
+
+		return fmt.Sprintf("%s%s", modulePart, f.Resource)
+	}
+
+	return fmt.Sprintf("%sresource.%s.%s", modulePart, f.Type, f.Resource)
+}

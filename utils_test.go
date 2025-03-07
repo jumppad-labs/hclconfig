@@ -7,7 +7,7 @@ import (
 )
 
 func TestReadResourceFromFileAtLocation(t *testing.T) {
-	c, err := ReadFileLocation("./test_fixtures/single/container.hcl", 9, 1, 29, 2)
+	c, err := ReadFileLocation("./test_fixtures/single/container.hcl", 13, 1, 32, 2)
 	require.NoError(t, err)
 
 	// check the contents
@@ -15,7 +15,7 @@ func TestReadResourceFromFileAtLocation(t *testing.T) {
 }
 
 func TestLineFromFileAtLocation(t *testing.T) {
-	c, err := ReadFileLocation("./test_fixtures/single/container.hcl", 9, 1, 9, 30)
+	c, err := ReadFileLocation("./test_fixtures/single/container.hcl", 13, 1, 13, 30)
 	require.NoError(t, err)
 
 	// check the contents
@@ -31,7 +31,6 @@ func TestCalculatesHashFromString(t *testing.T) {
 var singleLine = `resource "container" "consul"`
 
 var container = `resource "container" "consul" {
-
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 
   network {
