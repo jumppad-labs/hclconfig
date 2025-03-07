@@ -13,7 +13,7 @@ import (
 	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
 
-func createCtyFunctionFromGoFunc(f interface{}) (function.Function, error) {
+func createCtyFunctionFromGoFunc(f any) (function.Function, error) {
 	// get the parameters
 	inParams := []function.Parameter{}
 	var outParam function.TypeFunc
@@ -287,7 +287,7 @@ func getDefaultFunctions(filePath string) map[string]function.Function {
 				return cty.StringVal(""), fmt.Errorf("error parsing template: %s", err)
 			}
 
-			tmpl.RegisterHelpers(map[string]interface{}{
+			tmpl.RegisterHelpers(map[string]any{
 				"quote": func(in string) string {
 					return fmt.Sprintf(`"%s"`, in)
 				},

@@ -5,6 +5,7 @@ go 1.22
 toolchain go1.22.2
 
 require (
+	github.com/creasty/defaults v1.8.0
 	github.com/flytam/filenamify v1.2.0
 	github.com/hashicorp/errwrap v1.1.0
 	github.com/hashicorp/go-getter v1.7.5

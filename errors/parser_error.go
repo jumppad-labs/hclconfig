@@ -2,7 +2,7 @@ package errors
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/mitchellh/go-wordwrap"
@@ -35,7 +35,7 @@ func (p *ParserError) Error() string {
 
 	err.WriteString("  " + fmt.Sprintf("%s:%d,%d\n", p.Filename, p.Line, p.Column))
 	// process the file
-	file, _ := ioutil.ReadFile(wordwrap.WrapString(p.Filename, 80))
+	file, _ := os.ReadFile(wordwrap.WrapString(p.Filename, 80))
 
 	lines := strings.Split(string(file), "\n")
 

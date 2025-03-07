@@ -3,7 +3,6 @@ package hclconfig
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -116,7 +115,7 @@ func (p *Parser) RegisterType(name string, resource types.Resource) {
 // RegisterFunction type registers a custom interpolation function
 // with the given name
 // the parser uses this list to convert hcl defined resources into concrete types
-func (p *Parser) RegisterFunction(name string, f interface{}) error {
+func (p *Parser) RegisterFunction(name string, f any) error {
 	ctyFunc, err := createCtyFunctionFromGoFunc(f)
 	if err != nil {
 		return nil
@@ -243,13 +242,13 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 	}
 
 	for _, m := range rawMessagesForResources {
-		mm := map[string]interface{}{}
+		mm := map[string]any{}
 		err := json.Unmarshal(*m, &mm)
 		if err != nil {
 			return nil, err
 		}
 
-		meta := mm["meta"].(map[string]interface{})
+		meta := mm["meta"].(map[string]any)
 
 		r, err := p.registeredTypes.CreateResource(meta["type"].(string), meta["name"].(string))
 		if err != nil {
@@ -278,7 +277,7 @@ func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) []e
 		return []error{fmt.Errorf("%s is not a directory", dir)}
 	}
 
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return []error{fmt.Errorf("unable to list files in directory %s, error: %s", dir, err)}
 	}
@@ -863,7 +862,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 				Meta: types.Meta{
 					Name:       name,
 					Type:       b.Labels[0],
-					Properties: map[string]interface{}{},
+					Properties: map[string]any{},
 				},
 			}
 
@@ -1235,7 +1234,7 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	return ctx
 }
 
-func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p interface{}, ignoreErrors bool) error {
+func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p any, ignoreErrors bool) error {
 	dr, err := getDependentResources(b, ctx, config, p, "")
 	if err != nil {
 		return err
@@ -1288,7 +1287,7 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.
 // i.e. resource.container.foo.network[0].name
 // when a link is found it is replaced with an empty value of the correct type and the
 // dependent resources are returned to be processed later
-func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource interface{}, path string) ([]string, error) {
+func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, resource any, path string) ([]string, error) {
 	references := []string{}
 
 	for _, a := range b.Body.Attributes {

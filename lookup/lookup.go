@@ -21,20 +21,20 @@ const (
 )
 
 var (
-	ErrMalformedIndex    = errors.New("Malformed index key")
-	ErrInvalidIndexUsage = errors.New("Invalid index key usage")
-	ErrKeyNotFound       = errors.New("Unable to find the key")
+	ErrMalformedIndex    = errors.New("malformed index key")
+	ErrInvalidIndexUsage = errors.New("invalid index key usage")
+	ErrKeyNotFound       = errors.New("unable to find the key")
 )
 
 // LookupString performs a lookup into a value, using a string. Same as `Lookup`
 // but using a string with the keys separated by `.`
-func LookupString(i interface{}, path string, tags []string) (reflect.Value, error) {
+func LookupString(i any, path string, tags []string) (reflect.Value, error) {
 	return Lookup(i, strings.Split(path, SplitToken), tags)
 }
 
 // LookupStringI is the same as LookupString, but the path is not case
 // sensitive.
-func LookupStringI(i interface{}, path string, tags []string) (reflect.Value, error) {
+func LookupStringI(i any, path string, tags []string) (reflect.Value, error) {
 	return LookupI(i, strings.Split(path, SplitToken), tags)
 }
 
@@ -44,16 +44,16 @@ func LookupStringI(i interface{}, path string, tags []string) (reflect.Value, er
 // If one key owns to a slice and an index is not
 // specified the rest of the path will be applied to eval value of the
 // slice, and the value will be merged into a slice.
-func Lookup(i interface{}, path []string, tags []string) (reflect.Value, error) {
+func Lookup(i any, path []string, tags []string) (reflect.Value, error) {
 	return lookup(i, false, path, tags)
 }
 
 // LookupI is the same as Lookup, but the path keys are not case sensitive.
-func LookupI(i interface{}, path []string, tags []string) (reflect.Value, error) {
+func LookupI(i any, path []string, tags []string) (reflect.Value, error) {
 	return lookup(i, true, path, tags)
 }
 
-func SetValueStringI[V int64 | int | string | bool | reflect.Value](i interface{}, v V, path string, tags []string) error {
+func SetValueStringI[V int64 | int | string | bool | reflect.Value](i any, v V, path string, tags []string) error {
 	// First find the variable
 	dest, err := Lookup(i, strings.Split(path, SplitToken), tags)
 	if err != nil {
@@ -86,7 +86,7 @@ func SetValueStringI[V int64 | int | string | bool | reflect.Value](i interface{
 	return nil
 }
 
-func lookup(i interface{}, caseInsensitive bool, path []string, tags []string) (reflect.Value, error) {
+func lookup(i any, caseInsensitive bool, path []string, tags []string) (reflect.Value, error) {
 	value := reflect.ValueOf(i)
 	var parent reflect.Value
 	var err error
@@ -275,7 +275,7 @@ func isMergeable(v reflect.Value) bool {
 }
 
 func hasIndex(s string) bool {
-	return strings.Index(s, IndexOpenChar) != -1
+	return strings.Contains(s, IndexOpenChar)
 }
 
 func parseIndex(s string) (string, int, error) {

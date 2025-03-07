@@ -1,7 +1,6 @@
 package hclconfig
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -33,10 +32,10 @@ func TestProcessesTypes(t *testing.T) {
 
 	require.True(t, output["bool"].(bool))
 
-	require.Equal(t, "abc", output["array"].([]interface{})[0])
-	require.Equal(t, "123", output["array"].([]interface{})[1])
+	require.Equal(t, "abc", output["array"].([]any)[0])
+	require.Equal(t, "123", output["array"].([]any)[1])
 
-	require.Equal(t, "abc", output["map"].(map[string]interface{})["foo"])
+	require.Equal(t, "abc", output["map"].(map[string]any)["foo"])
 }
 
 // CreateConfigFromStrings is a test helper function that
@@ -87,7 +86,7 @@ func CreateTestFile(t *testing.T, contents string) string {
 
 // create a temporary directory
 func createTempDirectory(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("Unable to create temporary directory: %s", err)
 	}
@@ -96,7 +95,7 @@ func createTempDirectory(t *testing.T) string {
 }
 
 func createNamedFile(t *testing.T, dir, name, contents string) string {
-	f, err := ioutil.TempFile(dir, name)
+	f, err := os.CreateTemp(dir, name)
 	if err != nil {
 		t.Fatalf("Error creating temp file %s", err)
 	}

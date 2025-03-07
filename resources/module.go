@@ -16,7 +16,7 @@ type Module struct {
 	Source  string `hcl:"source" json:"source"`
 	Version string `hcl:"version,optional" json:"version,omitempty"`
 
-	Variables interface{} `hcl:"variables,optional" json:"variables,omitempty"`
+	Variables any `hcl:"variables,optional" json:"variables,omitempty"`
 
 	// SubContext is used to store the variables as a context that can be
 	// passed to child resources

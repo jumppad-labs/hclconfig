@@ -177,9 +177,29 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 	require.NotNil(t, r)
 
 	out = r.(*resources.Output)
-	require.Equal(t, "10.6.0.200", out.Value.([]interface{})[0].(string))
-	require.Equal(t, "10.7.0.201", out.Value.([]interface{})[1].(string))
-	require.Equal(t, float64(12), out.Value.([]interface{})[2].(float64))
+	require.Equal(t, "10.6.0.200", out.Value.([]any)[0].(string))
+	require.Equal(t, "10.7.0.201", out.Value.([]any)[1].(string))
+	require.Equal(t, float64(12), out.Value.([]any)[2].(float64))
+}
+
+func TestParseSetsDefaultValues(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/defaults/container.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	r, err := c.FindResource("resource.container.default")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	// check default values have been set
+	cont := r.(*structs.Container)
+	require.Equal(t, "hello world", cont.Default)
 }
 
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
@@ -280,14 +300,14 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	r, err = c.FindResource("output.splat")
 	require.NoError(t, err)
 	cont := r.(*resources.Output)
-	require.Equal(t, "/cache", cont.Value.([]interface{})[0])
-	require.Equal(t, "/cache2", cont.Value.([]interface{})[1])
+	require.Equal(t, "/cache", cont.Value.([]any)[0])
+	require.Equal(t, "/cache2", cont.Value.([]any)[1])
 
 	r, err = c.FindResource("output.splat_with_null")
 	require.NoError(t, err)
 	cont = r.(*resources.Output)
-	require.Equal(t, "test1", cont.Value.([]interface{})[0])
-	require.Equal(t, "test2", cont.Value.([]interface{})[1])
+	require.Equal(t, "test1", cont.Value.([]any)[0])
+	require.Equal(t, "test2", cont.Value.([]any)[1])
 
 	r, err = c.FindResource("output.function")
 	require.NoError(t, err)
@@ -468,7 +488,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 
 	// check element can be obtained from a map of values
 	// returned in the output
-	meta := cont.(*resources.Output).Value.(map[string]interface{})["meta"].(map[string]interface{})
+	meta := cont.(*resources.Output).Value.(map[string]any)["meta"].(map[string]any)
 	require.Equal(t, "base", meta["name"])
 }
 
