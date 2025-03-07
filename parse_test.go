@@ -497,11 +497,16 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	callbackMutext := sync.Mutex{}
+
 	calls := []string{}
 	o := DefaultOptions()
 	o.Callback = func(r types.Resource) error {
+		callbackMutext.Lock()
 		log.Printf("callback: %s", r.Metadata().ID)
 		calls = append(calls, r.Metadata().ID)
+
+		callbackMutext.Unlock()
 
 		return nil
 	}
