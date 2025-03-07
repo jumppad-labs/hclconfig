@@ -111,7 +111,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				pe.Line = resource.Metadata().Line
 				pe.Column = resource.Metadata().Column
 				pe.Filename = resource.Metadata().File
-				pe.Message = fmt.Sprintf("unable to find parent module: '%s, error: %s", fqdnString, err)
+				pe.Message = fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err)
 				pe.Level = errors.ParserErrorLevelError
 
 				return nil, pe
