@@ -25,7 +25,10 @@ func parseEntity(e *Entity) (interface{}, error) {
 				Type: reflect.TypeOf("string"),
 				Tag:  reflect.StructTag(p.Tags),
 			})
-		// need to work out how to identify these types
+		// Need to work out how to identify these types
+		// can probably just use the start of the type [] to figure
+		// out if it's a slice, the type of the object in the slice can be ignored
+		// We do need to handle ptrs though so probably need to figure if *type or not
 		case "[]main.Network":
 			fallthrough
 		case "[]schema.Network":
