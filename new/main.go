@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"reflect"
+	"fmt"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/hclconfig/new/schema"
 	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -22,24 +23,19 @@ type MyEntity struct {
 }
 
 func main() {
-	var sfs []reflect.StructField
-	sfs = append(sfs, reflect.StructField{
-		Name: "Foo",
-		Type: reflect.TypeOf("string"),
-		Tag:  `hcl:"foo"`,
-	})
+	// Create a schema from the struct
+	fmt.Println("Creating schema from struct")
+	jsonSchema, err := schema.GenerateFromInstance(MyEntity{})
+	if err != nil {
+		pretty.Println(err)
+		return
+	}
 
-	sfs = append(sfs, reflect.StructField{
-		Name: "Networks",
-		Type: reflect.TypeOf([]struct {
-			Name string `hcl:"name"`
-		}{}),
-		Tag: `hcl:"network,block"`,
-	})
+	pretty.Println(string(jsonSchema))
+	fmt.Println()
 
-	st := reflect.StructOf(sfs)
-	p := reflect.New(st).Interface()
-
+	// Parse the HCL file
+	fmt.Println("Parsing HCL file")
 	parser := hclparse.NewParser()
 	f, diags := parser.ParseHCLFile("./test.hcl")
 
@@ -47,31 +43,47 @@ func main() {
 		pretty.Println(diags.Error())
 	}
 
-	resources := []interface{}{}
-
-	//p := map[string]cty.Value{}
-
+	// Create a new eval context
 	ctx := &hcl.EvalContext{
 		Variables: map[string]cty.Value{},
 	}
 
 	valMap := map[string]cty.Value{}
 	valMap["a"] = cty.StringVal("foo")
-
 	ctx.Variables["var"] = cty.ObjectVal(valMap)
 
+	// Loop through the blocks in the HCL file
 	body := f.Body.(*hclsyntax.Body)
 
 	for _, block := range body.Blocks {
-		diags := gohcl.DecodeBody(block.Body, ctx, p)
+		fmt.Println("Parsing block")
+
+		// Create a new struct from the schema
+		fmt.Println("Creating struct from schema")
+		wireType, err := schema.CreateStructFromSchema(jsonSchema)
+		if err != nil {
+			pretty.Println(err)
+			return
+		}
+
+		// Decode the block into the struct
+		diags := gohcl.DecodeBody(block.Body, ctx, wireType)
 		if diags.HasErrors() {
 			pretty.Println(diags.Error())
 		}
 
-		resources = append(resources, p)
+		pretty.Println(wireType)
+		fmt.Println()
 
-		d, _ := json.Marshal(p)
+		// Marshal the struct to JSON
+		fmt.Println("Marshalling struct to JSON")
+		d, _ := json.MarshalIndent(wireType, " ", " ")
 
+		pretty.Println(string(d))
+		fmt.Println()
+
+		// Unmarshal the JSON back into the struct
+		fmt.Println("Unmarshalling JSON to struct")
 		my := &MyEntity{}
 		json.Unmarshal(d, my)
 

@@ -5,13 +5,6 @@ import (
 	"reflect"
 )
 
-type Entity struct {
-	Name       string    `json:"name,omitempty"`
-	Type       string    `json:"type,omitempty"`
-	Tags       string    `json:"tags,omitempty"`
-	Properties []*Entity `json:"properties,omitempty"`
-}
-
 func GenerateFromInstance(v any) ([]byte, error) {
 	elem := reflect.ValueOf(v)
 	e, err := serializeEntity(elem)
