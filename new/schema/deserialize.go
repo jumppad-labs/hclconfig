@@ -24,7 +24,6 @@ type PropertyType struct {
 	Map          bool
 	MapKey       string
 	InnerPointer bool
-	Package      string
 	Type         string
 }
 
@@ -146,10 +145,6 @@ func parseType(t string) (*PropertyType, error) {
 
 	if parts["mapkey"] != "" {
 		tp.MapKey = parts["mapkey"]
-	}
-
-	if parts["package"] != "" {
-		tp.Package = parts["package"]
 	}
 
 	return &tp, nil
