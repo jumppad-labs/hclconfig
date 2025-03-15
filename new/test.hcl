@@ -19,6 +19,7 @@ a "abc" "456" {
   map = {
     a = "b"
   }
+  slice = ["a", "b", "c"]
 
   network {
     name = "default"

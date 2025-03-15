@@ -22,6 +22,7 @@ type MyEntity struct {
 	Count int               `hcl:"count"`
 	Float float64           `hcl:"float"`
 	Map   map[string]string `hcl:"map"`
+	Slice *[]string         `hcl:"slice"`
 
 	Networks []Network `hcl:"network,block"`
 }
