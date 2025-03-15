@@ -69,10 +69,6 @@ func parseAttribute(attribute *Attribute) (any, error) {
 		} else {
 			innerType := parseInnerType(t, a)
 
-			if t.OuterPointer {
-				innerType = reflect.PointerTo(innerType)
-			}
-
 			fields = append(fields, reflect.StructField{
 				Name: a.Name,
 				Type: innerType,
@@ -143,10 +139,6 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 		}
 
 		innerType = reflect.TypeOf(se)
-	}
-
-	if t.OuterPointer {
-		innerType = reflect.PointerTo(innerType)
 	}
 
 	return innerType
