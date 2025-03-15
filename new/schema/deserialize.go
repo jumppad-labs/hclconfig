@@ -136,14 +136,10 @@ func parseType(t string) (*PropertyType, error) {
 			)
 		)?                        optional
 		(?P<innerpointer>\*)?     is the inner type a pointer?
-		(
-			(?P<package>.+)         package of the attribute
-			(?:\.)                  ignore the .
-		)?                        optional
 		(?P<type>.+)              type of the attribute
 		$                         end of type
 	*/
-	// expr := regexp.MustCompile(`^(?P<outerpointer>\*)?((?P<slice>\[])|((?P<map>map)(?:\[)(?P<mapkey>.+)(?:])))?(?P<innerpointer>\*)?((?P<package>.+)(?:\.))?(?P<type>.+)$`)
+
 	expr := regexp.MustCompile(`^(?P<outerpointer>\*)?((?P<slice>\[])|((?P<map>map)(?:\[)(?P<mapkey>.+)(?:])))?(?P<innerpointer>\*)?(?P<type>.+)$`)
 	matches := expr.FindAllStringSubmatch(t, -1)
 	if len(matches) == 0 {
