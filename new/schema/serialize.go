@@ -45,6 +45,10 @@ func serializeAttribute(v reflect.Value) (*Attribute, error) {
 		sv := reflect.New(v.Type().Elem()).Elem()
 		return serializeAttribute(sv)
 
+	case reflect.Ptr:
+		sv := reflect.New(v.Type().Elem()).Elem()
+		return serializeAttribute(sv)
+
 	// handle all other types here e.g. string, bool, int, float64, etc.
 	default:
 		fe := &Attribute{
