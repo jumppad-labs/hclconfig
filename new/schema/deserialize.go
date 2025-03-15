@@ -2,52 +2,152 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"regexp"
 )
 
-func CreateStructFromSchema(data []byte) (interface{}, error) {
-	e := &Entity{}
+func CreateStructFromSchema(data []byte) (any, error) {
+	e := &Attribute{}
 	err := json.Unmarshal(data, e)
 	if err != nil {
 		return nil, err
 	}
 
-	return parseEntity(e)
+	return parseAttribute(e)
 }
 
-func parseEntity(e *Entity) (interface{}, error) {
+type PropertyType struct {
+	OuterPointer bool
+	Struct       bool
+	Slice        bool
+	Map          bool
+	MapKey       string
+	InnerPointer bool
+	Type         string
+}
+
+func parseAttribute(attribute *Attribute) (any, error) {
 	fields := []reflect.StructField{}
-	for _, p := range e.Properties {
-		switch p.Type {
-		case "string":
-			fields = append(fields, reflect.StructField{
-				Name: p.Name,
-				Type: reflect.TypeOf("string"),
-				Tag:  reflect.StructTag(p.Tags),
-			})
-		// Need to work out how to identify these types
-		// can probably just use the start of the type [] to figure
-		// out if it's a slice, the type of the object in the slice can be ignored
-		// We do need to handle ptrs though so probably need to figure if *type or not
-		case "[]main.Network":
-			fallthrough
-		case "[]schema.Network":
-			se, err := parseEntity(p)
-			if err != nil {
-				return nil, err
+	for _, a := range attribute.Properties {
+		t, err := parseType(a.Type)
+		if err != nil {
+			return nil, err
+		}
+
+		if t.Slice {
+			innerType := parseInnerType(t, a)
+
+			sliceType := reflect.SliceOf(innerType)
+
+			if t.OuterPointer {
+				sliceType = reflect.PointerTo(sliceType)
 			}
 
 			nf := reflect.StructField{
-				Name: p.Name,
-				Type: reflect.SliceOf(reflect.TypeOf(se).Elem()),
-				Tag:  reflect.StructTag(p.Tags),
+				Name: a.Name,
+				Type: sliceType,
+				Tag:  reflect.StructTag(a.Tags),
 			}
 
 			fields = append(fields, nf)
+		} else if t.Map {
+			innerType := parseInnerType(t, a)
+
+			keyType := reflect.TypeOf(t.MapKey)
+			mapType := reflect.MapOf(keyType, innerType)
+
+			if t.OuterPointer {
+				mapType = reflect.PointerTo(mapType)
+			}
+
+			fields = append(fields, reflect.StructField{
+				Name: a.Name,
+				Type: mapType,
+				Tag:  reflect.StructTag(a.Tags),
+			})
+		} else {
+			innerType := parseInnerType(t, a)
+
+			if t.OuterPointer {
+				innerType = reflect.PointerTo(innerType)
+			}
+
+			fields = append(fields, reflect.StructField{
+				Name: a.Name,
+				Type: innerType,
+				Tag:  reflect.StructTag(a.Tags),
+			})
 		}
 	}
 
 	t := reflect.StructOf(fields)
 
 	return reflect.New(t).Interface(), nil
+}
+
+func parseType(t string) (*PropertyType, error) {
+	/*
+		^                         start of type
+		(?P<outerpointer>\*)?     is the outer type a pointer?
+		(
+			(?P<slice>\[])          is the outer type a slice?
+			|                       or
+			(
+				(?P<map>map)          is the outer type a map?
+				(?:\[)                ignore the [
+				(?P<mapkey>.+)        key type of the map
+				(?:])                 ignore the ]
+			)
+		)?                        optional
+		(?P<innerpointer>\*)?     is the inner type a pointer?
+		(?P<type>.+)              type of the attribute
+		$                         end of type
+	*/
+
+	expr := regexp.MustCompile(`^(?P<outerpointer>\*)?((?P<slice>\[])|((?P<map>map)(?:\[)(?P<mapkey>.+)(?:])))?(?P<innerpointer>\*)?(?P<type>.+)$`)
+	matches := expr.FindAllStringSubmatch(t, -1)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("unable to parse type: %s", t)
+	}
+
+	parts := make(map[string]string)
+	for i, name := range expr.SubexpNames() {
+		if i != 0 && name != "" {
+			parts[name] = matches[0][i]
+		}
+	}
+
+	tp := PropertyType{
+		OuterPointer: parts["outerpointer"] != "",
+		Slice:        parts["slice"] != "",
+		Map:          parts["map"] != "",
+		InnerPointer: parts["innerpointer"] != "",
+		Type:         parts["type"],
+	}
+
+	if parts["mapkey"] != "" {
+		tp.MapKey = parts["mapkey"]
+	}
+
+	return &tp, nil
+}
+
+func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
+	innerType := reflect.TypeOf(t.Type)
+
+	if a.Properties != nil {
+		se, err := parseAttribute(a)
+		if err != nil {
+			return nil
+		}
+
+		innerType = reflect.TypeOf(se)
+	}
+
+	if t.OuterPointer {
+		innerType = reflect.PointerTo(innerType)
+	}
+
+	return innerType
 }

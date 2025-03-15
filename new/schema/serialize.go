@@ -7,7 +7,7 @@ import (
 
 func GenerateFromInstance(v any) ([]byte, error) {
 	elem := reflect.ValueOf(v)
-	e, err := serializeEntity(elem)
+	e, err := serializeAttribute(elem)
 	if err != nil {
 		return nil, err
 	}
@@ -15,15 +15,15 @@ func GenerateFromInstance(v any) ([]byte, error) {
 	return json.MarshalIndent(e, " ", " ")
 }
 
-func serializeEntity(v reflect.Value) (*Entity, error) {
+func serializeAttribute(v reflect.Value) (*Attribute, error) {
 	switch v.Kind() {
 	case reflect.Struct:
-		e := &Entity{
+		e := &Attribute{
 			Type: v.Type().String(),
 		}
 
 		for i := 0; i < v.NumField(); i++ {
-			fe, err := serializeEntity(v.Field(i))
+			fe, err := serializeAttribute(v.Field(i))
 			if err != nil {
 				return nil, err
 			}
@@ -37,18 +37,24 @@ func serializeEntity(v reflect.Value) (*Entity, error) {
 
 		return e, nil
 
-	case reflect.String:
-		fe := &Entity{
-			Type: "string",
+	case reflect.Slice:
+		sv := reflect.New(v.Type().Elem()).Elem()
+		return serializeAttribute(sv)
+
+	case reflect.Map:
+		sv := reflect.New(v.Type().Elem()).Elem()
+		return serializeAttribute(sv)
+
+	case reflect.Ptr:
+		sv := reflect.New(v.Type().Elem()).Elem()
+		return serializeAttribute(sv)
+
+	// handle all other types here e.g. string, bool, int, float64, etc.
+	default:
+		fe := &Attribute{
+			Type: v.Type().String(),
 		}
 
 		return fe, nil
-
-	case reflect.Slice:
-		sv := reflect.New(v.Type().Elem()).Elem()
-		return serializeEntity(sv)
-
 	}
-
-	return nil, nil
 }

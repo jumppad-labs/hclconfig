@@ -14,12 +14,19 @@ import (
 )
 
 type Network struct {
-	Name string `hcl:"name"`
+	Name    string `hcl:"name"`
+	Enabled bool   `hcl:"enabled"`
 }
 type MyEntity struct {
-	Foo string `hcl:"foo"`
+	Foo   string            `hcl:"foo"`
+	Count int               `hcl:"count"`
+	Float float64           `hcl:"float"`
+	Map   map[string]string `hcl:"map"`
+	Slice []string          `hcl:"slice"`
 
-	Networks []Network `hcl:"network,block"`
+	NetworkMap    map[string]Network `hcl:"network_map"`
+	Networks      []Network          `hcl:"network,block"`
+	NetworkStruct Network            `hcl:"network_struct,block"`
 }
 
 func main() {
