@@ -95,6 +95,15 @@ func parseAttribute(attribute *Attribute) (any, error) {
 		} else {
 			innerType := reflect.TypeOf(t.Type)
 
+			if p.Properties != nil {
+				se, err := parseAttribute(p)
+				if err != nil {
+					return nil, err
+				}
+
+				innerType = reflect.TypeOf(se)
+			}
+
 			if t.OuterPointer {
 				innerType = reflect.PointerTo(innerType)
 			}

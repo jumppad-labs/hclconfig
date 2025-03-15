@@ -24,8 +24,9 @@ type MyEntity struct {
 	Map   map[string]string `hcl:"map"`
 	Slice []string          `hcl:"slice"`
 
-	NetworkMap map[string]Network `hcl:"network_map"`
-	Networks   []Network          `hcl:"network,block"`
+	NetworkMap    map[string]Network `hcl:"network_map"`
+	Networks      []Network          `hcl:"network,block"`
+	NetworkStruct Network            `hcl:"network_struct,block"`
 }
 
 func main() {

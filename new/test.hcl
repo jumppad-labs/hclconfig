@@ -32,16 +32,13 @@ a "abc" "456" {
     }
   }
 
+  network_struct {
+    name = "default"
+    enabled = true
+  }
+
   network {
     name = "default"
     enabled = false
   }
 }
-
-/*
-[{
-  "name": "foo",
-  "tags": "hcl:'"foo\"",
-  "type": "string",
-}]
-*/
