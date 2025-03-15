@@ -65,13 +65,22 @@ func parseAttribute(attribute *Attribute) (any, error) {
 
 			fields = append(fields, nf)
 		} else if t.Map {
-			keyType := reflect.TypeOf(t.MapKey)
 			innerType := reflect.TypeOf(t.Type)
+
+			if p.Properties != nil {
+				se, err := parseAttribute(p)
+				if err != nil {
+					return nil, err
+				}
+
+				innerType = reflect.TypeOf(se)
+			}
 
 			if t.InnerPointer {
 				innerType = reflect.PointerTo(innerType)
 			}
 
+			keyType := reflect.TypeOf(t.MapKey)
 			mapType := reflect.MapOf(keyType, innerType)
 
 			if t.OuterPointer {
