@@ -36,52 +36,34 @@ func parseAttribute(attribute *Attribute) (any, error) {
 		}
 
 		if t.Slice {
+			innerType := reflect.TypeOf(t.Type)
+
 			if p.Properties != nil {
 				se, err := parseAttribute(p)
 				if err != nil {
 					return nil, err
 				}
 
-				innerType := reflect.TypeOf(se)
-
-				if t.InnerPointer {
-					innerType = reflect.PointerTo(innerType)
-				}
-
-				sliceType := reflect.SliceOf(innerType.Elem())
-
-				if t.OuterPointer {
-					sliceType = reflect.PointerTo(sliceType)
-				}
-
-				nf := reflect.StructField{
-					Name: p.Name,
-					Type: sliceType,
-					Tag:  reflect.StructTag(p.Tags),
-				}
-
-				fields = append(fields, nf)
-			} else {
-				innerType := reflect.TypeOf(t.Type)
-
-				if t.InnerPointer {
-					innerType = reflect.PointerTo(innerType)
-				}
-
-				sliceType := reflect.SliceOf(innerType)
-
-				if t.OuterPointer {
-					sliceType = reflect.PointerTo(sliceType)
-				}
-
-				nf := reflect.StructField{
-					Name: p.Name,
-					Type: sliceType,
-					Tag:  reflect.StructTag(p.Tags),
-				}
-
-				fields = append(fields, nf)
+				innerType = reflect.TypeOf(se)
 			}
+
+			if t.InnerPointer {
+				innerType = reflect.PointerTo(innerType)
+			}
+
+			sliceType := reflect.SliceOf(innerType)
+
+			if t.OuterPointer {
+				sliceType = reflect.PointerTo(sliceType)
+			}
+
+			nf := reflect.StructField{
+				Name: p.Name,
+				Type: sliceType,
+				Tag:  reflect.StructTag(p.Tags),
+			}
+
+			fields = append(fields, nf)
 		} else if t.Map {
 			keyType := reflect.TypeOf(t.MapKey)
 			innerType := reflect.TypeOf(t.Type)

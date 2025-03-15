@@ -21,6 +21,17 @@ a "abc" "456" {
   }
   slice = ["a", "b", "c"]
 
+  network_map = {
+    default = {
+      name = "default"
+      enabled = true
+    }
+    other = {
+      name = "other"
+      enabled = false
+    }
+  }
+
   network {
     name = "default"
     enabled = false
