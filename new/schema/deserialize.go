@@ -29,27 +29,14 @@ type PropertyType struct {
 
 func parseAttribute(attribute *Attribute) (any, error) {
 	fields := []reflect.StructField{}
-	for _, p := range attribute.Properties {
-		t, err := parseType(p.Type)
+	for _, a := range attribute.Properties {
+		t, err := parseType(a.Type)
 		if err != nil {
 			return nil, err
 		}
 
 		if t.Slice {
-			innerType := reflect.TypeOf(t.Type)
-
-			if p.Properties != nil {
-				se, err := parseAttribute(p)
-				if err != nil {
-					return nil, err
-				}
-
-				innerType = reflect.TypeOf(se)
-			}
-
-			if t.InnerPointer {
-				innerType = reflect.PointerTo(innerType)
-			}
+			innerType := parseInnerType(t, a)
 
 			sliceType := reflect.SliceOf(innerType)
 
@@ -58,27 +45,14 @@ func parseAttribute(attribute *Attribute) (any, error) {
 			}
 
 			nf := reflect.StructField{
-				Name: p.Name,
+				Name: a.Name,
 				Type: sliceType,
-				Tag:  reflect.StructTag(p.Tags),
+				Tag:  reflect.StructTag(a.Tags),
 			}
 
 			fields = append(fields, nf)
 		} else if t.Map {
-			innerType := reflect.TypeOf(t.Type)
-
-			if p.Properties != nil {
-				se, err := parseAttribute(p)
-				if err != nil {
-					return nil, err
-				}
-
-				innerType = reflect.TypeOf(se)
-			}
-
-			if t.InnerPointer {
-				innerType = reflect.PointerTo(innerType)
-			}
+			innerType := parseInnerType(t, a)
 
 			keyType := reflect.TypeOf(t.MapKey)
 			mapType := reflect.MapOf(keyType, innerType)
@@ -88,30 +62,21 @@ func parseAttribute(attribute *Attribute) (any, error) {
 			}
 
 			fields = append(fields, reflect.StructField{
-				Name: p.Name,
+				Name: a.Name,
 				Type: mapType,
-				Tag:  reflect.StructTag(p.Tags),
+				Tag:  reflect.StructTag(a.Tags),
 			})
 		} else {
-			innerType := reflect.TypeOf(t.Type)
-
-			if p.Properties != nil {
-				se, err := parseAttribute(p)
-				if err != nil {
-					return nil, err
-				}
-
-				innerType = reflect.TypeOf(se)
-			}
+			innerType := parseInnerType(t, a)
 
 			if t.OuterPointer {
 				innerType = reflect.PointerTo(innerType)
 			}
 
 			fields = append(fields, reflect.StructField{
-				Name: p.Name,
+				Name: a.Name,
 				Type: innerType,
-				Tag:  reflect.StructTag(p.Tags),
+				Tag:  reflect.StructTag(a.Tags),
 			})
 		}
 	}
@@ -166,4 +131,23 @@ func parseType(t string) (*PropertyType, error) {
 	}
 
 	return &tp, nil
+}
+
+func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
+	innerType := reflect.TypeOf(t.Type)
+
+	if a.Properties != nil {
+		se, err := parseAttribute(a)
+		if err != nil {
+			return nil
+		}
+
+		innerType = reflect.TypeOf(se)
+	}
+
+	if t.OuterPointer {
+		innerType = reflect.PointerTo(innerType)
+	}
+
+	return innerType
 }
