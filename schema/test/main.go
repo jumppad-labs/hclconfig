@@ -1,4 +1,4 @@
-package main
+package schema
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/jumppad-labs/hclconfig/new/schema"
+	"github.com/jumppad-labs/hclconfig/schema"
 	"github.com/kr/pretty"
 	"github.com/zclconf/go-cty/cty"
 )
