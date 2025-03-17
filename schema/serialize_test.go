@@ -117,3 +117,11 @@ func TestSerializeStructPtrDepth3(t *testing.T) {
 
 	require.JSONEq(t, fixtures.MyStructPtrDepth3JSON, string(b))
 }
+
+func TestSerializeStructPtrSliceDepth2(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructPtrSlice{}, 2)
+	require.NoError(t, err)
+	fmt.Println(string(b))
+
+	require.JSONEq(t, fixtures.MyStructPtrSliceDepth2JSON, string(b))
+}
