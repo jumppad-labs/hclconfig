@@ -62,3 +62,31 @@ func TestSerializeStringPtrSlice(t *testing.T) {
 
 	require.JSONEq(t, fixtures.MyStringPtrSliceJSON, string(b))
 }
+
+func TestSerializeBool(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyBool{})
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyBoolJSON, string(b))
+}
+
+func TestSerializeBoolSlice(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyBoolSlice{})
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyBoolSliceJSON, string(b))
+}
+
+func TestSerializeBoolPtr(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyBoolPtr{})
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyBoolPtrJSON, string(b))
+}
+
+func TestSerializeBoolPtrSlice(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyBoolPtrSlice{})
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyBoolPtrSliceJSON, string(b))
+}
