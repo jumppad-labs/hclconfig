@@ -1,19 +1,5 @@
-a "abc" "123" {
-  foo = "bar"
-  count = 1
-  float = 1.23
-  map = {
-    key = "value"
-  }
-
-  network {
-    name = "default"
-    enabled = true
-  }
-}
-
 a "abc" "456" {
-  foo = var.a
+  foo   = var.a
   count = 2
   float = 3.33
   map = {
@@ -23,22 +9,22 @@ a "abc" "456" {
 
   network_map = {
     default = {
-      name = "default"
+      name    = "default"
       enabled = true
     }
     other = {
-      name = "other"
+      name    = "other"
       enabled = false
     }
   }
 
   network_struct {
-    name = "default"
+    name    = "default"
     enabled = true
   }
 
   network {
-    name = "default"
+    name    = "default"
     enabled = false
   }
 }

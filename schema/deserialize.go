@@ -130,7 +130,25 @@ func parseType(t string) (*PropertyType, error) {
 }
 
 func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
-	innerType := reflect.TypeOf(t.Type)
+	var innerType reflect.Type
+	switch t.Type {
+	case "string":
+		innerType = reflect.TypeOf("")
+	case "int":
+		innerType = reflect.TypeOf(0)
+	case "int64":
+		innerType = reflect.TypeOf(int64(0))
+	case "int32":
+		innerType = reflect.TypeOf(int32(0))
+	case "float":
+		innerType = reflect.TypeOf(0.0)
+	case "float64":
+		innerType = reflect.TypeOf(float64(0.0))
+	case "float32":
+		innerType = reflect.TypeOf(float32(0.0))
+	case "bool":
+		innerType = reflect.TypeOf(true)
+	}
 
 	if a.Properties != nil {
 		se, err := parseAttribute(a)

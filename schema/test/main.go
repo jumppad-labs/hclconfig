@@ -1,4 +1,4 @@
-package schema
+package main
 
 import (
 	"encoding/json"
@@ -13,26 +13,10 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-type Network struct {
-	Name    string `hcl:"name"`
-	Enabled bool   `hcl:"enabled"`
-}
-type MyEntity struct {
-	Foo   string            `hcl:"foo"`
-	Count int               `hcl:"count"`
-	Float float64           `hcl:"float"`
-	Map   map[string]string `hcl:"map"`
-	Slice []string          `hcl:"slice"`
-
-	NetworkMap    map[string]Network `hcl:"network_map"`
-	Networks      []*Network         `hcl:"network,block"`
-	NetworkStruct *Network           `hcl:"network_struct,block"`
-}
 
 func main() {
 	// Create a schema from the struct
 	fmt.Println("Creating schema from struct")
-	jsonSchema, err := schema.GenerateFromInstance(MyEntity{})
 	if err != nil {
 		pretty.Println(err)
 		return
