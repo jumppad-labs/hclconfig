@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"fmt"
 	"testing"
 
 	fixtures "github.com/jumppad-labs/hclconfig/schema/test_fixtures"
@@ -97,7 +96,6 @@ func TestSerializeBoolPtrSlice(t *testing.T) {
 func TestSerializeStructPtrDepth1(t *testing.T) {
 	b, err := GenerateFromInstance(fixtures.MyStructPtr{}, 1)
 	require.NoError(t, err)
-	fmt.Println(string(b))
 
 	require.JSONEq(t, fixtures.MyStructPtrDepth1JSON, string(b))
 }
@@ -105,7 +103,6 @@ func TestSerializeStructPtrDepth1(t *testing.T) {
 func TestSerializeStructPtrDepth2(t *testing.T) {
 	b, err := GenerateFromInstance(fixtures.MyStructPtr{}, 2)
 	require.NoError(t, err)
-	fmt.Println(string(b))
 
 	require.JSONEq(t, fixtures.MyStructPtrDepth2JSON, string(b))
 }
@@ -113,15 +110,62 @@ func TestSerializeStructPtrDepth2(t *testing.T) {
 func TestSerializeStructPtrDepth3(t *testing.T) {
 	b, err := GenerateFromInstance(fixtures.MyStructPtr{}, 3)
 	require.NoError(t, err)
-	fmt.Println(string(b))
 
 	require.JSONEq(t, fixtures.MyStructPtrDepth3JSON, string(b))
+}
+
+func TestSerializeStructSliceDepth1(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructSlice{}, 1)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructSliceDepth1JSON, string(b))
+}
+
+func TestSerializeStructSliceDepth2(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructSlice{}, 2)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructSliceDepth2JSON, string(b))
+}
+
+func TestSerializeStructPtrSliceDepth1(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructPtrSlice{}, 1)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructPtrSliceDepth1JSON, string(b))
 }
 
 func TestSerializeStructPtrSliceDepth2(t *testing.T) {
 	b, err := GenerateFromInstance(fixtures.MyStructPtrSlice{}, 2)
 	require.NoError(t, err)
-	fmt.Println(string(b))
 
 	require.JSONEq(t, fixtures.MyStructPtrSliceDepth2JSON, string(b))
+}
+
+func TestSerializeStructMapDepth1(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructMap{}, 1)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructMapDepth1JSON, string(b))
+}
+
+func TestSerializeStructMapDepth2(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructMap{}, 2)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructMapDepth2JSON, string(b))
+}
+
+func TestSerializeStructMapPtrDepth1(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructMapPtr{}, 1)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructMapPtrDepth1JSON, string(b))
+}
+
+func TestSerializeStructMapPtrDepth2(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyStructMapPtr{}, 2)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyStructMapPtrDepth2JSON, string(b))
 }
