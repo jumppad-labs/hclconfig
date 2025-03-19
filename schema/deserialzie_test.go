@@ -416,7 +416,7 @@ func TestDeserializeStructSlice(t *testing.T) {
 	pretty.Println(s)
 
 	require.Equal(t, "slice", getKindForField(s, 1, 0))
-	require.Equal(t, "struct", getKindForField(s, 0, 1))
+	require.Equal(t, "struct", getKindForField(s, 1, 1))
 }
 
 func TestDeserializeStructPtrSlice(t *testing.T) {
