@@ -81,3 +81,33 @@ var MyIntPtrSliceJSON = `{
    }
   ]
  }`
+
+type MyIntMap struct {
+	Integer map[string]int `json:"integer"`
+}
+
+var MyIntMapJSON = `{
+  "type": "fixtures.MyIntMap",
+  "properties": [
+   {
+    "name": "Integer",
+    "type": "map[string]int",
+    "tags": "json:\"integer\""
+   }
+  ]
+ }`
+
+type MyIntMapPtr struct {
+	Integer map[string]*int `json:"integer"`
+}
+
+var MyIntMapPtrJSON = `{
+  "type": "fixtures.MyIntMapPtr",
+  "properties": [
+   {
+    "name": "Integer",
+    "type": "map[string]*int",
+    "tags": "json:\"integer\""
+   }
+  ]
+ }`

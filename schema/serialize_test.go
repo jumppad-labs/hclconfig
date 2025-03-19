@@ -23,6 +23,13 @@ func TestSerializeIntSlice(t *testing.T) {
 	require.JSONEq(t, fixtures.MyIntSliceJSON, string(b))
 }
 
+func TestSerializeIntMap(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyIntMap{}, maxDepth)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyIntMapJSON, string(b))
+}
+
 func TestSerializeIntPtr(t *testing.T) {
 	b, err := GenerateFromInstance(fixtures.MyIntPtr{}, maxDepth)
 	require.NoError(t, err)
@@ -35,6 +42,13 @@ func TestSerializeIntPtrSlice(t *testing.T) {
 	require.NoError(t, err)
 
 	require.JSONEq(t, fixtures.MyIntPtrSliceJSON, string(b))
+}
+
+func TestSerializeIntPtrMap(t *testing.T) {
+	b, err := GenerateFromInstance(fixtures.MyIntMapPtr{}, maxDepth)
+	require.NoError(t, err)
+
+	require.JSONEq(t, fixtures.MyIntMapPtrJSON, string(b))
 }
 
 func TestSerializeString(t *testing.T) {

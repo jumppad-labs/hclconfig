@@ -150,6 +150,11 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 		innerType = reflect.TypeOf(true)
 	}
 
+	// if the property is a pointer, we need to wrap the inner type in a pointer
+	if innerType != nil && (t.OuterPointer || t.InnerPointer) {
+		innerType = reflect.PointerTo(innerType)
+	}
+
 	if a.Properties != nil {
 		se, err := parseAttribute(a)
 		if err != nil {
