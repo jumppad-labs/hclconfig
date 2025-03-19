@@ -15,6 +15,28 @@ var MyIntJSON = `{
   ]
  }`
 
+var MyInt32JSON = `{
+  "type": "fixtures.MyInt",
+  "properties": [
+   {
+    "name": "Integer",
+    "type": "int32",
+    "tags": "json:\"integer\""
+   }
+  ]
+ }`
+
+var MyInt64JSON = `{
+  "type": "fixtures.MyInt",
+  "properties": [
+   {
+    "name": "Integer",
+    "type": "int64",
+    "tags": "json:\"integer\""
+   }
+  ]
+ }`
+
 type MyIntPtr struct {
 	Integer *int `json:"integer"`
 }
