@@ -59,3 +59,33 @@ var MyStringPtrSliceJSON = `{
    }
   ]
  }`
+
+type MyStringMap struct {
+	String map[string]string `json:"string"`
+}
+
+var MyStringMapJSON = `{
+  "type": "fixtures.MyStringMap",
+  "properties": [
+   {
+    "name": "String",
+    "type": "map[string]string",
+    "tags": "json:\"string\""
+   }
+  ]
+ }`
+
+type MyStringPtrMap struct {
+	String map[string]*string `json:"string"`
+}
+
+var MyStringMapPtrJSON = `{
+  "type": "fixtures.MyStringPtrMap",
+  "properties": [
+   {
+    "name": "String",
+    "type": "map[string]*string",
+    "tags": "json:\"string\""
+   }
+  ]
+ }`

@@ -134,20 +134,36 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 	switch t.Type {
 	case "string":
 		innerType = reflect.TypeOf("")
+	case "bool":
+		innerType = reflect.TypeOf(true)
+	case "byte":
+		innerType = reflect.TypeOf(byte(0))
+	case "rune":
+		innerType = reflect.TypeOf(rune(0))
 	case "int":
 		innerType = reflect.TypeOf(0)
 	case "int64":
 		innerType = reflect.TypeOf(int64(0))
 	case "int32":
 		innerType = reflect.TypeOf(int32(0))
+	case "uint":
+		innerType = reflect.TypeOf(uint(0))
+	case "uint64":
+		innerType = reflect.TypeOf(uint64(0))
+	case "uint32":
+		innerType = reflect.TypeOf(uint32(0))
+	case "uintptr":
+		innerType = reflect.TypeOf(uintptr(0))
 	case "float":
 		innerType = reflect.TypeOf(0.0)
 	case "float64":
 		innerType = reflect.TypeOf(float64(0.0))
 	case "float32":
 		innerType = reflect.TypeOf(float32(0.0))
-	case "bool":
-		innerType = reflect.TypeOf(true)
+	case "complex64":
+		innerType = reflect.TypeOf(complex64(0))
+	case "complex128":
+		innerType = reflect.TypeOf(complex128(0))
 	}
 
 	// if the property is a pointer, we need to wrap the inner type in a pointer

@@ -59,3 +59,33 @@ var MyBoolPtrSliceJSON = `{
    }
   ]
  }`
+
+type MyBoolMap struct {
+	Boolean map[string]bool `json:"boolean"`
+}
+
+var MyBoolMapJSON = `{
+  "type": "fixtures.MyBoolMap",
+  "properties": [
+   {
+    "name": "Boolean",
+    "type": "map[string]bool",
+    "tags": "json:\"boolean\""
+   }
+  ]
+ }`
+
+type MyBoolPtrMap struct {
+	Boolean map[string]*bool `json:"boolean"`
+}
+
+var MyBoolPtrMapJSON = `{
+  "type": "fixtures.MyBoolPtrMap",
+  "properties": [
+   {
+    "name": "Boolean",
+    "type": "map[string]*bool",
+    "tags": "json:\"boolean\""
+   }
+  ]
+ }`
