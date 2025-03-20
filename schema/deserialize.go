@@ -27,6 +27,7 @@ type PropertyType struct {
 	Type         string
 }
 
+// always returns a pointer to the struct
 func parseAttribute(attribute *Attribute) (any, error) {
 	fields := []reflect.StructField{}
 	for _, a := range attribute.Properties {
@@ -37,7 +38,6 @@ func parseAttribute(attribute *Attribute) (any, error) {
 
 		if t.Slice {
 			innerType := parseInnerType(t, a)
-
 			sliceType := reflect.SliceOf(innerType)
 
 			if t.OuterPointer {
@@ -51,6 +51,7 @@ func parseAttribute(attribute *Attribute) (any, error) {
 			}
 
 			fields = append(fields, nf)
+
 		} else if t.Map {
 			innerType := parseInnerType(t, a)
 
@@ -78,7 +79,6 @@ func parseAttribute(attribute *Attribute) (any, error) {
 	}
 
 	t := reflect.StructOf(fields)
-
 	return reflect.New(t).Interface(), nil
 }
 
@@ -171,6 +171,7 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 		innerType = reflect.PointerTo(innerType)
 	}
 
+	// if there are properties, we need to create a struct
 	if a.Properties != nil {
 		se, err := parseAttribute(a)
 		if err != nil {
@@ -178,6 +179,12 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 		}
 
 		innerType = reflect.TypeOf(se)
+
+		// parse attribute always returns a pointer to the struct
+		// if the inner type is not a pointer, we need to dereference it
+		if !t.InnerPointer && !t.OuterPointer {
+			innerType = reflect.TypeOf(se).Elem()
+		}
 	}
 
 	return innerType

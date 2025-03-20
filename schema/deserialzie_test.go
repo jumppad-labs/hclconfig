@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	fixtures "github.com/jumppad-labs/hclconfig/schema/test_fixtures"
-	"github.com/kr/pretty"
 	"github.com/stretchr/testify/require"
 )
 
@@ -412,8 +411,6 @@ func TestDeserializeStructSlice(t *testing.T) {
 
 	s, err := CreateStructFromSchema([]byte(fixtures.MyStructSliceDepth2JSON))
 	require.NoError(t, err)
-
-	pretty.Println(s)
 
 	require.Equal(t, "slice", getKindForField(s, 1, 0))
 	require.Equal(t, "struct", getKindForField(s, 1, 1))
