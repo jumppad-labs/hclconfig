@@ -8,15 +8,21 @@ import (
 )
 
 type Provider struct {
+	cfg *Person
+	log plugins.Logger
 }
 
 func (p *Provider) Init(cfg types.Resource, log plugins.Logger) error {
 	// ...initialize the provider with the given configuration and logger...
+	p.cfg = cfg.(*Person)
+	p.log = log
+
 	return nil
 }
 
 func (p *Provider) Create(ctx context.Context) error {
 	// ...logic to create a person resource...
+	p.log.Info("Creating person resource", "name", p.cfg.Name)
 	return nil
 }
 

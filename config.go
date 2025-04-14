@@ -526,3 +526,27 @@ func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
 
 	return nil, ResourceNotFoundError{}
 }
+
+func NewQuerier[T types.Resource](c *Config) *Querier[T] {
+	return &Querier[T]{config: c}
+}
+
+type Querier[T types.Resource] struct {
+	config *Config
+}
+
+func (q *Querier[T]) FindResource(path string) (T, error) {
+	for _, r := range q.config.Resources {
+		if r.Metadata().ID == path {
+			return r.(T), nil
+		}
+	}
+
+	// return a zero value of T and an error
+	var result T
+	return result, ResourceNotFoundError{path}
+}
+
+func (q *Querier[T]) FindResourcesByType() ([]T, error) {
+	return nil, fmt.Errorf("not implemented")
+}

@@ -1,5 +1,7 @@
 package entities
 
+import "github.com/jumppad-labs/hclconfig/types"
+
 type Address struct {
 	Street  string `hcl:"street" json:"street"`
 	City    string `hcl:"city" json:"city"`
@@ -9,6 +11,8 @@ type Address struct {
 }
 
 type Person struct {
+	types.ResourceBase
+
 	Name    string  `hcl:"name" json:"name"`
 	Address Address `hcl:"address,block" json:"address"`
 }

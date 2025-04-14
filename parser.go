@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/registry"
 	"github.com/jumppad-labs/hclconfig/resources"
 	"github.com/jumppad-labs/hclconfig/types"
@@ -93,6 +94,7 @@ type Parser struct {
 	options             ParserOptions
 	registeredTypes     types.RegisteredTypes
 	registeredFunctions map[string]function.Function
+	registeredPlugins   plugins.PluginEntityProvider
 }
 
 // NewParser creates a new parser with the given options

@@ -8,6 +8,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
+// RegisteredType is transfered over the wire
 type RegisteredType struct {
 	// The top level type name, i.e. resource
 	Type string
@@ -15,10 +16,17 @@ type RegisteredType struct {
 	SubType string
 	// The json schema for the type
 	Schema []byte
+}
+
+// RegisteredEntities is a struct that holds the registered types and their
+// concrete types. This is used to create the entities from the schema
+type RegisteredEntities struct {
+	entityType RegisteredType
+
 	// The concrete type that is used to create the entity
-	ConcreteType interface{}
+	concreteType interface{}
 	// The provider that handles this type
-	Provider Provider
+	provider Provider
 }
 
 // Plugin is a private interface that defines the contract between HCLConfig
