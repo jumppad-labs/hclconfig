@@ -446,7 +446,7 @@ func ExampleLookup() {
 	// Output: 10
 }
 
-func ExampleCaseInsensitive() {
+func ExampleLookupStringI() {
 	type ExampleStruct struct {
 		SoftwareUpdated bool
 	}

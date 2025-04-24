@@ -34,5 +34,5 @@ func TestErrorReturnsConcatonatedString(t *testing.T) {
 	ce.AppendError(&ParserError{Message: "boom"})
 	ce.AppendError(&ParserError{Message: "bang"})
 
-	require.Equal(t, "Error:\n  boom\n\n  :0,0\n\nError:\n  bang\n\n  :0,0\n", ce.Error())
+	require.Equal(t, "Error:\n  boom\n\n :0,0-0\n\nError:\n  bang\n\n :0,0-0\n", ce.Error())
 }

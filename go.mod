@@ -1,8 +1,6 @@
 module github.com/jumppad-labs/hclconfig
 
-go 1.22
-
-toolchain go1.22.2
+go 1.24
 
 require (
 	github.com/creasty/defaults v1.8.0
@@ -15,6 +13,7 @@ require (
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.9.0
 	github.com/zclconf/go-cty v1.15.0
+	golang.org/x/text v0.17.0
 )
 
 require (
@@ -60,7 +59,6 @@ require (
 	golang.org/x/oauth2 v0.22.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	google.golang.org/api v0.190.0 // indirect
