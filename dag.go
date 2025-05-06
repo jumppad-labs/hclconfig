@@ -2,6 +2,8 @@ package hclconfig
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/creasty/defaults"
 	"github.com/hashicorp/hcl/v2"
@@ -219,6 +221,11 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			return nil
 		}
 
+		ctxValidation := validateResource(c, r, r.Metadata().Links)
+		if ctxValidation != nil {
+			return diags.Append(ctxValidation)
+		}
+
 		// set the context variables from the linked resources
 		ctxErrs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 		if ctxErrs != nil {
@@ -346,6 +353,111 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		return nil
 	}
+}
+
+func validateResource(c *Config, r types.Resource, values []string) *errors.ParserError {
+	for _, v := range values {
+		fqrn, err := resources.ParseFQRN(v)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf("error parsing resource link %s", err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+
+		// get the value from the linked resource
+		l, err := c.FindRelativeResource(v, r.Metadata().Module)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+
+		val := reflect.TypeOf(l)
+		if val.Kind() == reflect.Ptr {
+			val = val.Elem()
+		}
+
+		attr := fqrn.Attribute
+
+		// if we have additional properties, check if the object has those
+		if attr != "" {
+			properties := strings.Split(attr, ".")
+
+			found := objectHasAttribute(val, properties)
+			if !found {
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to find dependent attribute "%s"`, attr)
+				pe.Level = errors.ParserErrorLevelError
+
+				return pe
+			}
+		}
+	}
+
+	return nil
+}
+
+func objectHasAttribute(t reflect.Type, properties []string) bool {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// Do we have to handle nested maps and maps in slices?
+	switch t.Kind() {
+	case reflect.Struct:
+		for index := range t.NumField() {
+			field := t.Field(index)
+			if strings.ToLower(field.Name) == properties[0] {
+				if len(properties) == 1 {
+					return true
+				}
+
+				ft := field.Type
+				if ft.Kind() == reflect.Ptr {
+					ft = ft.Elem()
+				}
+
+				return objectHasAttribute(ft, properties[1:])
+			}
+		}
+
+	case reflect.Slice:
+		nt := t.Elem()
+		return objectHasAttribute(nt, properties)
+
+	case reflect.Map:
+		nt := t.Elem()
+
+		switch nt.Kind() {
+		case reflect.Struct:
+			fallthrough
+		case reflect.Slice:
+			fallthrough
+		case reflect.Map:
+			return objectHasAttribute(nt, properties)
+		default:
+			return true
+		}
+
+	// since an interface can be anything, we have to assume its alright.
+	case reflect.Interface:
+		return true
+	}
+
+	return false
 }
 
 // setContextVariablesFromList sets the context variables from a list of resource links
