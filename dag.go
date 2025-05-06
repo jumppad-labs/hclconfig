@@ -382,16 +382,16 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 			return pe
 		}
 
-		val := reflect.TypeOf(l)
-		if val.Kind() == reflect.Ptr {
-			val = val.Elem()
-		}
-
 		attr := fqrn.Attribute
 
 		// if we have additional properties, check if the object has those
 		if attr != "" {
 			properties := strings.Split(attr, ".")
+
+			val := reflect.TypeOf(l)
+			if val.Kind() == reflect.Ptr {
+				val = val.Elem()
+			}
 
 			found := objectHasAttribute(val, properties)
 			if !found {
