@@ -2,6 +2,7 @@ package structs
 
 import (
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // TypeContainer is the resource string for a Container resource
@@ -38,6 +39,8 @@ type Container struct {
 	// output
 	CreatedNetworks    []NetworkAttachment `hcl:"created_network,optional" json:"created_networks,omitempty"`         // Attach to the correct network // only when Image is specified
 	CreatedNetworksMap map[string]Network  `hcl:"created_network_map,optional" json:"created_networks_map,omitempty"` // Attach to the correct network // only when Image is specified
+
+	Output cty.Value `hcl:"output,optional" json:"output,omitempty"`
 }
 
 type User struct {

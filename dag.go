@@ -418,6 +418,26 @@ func objectHasAttribute(t reflect.Type, properties []string) bool {
 	// Do we have to handle nested maps and maps in slices?
 	switch t.Kind() {
 	case reflect.Struct:
+		// if we encounter a cty.Value it can be anything, so we have to assume its alright.
+		if t.String() == "cty.Value" {
+			return true
+		}
+
+		// handle embedded ResourceBase
+		if properties[0] == "meta" {
+			rb, found := t.FieldByName("ResourceBase")
+			if !found {
+				return false
+			}
+
+			m, found := rb.Type.FieldByName("Meta")
+			if !found {
+				return false
+			}
+
+			return objectHasAttribute(m.Type, properties[1:])
+		}
+
 		for index := range t.NumField() {
 			field := t.Field(index)
 			if strings.ToLower(field.Name) == properties[0] {
@@ -441,6 +461,8 @@ func objectHasAttribute(t reflect.Type, properties []string) bool {
 	case reflect.Map:
 		nt := t.Elem()
 
+		// TODO: add check that key exists?
+
 		switch nt.Kind() {
 		case reflect.Struct:
 			fallthrough
@@ -452,7 +474,7 @@ func objectHasAttribute(t reflect.Type, properties []string) bool {
 			return true
 		}
 
-	// since an interface can be anything, we have to assume its alright.
+	// since an interface can be anything, so we have to assume its alright.
 	case reflect.Interface:
 		return true
 	}

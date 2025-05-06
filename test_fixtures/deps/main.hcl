@@ -5,14 +5,24 @@ resource "network" "main" {
 resource "container" "nginx" {
   command = ["bla", "bla"]
 
+  network {
+    name = resource.network.main.meta.name
+  }
+
   env = {
-    key = "value"
+    key = 2
   }
 
   created_network_map = {
     first = resource.network.main
   }
 }
+
+# resource "container" "second" {
+#   env = {
+#     key = resource.container.nginx.output
+#   }
+# }
 
 # output "struct_o" {
 #   value = resource.container.nginx.resources.cpu
@@ -30,24 +40,18 @@ resource "container" "nginx" {
 #   value = resource.container.nginx.ports.fail
 # }
 
-output "map_o" {
-  value = resource.container.nginx.env.key
+# output "map_o" {
+#   value = resource.container.nginx.env.key
+# }
+
+# output "map_x" {
+#   value = resource.container.nginx.env.fail
+# }
+
+output "cty_o" {
+  value = resource.container.nginx.output.value
 }
 
-output "map_x" {
-  value = resource.container.nginx.env.fail
+output "cty_x" {
+  value = resource.container.nginx.network.value
 }
-
-# resource "container" "dependency" {
-#   command = [resource.container.nginx.something]
-# }
-
-# output "correct_field" {
-#   value = resource.container.nginx.command
-# }
-
-# output "incorrect_field" {
-#   value = resource.container.nginx.incorrect
-# }
-
-
