@@ -198,24 +198,23 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				if err != nil {
 					return diags.Append(err)
 				}
-
-				// now we need to evaluate the expression
-				var isDisabled bool
-				expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
-				if expdiags.HasErrors() {
-
-					pe := &errors.ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
-					pe.Level = errors.ParserErrorLevelError
-
-					return diags.Append(pe)
-				}
-
-				r.SetDisabled(isDisabled)
 			}
+
+			// now we need to evaluate the expression
+			var isDisabled bool
+			expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+			if expdiags.HasErrors() {
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
+				pe.Level = errors.ParserErrorLevelError
+
+				return diags.Append(pe)
+			}
+
+			r.SetDisabled(isDisabled)
 		}
 
 		// if the resource is disabled we need to skip the resource
@@ -270,6 +269,8 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			pe.Level = level
 
+			// we don't care about warnings as they should now just be
+			// errors for values that won't be known until runtime.
 			if level == errors.ParserErrorLevelError {
 				return diags.Append(pe)
 			}
