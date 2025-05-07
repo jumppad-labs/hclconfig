@@ -231,7 +231,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 		// ctxErrs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 		// if ctxErrs != nil {
-		// return diags.Append(ctxErrs)
+		// 	return diags.Append(ctxErrs)
 		// }
 
 		// Process the raw resource now we have the context from the linked
