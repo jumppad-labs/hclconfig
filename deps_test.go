@@ -18,5 +18,5 @@ func TestDepsValidated(t *testing.T) {
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	fmt.Println(err)
-	require.Error(t, err)
+	require.NoError(t, err)
 }

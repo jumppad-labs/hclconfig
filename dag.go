@@ -444,6 +444,9 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 			return nil
 		}
 
+		// if we have a nil value, its nested attributes can not be resolved
+		// unlike an interface or cty.Value, we can be sure that the value should be known
+
 		// handle embedded ResourceBase
 		if properties[0] == "meta" {
 			r, found := t.FieldByName("ResourceBase")
