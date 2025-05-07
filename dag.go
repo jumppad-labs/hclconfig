@@ -388,6 +388,13 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 		}
 
 		attr := fqrn.Attribute
+		if fqrn.Type == "output" {
+			if attr == "" {
+				attr = "value"
+			} else {
+				attr = "value." + attr
+			}
+		}
 
 		// if we have additional properties, check if the object has those
 		if attr != "" {
