@@ -16,6 +16,11 @@ resource "container" "nginx" {
   created_network_map = {
     first = resource.network.main
   }
+
+  port {
+    local = 80
+    remote = 80
+  }
 }
 
 # resource "container" "second" {
@@ -33,11 +38,35 @@ resource "container" "nginx" {
 # }
 
 # output "list_o" {
-#   value = resource.container.nginx.ports.local
+#   value = resource.container.nginx.port.0.local
 # }
 
 # output "list_x" {
-#   value = resource.container.nginx.ports.fail
+#   value = resource.container.nginx.port.0.fail
+# }
+
+# output "list_direct_o" {
+#   value = resource.container.nginx.port.0
+# }
+
+# output "list_direct_x" {
+#   value = resource.container.nginx.port.1
+# }
+
+# output "list_direct_o" {
+#   value = resource.container.nginx.port[0]
+# }
+
+# output "list_direct_x" {
+#   value = resource.container.nginx.port[1]
+# }
+
+# output "list_bracket_o" {
+#   value = resource.container.nginx.port[0].local
+# }
+
+# output "list_bracket_x" {
+#   value = resource.container.nginx.port[0].fail
 # }
 
 # output "map_o" {
@@ -48,10 +77,30 @@ resource "container" "nginx" {
 #   value = resource.container.nginx.env.fail
 # }
 
-output "cty_o" {
-  value = resource.container.nginx.output.value
-}
+# output "map_bracket_o" {
+#   value = resource.container.nginx.env["key"]
+# }
 
-output "cty_x" {
-  value = resource.container.nginx.network.value
-}
+# output "map_bracket_x" {
+#   value = resource.container.nginx.env["fail"]
+# }
+
+# output "complex_map_o" {
+#   value = resource.container.nginx.created_network_map.first.subnet
+# }
+
+# output "complex_map_bracket_o" {
+#   value = resource.container.nginx.created_network_map["first"].subnet
+# }
+
+# output "complex_map_bracket_x" {
+#   value = resource.container.nginx.created_network_map["first"].fail
+# }
+
+# output "cty_o" {
+#   value = resource.container.nginx.output.value
+# }
+
+# output "cty_x" {
+#   value = resource.container.nginx.network.value
+# }

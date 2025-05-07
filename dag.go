@@ -3,6 +3,8 @@ package hclconfig
 import (
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/creasty/defaults"
@@ -356,8 +358,8 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 }
 
 func validateResource(c *Config, r types.Resource, values []string) *errors.ParserError {
-	for _, v := range values {
-		fqrn, err := resources.ParseFQRN(v)
+	for _, value := range values {
+		fqrn, err := resources.ParseFQRN(value)
 		if err != nil {
 			pe := &errors.ParserError{}
 			pe.Filename = r.Metadata().File
@@ -370,13 +372,13 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 		}
 
 		// get the value from the linked resource
-		l, err := c.FindRelativeResource(v, r.Metadata().Module)
+		l, err := c.FindRelativeResource(value, r.Metadata().Module)
 		if err != nil {
 			pe := &errors.ParserError{}
 			pe.Filename = r.Metadata().File
 			pe.Line = r.Metadata().Line
 			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
+			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, value, err)
 			pe.Level = errors.ParserErrorLevelError
 
 			return pe
@@ -388,18 +390,36 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 		if attr != "" {
 			properties := strings.Split(attr, ".")
 
-			val := reflect.TypeOf(l)
-			if val.Kind() == reflect.Ptr {
-				val = val.Elem()
+			// check if we have a bracket on the first property
+			// cut it off the property and insert it into properties after the current property
+			flattened := []string{}
+			for _, property := range properties {
+				regex := regexp.MustCompile(`(?P<property>[a-zA-Z0-9_\-]*)(?:\[["']?(?P<key>[a-zA-Z0-9)_\-]*)["']?\])?`)
+				matches := regex.FindStringSubmatch(property)
+
+				parts := make(map[string]string)
+				for i, name := range regex.SubexpNames() {
+					if i != 0 && name != "" {
+						parts[name] = matches[i]
+					}
+				}
+
+				flattened = append(flattened, parts["property"])
+				if parts["key"] != "" {
+					flattened = append(flattened, parts["key"])
+				}
 			}
 
-			found := objectHasAttribute(val, properties)
-			if !found {
+			v := reflect.ValueOf(l)
+			t := reflect.TypeOf(l)
+
+			err = objectHasAttribute(v, t, flattened)
+			if err != nil {
 				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
 				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to find dependent attribute "%s"`, attr)
+				pe.Message = err.Error()
 				pe.Level = errors.ParserErrorLevelError
 
 				return pe
@@ -410,9 +430,10 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 	return nil
 }
 
-func objectHasAttribute(t reflect.Type, properties []string) bool {
+func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) error {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
+		v = v.Elem()
 	}
 
 	// Do we have to handle nested maps and maps in slices?
@@ -420,66 +441,98 @@ func objectHasAttribute(t reflect.Type, properties []string) bool {
 	case reflect.Struct:
 		// if we encounter a cty.Value it can be anything, so we have to assume its alright.
 		if t.String() == "cty.Value" {
-			return true
+			return nil
 		}
 
 		// handle embedded ResourceBase
 		if properties[0] == "meta" {
-			rb, found := t.FieldByName("ResourceBase")
+			r, found := t.FieldByName("ResourceBase")
 			if !found {
-				return false
+				return fmt.Errorf(`unable to find dependent attribute "%s"`, properties[0])
 			}
 
-			m, found := rb.Type.FieldByName("Meta")
+			m, found := r.Type.FieldByName("Meta")
 			if !found {
-				return false
+				return fmt.Errorf(`unable to find dependent attribute "%s"`, properties[0])
 			}
 
-			return objectHasAttribute(m.Type, properties[1:])
+			// get the corresponding values to pass on
+			rv := v.FieldByName("ResourceBase")
+			mv := rv.FieldByName("Meta")
+
+			return objectHasAttribute(mv, m.Type, properties[1:])
 		}
 
 		for index := range t.NumField() {
-			field := t.Field(index)
-			if strings.ToLower(field.Name) == properties[0] {
+			f := t.Field(index)
+
+			// compare the property with hcl tags on the object
+			tag := f.Tag.Get("hcl")
+			if strings.Contains(tag, properties[0]) {
+				// if there are no further properties, we are done.
 				if len(properties) == 1 {
-					return true
+					return nil
 				}
 
-				ft := field.Type
-				if ft.Kind() == reflect.Ptr {
-					ft = ft.Elem()
-				}
+				fv := v.FieldByName(f.Name)
 
-				return objectHasAttribute(ft, properties[1:])
+				return objectHasAttribute(fv, f.Type, properties[1:])
 			}
 		}
 
 	case reflect.Slice:
 		nt := t.Elem()
-		return objectHasAttribute(nt, properties)
+
+		if len(properties) == 1 {
+			// check that the index actually exists
+			index, err := strconv.Atoi(properties[0])
+			if err != nil {
+				return fmt.Errorf(`invalid list index: "%s"`, properties[0])
+			}
+
+			if index >= v.Len() {
+				return fmt.Errorf(`list does not contain index: "%s"`, properties[0])
+			}
+
+			return nil
+		}
+
+		// ignore the next property, because it is an index and we dont care about it
+		return objectHasAttribute(v, nt, properties[1:])
 
 	case reflect.Map:
 		nt := t.Elem()
 
-		// TODO: add check that key exists?
+		// check that the referred key exists
+		var nv reflect.Value
+		var keyFound bool
 
-		switch nt.Kind() {
-		case reflect.Struct:
-			fallthrough
-		case reflect.Slice:
-			fallthrough
-		case reflect.Map:
-			return objectHasAttribute(nt, properties)
-		default:
-			return true
+		keys := v.MapKeys()
+		for _, key := range keys {
+			if key.String() == properties[0] {
+				keyFound = true
+				nv = v.MapIndex(key)
+			}
 		}
+
+		if !keyFound {
+			return fmt.Errorf(`map does not contain key: "%s"`, properties[0])
+		}
+
+		// if there are no further properties, we are done.
+		if len(properties) == 1 {
+			return nil
+		}
+
+		// if we found the key, see if we can traverse into the nested value
+		return objectHasAttribute(nv, nt, properties[1:])
 
 	// since an interface can be anything, so we have to assume its alright.
 	case reflect.Interface:
-		return true
+		return nil
 	}
 
-	return false
+	return fmt.Errorf(`unable to find dependent attribute: "%s"`, properties[0])
 }
 
 // setContextVariablesFromList sets the context variables from a list of resource links
