@@ -8,8 +8,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDepsValidated(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/deps/main.hcl")
+func TestDependenciesValidNoError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/deps/valid.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+}
+
+func TestDependenciesInvalidError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/deps/invalid.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,5 +30,5 @@ func TestDepsValidated(t *testing.T) {
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	fmt.Println(err)
-	require.NoError(t, err)
+	require.Error(t, err)
 }

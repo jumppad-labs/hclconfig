@@ -229,10 +229,11 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// set the context variables from the linked resources
-		ctxErrs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
-		if ctxErrs != nil {
-			return diags.Append(ctxErrs)
-		}
+		setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
+		// ctxErrs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
+		// if ctxErrs != nil {
+		// return diags.Append(ctxErrs)
+		// }
 
 		// Process the raw resource now we have the context from the linked
 		// resources
@@ -269,7 +270,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			pe.Level = level
 
-			return diags.Append(pe)
+			if level == errors.ParserErrorLevelError {
+				return diags.Append(pe)
+			}
 		}
 
 		// if the type is a module then potentially we only just found out that we should be
@@ -444,9 +447,6 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 			return nil
 		}
 
-		// if we have a nil value, its nested attributes can not be resolved
-		// unlike an interface or cty.Value, we can be sure that the value should be known
-
 		// handle embedded ResourceBase
 		if properties[0] == "meta" {
 			r, found := t.FieldByName("ResourceBase")
@@ -478,6 +478,16 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 				}
 
 				fv := v.FieldByName(f.Name)
+
+				// TODO: check if we can actually use this case, because all computed values would be nil initially
+				//
+				// if we have a nil value, its nested attributes can not be resolved
+				// unlike an interface or cty.Value, we can be sure that the value should be known
+				if fv.Type().Kind() == reflect.Ptr {
+					if fv.IsNil() {
+						return fmt.Errorf(`dependent attribute is not set: "%s"`, properties[0])
+					}
+				}
 
 				return objectHasAttribute(fv, f.Type, properties[1:])
 			}
