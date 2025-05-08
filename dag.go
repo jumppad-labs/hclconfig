@@ -217,22 +217,16 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 		}
 
-		ctxValidation := validateResource(c, r, r.Metadata().Links)
-		if ctxValidation != nil {
-			return diags.Append(ctxValidation)
+		// set the context variables from the linked resources
+		errs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
+		if errs != nil {
+			return diags.Append(errs)
 		}
 
 		// if the resource is disabled we need to skip the resource
 		if r.GetDisabled() {
 			return nil
 		}
-
-		// set the context variables from the linked resources
-		setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
-		// ctxErrs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
-		// if ctxErrs != nil {
-		// 	return diags.Append(ctxErrs)
-		// }
 
 		// Process the raw resource now we have the context from the linked
 		// resources
@@ -361,7 +355,15 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 	}
 }
 
-func validateResource(c *Config, r types.Resource, values []string) *errors.ParserError {
+// setContextVariablesFromList sets the context variables from a list of resource links
+//
+// for example: given the values ["module.module1.module2.resource.container.mine.id"]
+// the context variable "module.module1.module2.resource.container.mine.id" will be set to the
+// value defined by the resource of type container with the name mine and the attribute id
+func setContextVariablesFromList(c *Config, r types.Resource, values []string, ctx *hcl.EvalContext) *errors.ParserError {
+	// attempt to set the values in the resource links to the resource attribute
+	// all linked values should now have been processed as the graph
+	// will have handled them first
 	for _, value := range values {
 		fqrn, err := resources.ParseFQRN(value)
 		if err != nil {
@@ -436,6 +438,48 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 
 				return pe
 			}
+		}
+
+		// can we set the context variables here?
+		var ctyRes cty.Value
+
+		// once we have found a resource convert it to a cty type and then
+		// set it on the context
+		switch l.Metadata().Type {
+		case resources.TypeLocal:
+			loc := l.(*resources.Local)
+			ctyRes = loc.CtyValue
+		case resources.TypeOutput:
+			out := l.(*resources.Output)
+			ctyRes = out.CtyValue
+		default:
+			ctyRes, err = convert.GoToCtyValue(l)
+		}
+
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, value, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
+		}
+
+		// remove the attributes and to get a pure resource ref
+		fqrn.Attribute = ""
+
+		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return pe
 		}
 	}
 
@@ -564,84 +608,4 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 	}
 
 	return fmt.Errorf(`unable to find dependent attribute: "%s"`, properties[0])
-}
-
-// setContextVariablesFromList sets the context variables from a list of resource links
-//
-// for example: given the values ["module.module1.module2.resource.container.mine.id"]
-// the context variable "module.module1.module2.resource.container.mine.id" will be set to the
-// value defined by the resource of type container with the name mine and the attribute id
-func setContextVariablesFromList(c *Config, r types.Resource, values []string, ctx *hcl.EvalContext) *errors.ParserError {
-	// attempt to set the values in the resource links to the resource attribute
-	// all linked values should now have been processed as the graph
-	// will have handled them first
-	for _, v := range values {
-		fqrn, err := resources.ParseFQRN(v)
-		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf("error parsing resource link %s", err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
-		}
-
-		// get the value from the linked resource
-		l, err := c.FindRelativeResource(v, r.Metadata().Module)
-		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
-		}
-
-		var ctyRes cty.Value
-
-		// once we have found a resource convert it to a cty type and then
-		// set it on the context
-		switch l.Metadata().Type {
-		case resources.TypeLocal:
-			loc := l.(*resources.Local)
-			ctyRes = loc.CtyValue
-		case resources.TypeOutput:
-			out := l.(*resources.Output)
-			ctyRes = out.CtyValue
-		default:
-			ctyRes, err = convert.GoToCtyValue(l)
-		}
-
-		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
-		}
-
-		// remove the attributes and to get a pure resource ref
-		fqrn.Attribute = ""
-
-		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
-		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
-		}
-	}
-
-	return nil
 }
