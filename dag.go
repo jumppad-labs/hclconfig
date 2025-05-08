@@ -192,39 +192,39 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				return diags.Append(pe)
 			}
 
+			var isDisabled bool
 			if len(expr) > 0 {
 				// first we need to build the context for the expression
 				err := setContextVariablesFromList(c, r, expr, ctx)
 				if err != nil {
 					return diags.Append(err)
 				}
+
+				// now we need to evaluate the expression
+				expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+				if expdiags.HasErrors() {
+					pe := &errors.ParserError{}
+					pe.Filename = r.Metadata().File
+					pe.Line = r.Metadata().Line
+					pe.Column = r.Metadata().Column
+					pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
+					pe.Level = errors.ParserErrorLevelError
+
+					return diags.Append(pe)
+				}
+
+				r.SetDisabled(isDisabled)
 			}
-
-			// now we need to evaluate the expression
-			var isDisabled bool
-			expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
-			if expdiags.HasErrors() {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
-				pe.Level = errors.ParserErrorLevelError
-
-				return diags.Append(pe)
-			}
-
-			r.SetDisabled(isDisabled)
-		}
-
-		// if the resource is disabled we need to skip the resource
-		if r.GetDisabled() {
-			return nil
 		}
 
 		ctxValidation := validateResource(c, r, r.Metadata().Links)
 		if ctxValidation != nil {
 			return diags.Append(ctxValidation)
+		}
+
+		// if the resource is disabled we need to skip the resource
+		if r.GetDisabled() {
+			return nil
 		}
 
 		// set the context variables from the linked resources
@@ -419,6 +419,7 @@ func validateResource(c *Config, r types.Resource, values []string) *errors.Pars
 				if parts["key"] != "" {
 					flattened = append(flattened, parts["key"])
 				}
+
 			}
 
 			v := reflect.ValueOf(l)
@@ -472,6 +473,15 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 			mv := rv.FieldByName("Meta")
 
 			return objectHasAttribute(mv, m.Type, properties[1:])
+		}
+
+		if properties[0] == "disabled" {
+			_, found := t.FieldByName("ResourceBase")
+			if !found {
+				return fmt.Errorf(`unable to find dependent attribute "%s"`, properties[0])
+			}
+
+			return nil
 		}
 
 		for index := range t.NumField() {

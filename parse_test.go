@@ -616,7 +616,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-	require.Equal(t, 4, c.ResourceCount())
+	require.Equal(t, 5, c.ResourceCount())
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
