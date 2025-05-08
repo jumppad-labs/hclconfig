@@ -427,7 +427,7 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 			v := reflect.ValueOf(l)
 			t := reflect.TypeOf(l)
 
-			err = objectHasAttribute(v, t, flattened)
+			err = validateAttribute(v, t, flattened)
 			if err != nil {
 				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
@@ -486,7 +486,7 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 	return nil
 }
 
-func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) error {
+func validateAttribute(v reflect.Value, t reflect.Type, properties []string) error {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 		v = v.Elem()
@@ -516,7 +516,7 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 			rv := v.FieldByName("ResourceBase")
 			mv := rv.FieldByName("Meta")
 
-			return objectHasAttribute(mv, m.Type, properties[1:])
+			return validateAttribute(mv, m.Type, properties[1:])
 		}
 
 		if properties[0] == "disabled" {
@@ -551,7 +551,7 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 					}
 				}
 
-				return objectHasAttribute(fv, f.Type, properties[1:])
+				return validateAttribute(fv, f.Type, properties[1:])
 			}
 		}
 
@@ -573,7 +573,7 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 		}
 
 		// ignore the next property, because it is an index and we dont care about it
-		return objectHasAttribute(v, nt, properties[1:])
+		return validateAttribute(v, nt, properties[1:])
 
 	case reflect.Map:
 		nt := t.Elem()
@@ -600,7 +600,7 @@ func objectHasAttribute(v reflect.Value, t reflect.Type, properties []string) er
 		}
 
 		// if we found the key, see if we can traverse into the nested value
-		return objectHasAttribute(nv, nt, properties[1:])
+		return validateAttribute(nv, nt, properties[1:])
 
 	// since an interface can be anything, so we have to assume its alright.
 	case reflect.Interface:
