@@ -1524,7 +1524,12 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			case hcl.TraverseAttr:
 				strExpression += "." + tt.Name
 			case hcl.TraverseIndex:
-				strExpression += "[" + tt.Key.AsBigFloat().String() + "]"
+				switch tt.Key.Type() {
+				case cty.String:
+					strExpression += "[\"" + tt.Key.AsString() + "\"]"
+				case cty.Number:
+					strExpression += "[" + tt.Key.AsBigFloat().String() + "]"
+				}
 			}
 		}
 	}

@@ -2,6 +2,11 @@ variable "disabled" {
   default = true
 }
 
+resource "network" "onprem" {
+  disabled = variable.disabled
+  subnet = "0.0.0.0/24"
+}
+
 ## This resource will not have it's dependencies
 ## validated as disabled can be calculated at parse time
 resource "container" "disabled_value" {

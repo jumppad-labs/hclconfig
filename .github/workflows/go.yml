@@ -10,9 +10,23 @@ on:
     branches: [ "main" ]
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.22
+
+    - name: Test
+      id: test
+      run: go test -v ./... -race
 
   build:
     runs-on: ubuntu-latest
+    needs: [test]
     steps:
     - uses: actions/checkout@v3
 
@@ -26,6 +40,3 @@ jobs:
         CGO_ENABLED=0 GOOS=darwin go build -v ./...
         CGO_ENABLED=0 GOOS=linux go build -v ./...
         CGO_ENABLED=0 GOOS=windows go build -v ./...
-
-    - name: Test
-      run: go test -v ./... -race
