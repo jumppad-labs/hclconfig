@@ -155,6 +155,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			panic("an item has been added to the graph that is not a resource")
 		}
 
+		l := getResourceLock(r)
+		defer l()
+
 		// if this is the root module or is disabled skip or is a variable
 		if r.Metadata().Type == resources.TypeRoot {
 			return nil

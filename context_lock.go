@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/jumppad-labs/hclconfig/types"
 )
 
 var locks = sync.Map{}
@@ -12,6 +13,18 @@ var locks = sync.Map{}
 // at the same time
 func getContextLock(ctx *hcl.EvalContext) func() {
 	lock, _ := locks.LoadOrStore(ctx, &sync.Mutex{})
+
+	// obtain a lock
+	lock.(*sync.Mutex).Lock()
+
+	// return a function to allow unlocking
+	return func() {
+		lock.(*sync.Mutex).Unlock()
+	}
+}
+
+func getResourceLock(r types.Resource) func() {
+	lock, _ := locks.LoadOrStore(r, &sync.Mutex{})
 
 	// obtain a lock
 	lock.(*sync.Mutex).Lock()
