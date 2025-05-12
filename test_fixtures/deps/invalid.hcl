@@ -65,6 +65,10 @@ output "map_bracket_invalid_key" {
   value = resource.container.nginx.env["fail"]
 }
 
-output "complex_map_bracket_invalud_field" {
+output "complex_map_bracket_invalid_field" {
   value = resource.container.nginx.created_network_map["first"].fail
+}
+
+output "invalid_func" {
+  value = invalid("first")
 }

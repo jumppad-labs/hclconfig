@@ -1,9 +1,11 @@
 package hclconfig
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 )
@@ -83,5 +85,11 @@ func TestDependenciesInvalidError(t *testing.T) {
 	p := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
+	fmt.Println(err)
 	require.Error(t, err)
+
+	cfgErr, ok := err.(*errors.ConfigError)
+	require.True(t, ok)
+
+	require.Len(t, cfgErr.Errors, 11)
 }

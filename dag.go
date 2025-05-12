@@ -265,6 +265,11 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 					level = errors.ParserErrorLevelError
 					break
 				}
+
+				if err.Summary == "Call to unknown function" {
+					level = errors.ParserErrorLevelError
+					break
+				}
 			}
 
 			pe.Level = level
