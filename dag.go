@@ -197,6 +197,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			var isDisabled bool
 			if len(expr) > 0 {
+				l := getContextLock(ctx)
+				defer l()
+
 				// first we need to build the context for the expression
 				err := setContextVariablesFromList(c, r, expr, ctx)
 				if err != nil {
