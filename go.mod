@@ -1,6 +1,6 @@
 module github.com/jumppad-labs/hclconfig
 
-go 1.24
+go 1.24.3
 
 require (
 	github.com/creasty/defaults v1.8.0

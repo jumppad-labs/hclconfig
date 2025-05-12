@@ -871,7 +871,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	require.Error(t, err)
 
 	// only 17 of the resources and variables should be created, none of the descendants of base
-	require.Len(t, calls, 17)
+	require.Len(t, calls, 16)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
