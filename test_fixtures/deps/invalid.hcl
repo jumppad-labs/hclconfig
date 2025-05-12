@@ -23,6 +23,15 @@ resource "container" "nginx" {
   }
 }
 
+# Can't add this, or the parser will exit out immediately
+# invalid "something" {
+#   a = "b"
+# }
+
+output "invalid_reference" {
+  value = invalid.something.a
+}
+
 output "struct_invalid_field" {
   value = resource.container.nginx.network.value
 }
