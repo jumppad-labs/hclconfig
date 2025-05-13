@@ -1,7 +1,6 @@
 package hclconfig
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -85,7 +84,6 @@ func TestDependenciesInvalidError(t *testing.T) {
 	p := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
-	fmt.Println(err)
 	require.Error(t, err)
 
 	cfgErr, ok := err.(*errors.ConfigError)

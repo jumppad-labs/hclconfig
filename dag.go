@@ -237,7 +237,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			err := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 
 			if err != nil {
-				diags.Append(err)
+				diags = diags.Append(err)
 			}
 		})
 
