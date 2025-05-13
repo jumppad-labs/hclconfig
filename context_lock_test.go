@@ -18,22 +18,23 @@ func TestContextLockDoesNotAllowConcurrentAccesstoContext(t *testing.T) {
 
 	go func() {
 		// get a lock but never unlock it
-		getContextLock(a)
-		for i := 0; i < 100; i++ {
-			a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
-		}
+		withContextLock(a, func() {
+			for i := 0; i < 100; i++ {
+				a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
+			}
 
-		w.Done()
+			w.Done()
+		})
 	}()
 
 	go func() {
-		unlock := getContextLock(a)
-		defer unlock()
-		for i := 0; i < 100; i++ {
-			a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
-		}
+		withContextLock(a, func() {
+			for i := 0; i < 100; i++ {
+				a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
+			}
 
-		w.Done()
+			w.Done()
+		})
 	}()
 
 	done := make(chan struct{})
@@ -60,23 +61,23 @@ func TestContextLockAllowsConcurrentAccesstoDifferentContexts(t *testing.T) {
 	w.Add(2)
 
 	go func() {
-		unlock := getContextLock(a)
-		defer unlock()
-		for i := 0; i < 100; i++ {
-			a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
-		}
+		withContextLock(a, func() {
+			for i := 0; i < 100; i++ {
+				a.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
+			}
 
-		w.Done()
+			w.Done()
+		})
 	}()
 
 	go func() {
-		unlock := getContextLock(b)
-		defer unlock()
-		for i := 0; i < 100; i++ {
-			b.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
-		}
+		withContextLock(a, func() {
+			for i := 0; i < 100; i++ {
+				b.Variables[fmt.Sprintf("%d", i)] = cty.StringVal("bar")
+			}
 
-		w.Done()
+			w.Done()
+		})
 	}()
 
 	done := make(chan struct{})

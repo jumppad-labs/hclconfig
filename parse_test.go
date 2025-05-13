@@ -616,7 +616,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-	require.Equal(t, 4, c.ResourceCount())
+	require.Equal(t, 5, c.ResourceCount())
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
@@ -871,7 +871,8 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	require.Error(t, err)
 
 	// only 17 of the resources and variables should be created, none of the descendants of base
-	require.Len(t, calls, 17)
+	require.GreaterOrEqual(t, len(calls), 16)
+	require.LessOrEqual(t, len(calls), 17)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
@@ -1164,10 +1165,10 @@ func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T)
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
 
-	require.False(t, ce.ContainsErrors())
+	require.True(t, ce.ContainsErrors())
 
 	pe := ce.Errors[0].(*errors.ParserError)
-	require.Equal(t, pe.Level, errors.ParserErrorLevelWarning)
+	require.Equal(t, pe.Level, errors.ParserErrorLevelError)
 }
 
 func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {

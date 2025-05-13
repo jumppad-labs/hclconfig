@@ -1039,9 +1039,6 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 // i.e "resources.foo.bar" set to "true" would return
 // ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True() = true
 func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) error {
-	ul := getContextLock(ctx)
-	defer ul()
-
 	pathParts := strings.Split(path, ".")
 
 	var err error
@@ -1524,7 +1521,12 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			case hcl.TraverseAttr:
 				strExpression += "." + tt.Name
 			case hcl.TraverseIndex:
-				strExpression += "[" + tt.Key.AsBigFloat().String() + "]"
+				switch tt.Key.Type() {
+				case cty.String:
+					strExpression += "[\"" + tt.Key.AsString() + "\"]"
+				case cty.Number:
+					strExpression += "[" + tt.Key.AsBigFloat().String() + "]"
+				}
 			}
 		}
 	}

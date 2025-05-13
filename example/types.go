@@ -45,6 +45,19 @@ func (t *Config) Process() error {
 	return nil
 }
 
+type ConfigProvider struct {
+	Type Config
+}
+
+func (t *ConfigProvider) Process() error {
+	// override default values
+	if t.Type.Timeouts.TLSHandshake == 0 {
+		t.Type.Timeouts.TLSHandshake = 5
+	}
+
+	return nil
+}
+
 type DBCommon struct {
 	types.ResourceBase `hcl:",remain"`
 	ErikIsA            string `hcl:"erik_is_a,optional"`
