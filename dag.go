@@ -148,13 +148,13 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 // can be performed
 func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
-
 		r, ok := v.(types.Resource)
 		// not a resource skip, this should never happen
 		if !ok {
 			panic("an item has been added to the graph that is not a resource")
 		}
 
+		// ensure that the resource is written to by other processes
 		l := getResourceLock(r)
 		defer l()
 
@@ -197,17 +197,25 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 			var isDisabled bool
 			if len(expr) > 0 {
-				l := getContextLock(ctx)
-				defer l()
 
 				// first we need to build the context for the expression
-				err := setContextVariablesFromList(c, r, expr, ctx)
-				if err != nil {
-					return diags.Append(err)
+				withContextLock(ctx, func() {
+					err := setContextVariablesFromList(c, r, expr, ctx)
+					if err != nil {
+						diags = diags.Append(err)
+					}
+				})
+
+				if diags.HasErrors() {
+					return diags
 				}
 
 				// now we need to evaluate the expression
-				expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+				expdiags := hcl.Diagnostics{}
+				withContextLock(ctx, func() {
+					expdiags = gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+				})
+
 				if expdiags.HasErrors() {
 					pe := &errors.ParserError{}
 					pe.Filename = r.Metadata().File
@@ -224,9 +232,16 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// set the context variables from the linked resources
-		errs := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
-		if errs != nil {
-			return diags.Append(errs)
+		withContextLock(ctx, func() {
+			err := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
+
+			if err != nil {
+				diags.Append(err)
+			}
+		})
+
+		if diags.HasErrors() {
+			return diags
 		}
 
 		// if the resource is disabled we need to skip the resource
@@ -236,26 +251,28 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		// Process the raw resource now we have the context from the linked
 		// resources
-		ul := getContextLock(ctx)
-		defer ul()
 
 		// if there are defaults defined on the resource set them
 		defaults.Set(r)
 
-		diag := gohcl.DecodeBody(bdy, ctx, r)
-		if diag.HasErrors() {
+		decodeDiags := hcl.Diagnostics{}
+		withContextLock(ctx, func() {
+			decodeDiags = gohcl.DecodeBody(bdy, ctx, r)
+		})
+
+		if decodeDiags.HasErrors() {
 			pe := &errors.ParserError{}
 			pe.Filename = r.Metadata().File
 			pe.Line = r.Metadata().Line
 			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
+			pe.Message = fmt.Sprintf(`unable to decode body: %s`, decodeDiags.Error())
 			// this error is set as warning as it is possible that the resource has
 			// interpolation that is not yet resolved
 
 			// check the error types and determine if we should set a warning or error
 			level := errors.ParserErrorLevelWarning
 
-			for _, e := range diag.Errs() {
+			for _, e := range decodeDiags.Errs() {
 				err, ok := e.(*hcl.Diagnostic)
 				if !ok {
 					continue
@@ -272,7 +289,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			// we don't care about warnings as they should now just be
 			// errors for values that won't be known until runtime.
 			if level == errors.ParserErrorLevelError {
-				return diags.Append(pe)
+				return dag.Diagnostics{}.Append(pe)
 			}
 		}
 
@@ -292,7 +309,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
 				pe.Level = errors.ParserErrorLevelError
 
-				return diags.Append(pe)
+				return dag.Diagnostics{}.Append(pe)
 			}
 
 			// set all the dependents to disabled
@@ -304,17 +321,20 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// if the type is a module we need to add the variables to the
 		// context
 		if r.Metadata().Type == resources.TypeModule {
+
 			mod := r.(*resources.Module)
 
-			var mapVars map[string]cty.Value
-			if att, ok := mod.Variables.(*hcl.Attribute); ok {
-				val, _ := att.Expr.Value(ctx)
-				mapVars = val.AsValueMap()
+			withContextLock(ctx, func() {
+				var mapVars map[string]cty.Value
+				if att, ok := mod.Variables.(*hcl.Attribute); ok {
+					val, _ := att.Expr.Value(ctx)
+					mapVars = val.AsValueMap()
 
-				for k, v := range mapVars {
-					setContextVariable(mod.SubContext, k, v)
+					for k, v := range mapVars {
+						setContextVariable(mod.SubContext, k, v)
+					}
 				}
-			}
+			})
 		}
 
 		// if this is an output or local we need to convert the value into
@@ -352,7 +372,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 					pe.Message = fmt.Sprintf(`unable to create resource "%s": %s`, r.Metadata().ID, err)
 					pe.Level = errors.ParserErrorLevelError
 
-					return diags.Append(pe)
+					return dag.Diagnostics{}.Append(pe)
 				}
 			}
 		}

@@ -1039,9 +1039,6 @@ func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
 // i.e "resources.foo.bar" set to "true" would return
 // ctx.Variables["resources"].AsValueMap()["foo"].AsValueMap()["bar"].True() = true
 func setContextVariableFromPath(ctx *hcl.EvalContext, path string, value cty.Value) error {
-	ul := getContextLock(ctx)
-	defer ul()
-
 	pathParts := strings.Split(path, ".")
 
 	var err error

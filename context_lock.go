@@ -9,18 +9,15 @@ import (
 
 var locks = sync.Map{}
 
-// getContextLock ensures that a HCL Context is not written and read
+// withContextLock ensures that a HCL Context is not written and read
 // at the same time
-func getContextLock(ctx *hcl.EvalContext) func() {
+func withContextLock(ctx *hcl.EvalContext, call func()) {
 	lock, _ := locks.LoadOrStore(ctx, &sync.Mutex{})
 
 	// obtain a lock
 	lock.(*sync.Mutex).Lock()
-
-	// return a function to allow unlocking
-	return func() {
-		lock.(*sync.Mutex).Unlock()
-	}
+	defer lock.(*sync.Mutex).Unlock()
+	call()
 }
 
 func getResourceLock(r types.Resource) func() {
