@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -278,7 +279,32 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 					continue
 				}
 
-				if err.Summary == "Error in function call" {
+				errorSummaries := []string{
+					"Error in function call",
+					"Call to unknown function",
+					"Unknown variable",
+					"Invalid expanding argument value",
+					"Not enough function arguments",
+					"Too many function arguments",
+					"Invalid function argument",
+					"Inconsistent conditional result types",
+					"Null condition",
+					"Incorrect condition type",
+					"Null value as key",
+					"Incorrect key type",
+					"Ambiguous attribute key",
+					"Iteration over null value",
+					"Iteration over non-iterable value",
+					"Condition is null",
+					"Invalid 'for' condition",
+					"Invalid object key",
+					"Duplicate object key",
+					"Splat of null value",
+					"Invalid nested splat expressions",
+					"Function calls not allowed",
+				}
+
+				if slices.Contains(errorSummaries, err.Summary) {
 					level = errors.ParserErrorLevelError
 					break
 				}
