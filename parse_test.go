@@ -571,6 +571,18 @@ func TestParseContainerWithNoNameReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseContainerWithInvalidAttributeReturnsError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/invalid_attribute.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := setupParser(t)
+
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err)
+}
+
 func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_type.hcl")
 	if err != nil {
