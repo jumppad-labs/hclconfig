@@ -607,6 +607,37 @@ func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestResoucesInDisabledModulesRemainDisabled(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/disabled/module.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o := DefaultOptions()
+	calls := []string{}
+	callSync := sync.Mutex{}
+	o.Callback = func(r types.Resource) error {
+		callSync.Lock()
+		calls = append(calls, r.Metadata().ID)
+		callSync.Unlock()
+
+		return nil
+	}
+
+	p := setupParser(t, o)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	m, err := c.FindResource("module.disabled")
+	require.NoError(t, err)
+	require.True(t, m.GetDisabled())
+
+	r, err := c.FindResource("module.disabled.resource.network.onprem")
+	require.NoError(t, err)
+	require.True(t, r.GetDisabled())
+}
+
 func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./test_fixtures/disabled/disabled.hcl")
 	if err != nil {
@@ -673,7 +704,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	require.True(t, r.GetDisabled())
 
 	// should only called for the containing module and variables
-	require.Len(t, calls, 3)
+	require.Len(t, calls, 5)
 }
 
 func TestGetNameAndIndexReturnsCorrectDetails(t *testing.T) {
@@ -1163,7 +1194,7 @@ func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
 	require.Equal(t, pe.Level, errors.ParserErrorLevelError)
 }
 
-func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T) {
+func TestParseFileReturnsConfigErrorWhenResourceContainsInvalidInterpolation(t *testing.T) {
 	f, pathErr := filepath.Abs("./test_fixtures/process_error/bad_interpolation.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)

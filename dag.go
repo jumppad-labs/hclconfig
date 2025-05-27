@@ -62,14 +62,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			var err error
 			fqdn, err := resources.ParseFQRN(d)
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Line = resource.Metadata().Line
-				pe.Column = resource.Metadata().Column
-				pe.Filename = resource.Metadata().File
-				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return nil, pe
+				return nil, createParserError(resource, fmt.Sprintf("invalid dependency '%s': %s", d, err))
 			}
 
 			// when the dependency is a module, depend on all resources in the module
@@ -113,14 +106,8 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 			d, err := c.FindResource(fqdnString)
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Line = resource.Metadata().Line
-				pe.Column = resource.Metadata().Column
-				pe.Filename = resource.Metadata().File
-				pe.Message = fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return nil, pe
+				return nil, createParserError(resource,
+					fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err))
 			}
 
 			hasDeps = true
@@ -174,6 +161,23 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			panic("no context found for resource")
 		}
 
+		// validate the resource links
+		if len(r.Metadata().Links) > 0 {
+			err := validateLinkedResources(c, r, r.Metadata().Links)
+			if err != nil {
+				return diags.Append(createParserError(
+					r,
+					fmt.Sprintf(`resource contains invalid interpolated values: %s`, err),
+				))
+			}
+		}
+
+		// if the resource is disabled we need to skip setting disabled again
+		// otherwise we could revert the disabled state set by a module
+		if r.GetDisabled() {
+			return nil
+		}
+
 		// first we need to check if the resource is disabled
 		// this might be set by an interpolated value
 		// if this is disabled we ignore the resource
@@ -182,26 +186,22 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// function or a conditional statement. We need to evaluate the expression
 		// to determine if the resource should be disabled
 		if attr, ok := bdy.Attributes["disabled"]; ok {
-			expr, err := processExpr(attr.Expr)
+			resources, err := processExpr(attr.Expr)
 
 			// need to handle this error
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return diags.Append(pe)
+				return diags.Append(createParserError(
+					r,
+					fmt.Sprintf(`unable to process disabled expression: %s`, err)),
+				)
 			}
 
 			var isDisabled bool
-			if len(expr) > 0 {
+			if len(resources) > 0 {
 
 				// first we need to build the context for the expression
 				withContextLock(ctx, func() {
-					err := setContextVariablesFromList(c, r, expr, ctx)
+					err := setContextVariablesFromList(c, r, resources, ctx)
 					if err != nil {
 						diags = diags.Append(err)
 					}
@@ -218,14 +218,10 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				})
 
 				if expdiags.HasErrors() {
-					pe := &errors.ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
-					pe.Level = errors.ParserErrorLevelError
-
-					return diags.Append(pe)
+					return diags.Append(createParserError(
+						r,
+						fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())),
+					)
 				}
 
 				r.SetDisabled(isDisabled)
@@ -233,6 +229,7 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// set the context variables from the linked resources
+		// this also validates the links
 		withContextLock(ctx, func() {
 			err := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 
@@ -245,34 +242,22 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			return diags
 		}
 
-		// if the resource is disabled we need to skip the resource
-		if r.GetDisabled() {
-			return nil
-		}
-
-		// Process the raw resource now we have the context from the linked
-		// resources
-
 		// if there are defaults defined on the resource set them
 		defaults.Set(r)
 
+		// process the raw resource now we have the context from the linked
+		// resources
 		decodeDiags := hcl.Diagnostics{}
 		withContextLock(ctx, func() {
 			decodeDiags = gohcl.DecodeBody(bdy, ctx, r)
 		})
 
 		if decodeDiags.HasErrors() {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to decode body: %s`, decodeDiags.Error())
 			// this error is set as warning as it is possible that the resource has
 			// interpolation that is not yet resolved
+			parserErr := createParserWarning(r, fmt.Sprintf(`unable to decode body: %s`, decodeDiags.Error()))
 
 			// check the error types and determine if we should set a warning or error
-			level := errors.ParserErrorLevelWarning
-
 			for _, e := range decodeDiags.Errs() {
 				err, ok := e.(*hcl.Diagnostic)
 				if !ok {
@@ -306,42 +291,9 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 				}
 
 				if slices.Contains(errorSummaries, err.Summary) {
-					level = errors.ParserErrorLevelError
-					break
+					parserErr.Level = errors.ParserErrorLevelError
+					return diags.Append(parserErr)
 				}
-			}
-
-			pe.Level = level
-
-			// we don't care about warnings as they should now just be
-			// errors for values that won't be known until runtime.
-			if level == errors.ParserErrorLevelError {
-				return dag.Diagnostics{}.Append(pe)
-			}
-		}
-
-		// if the type is a module then potentially we only just found out that we should be
-		// disabled
-
-		// as an additional check, set all module resources to disabled if the module is disabled
-		if r.GetDisabled() && r.Metadata().Type == resources.TypeModule {
-			// find all dependent resources
-			dr, err := c.FindModuleResources(r.Metadata().ID, true)
-			if err != nil {
-				// should not be here unless an internal error
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
-				pe.Level = errors.ParserErrorLevelError
-
-				return dag.Diagnostics{}.Append(pe)
-			}
-
-			// set all the dependents to disabled
-			for _, d := range dr {
-				d.SetDisabled(true)
 			}
 		}
 
@@ -349,6 +301,28 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		// context
 		if r.Metadata().Type == resources.TypeModule {
 
+			// if it is disabled we need to set all the
+			// resources in the module to disabled
+			if r.GetDisabled() {
+				// find all dependent resources
+				dr, err := c.FindModuleResources(r.Metadata().ID, true)
+				if err != nil {
+					return diags.Append(createParserError(
+						r,
+						fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err),
+					))
+				}
+
+				// set all the dependents to disabled
+				for _, d := range dr {
+					d.SetDisabled(true)
+				}
+
+				// if the modules is disabled we can exit here
+				return nil
+			}
+
+			// now set the context variables from the modules variables
 			mod := r.(*resources.Module)
 
 			withContextLock(ctx, func() {
@@ -387,20 +361,14 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		//
 		// if disabled was set through interpolation, the value has only been set here
 		// we need to handle an additional check
-		if !r.GetDisabled() {
-			// call the callbacks
-			if wf != nil {
-				err := wf(r)
-				if err != nil {
-					pe := &errors.ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`unable to create resource "%s": %s`, r.Metadata().ID, err)
-					pe.Level = errors.ParserErrorLevelError
-
-					return dag.Diagnostics{}.Append(pe)
-				}
+		// call the callbacks
+		if wf != nil {
+			err := wf(r)
+			if err != nil {
+				return diags.Append(createParserError(
+					r,
+					fmt.Sprintf(`unable to create resource "%s": %s`, r.Metadata().ID, err),
+				))
 			}
 		}
 
@@ -418,29 +386,73 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 	// all linked values should now have been processed as the graph
 	// will have handled them first
 	for _, value := range values {
+		// get the value from the linked resource
+		l, err := c.FindRelativeResource(value, r.Metadata().Module)
+		if err != nil {
+			return createParserError(
+				r,
+				fmt.Sprintf("unable to find dependent resource '%s': %s", value, err))
+		}
+
+		// can we set the context variables here?
+		var ctyRes cty.Value
+
+		// once we have found a resource convert it to a cty type and then
+		// set it on the context
+		switch l.Metadata().Type {
+		case resources.TypeLocal:
+			loc := l.(*resources.Local)
+			ctyRes = loc.CtyValue
+		case resources.TypeOutput:
+			out := l.(*resources.Output)
+			ctyRes = out.CtyValue
+		default:
+			ctyRes, err = convert.GoToCtyValue(l)
+		}
+
+		if err != nil {
+			return createParserError(
+				r,
+				fmt.Sprintf(`unable to convert reference %s to context variable: %s`, value, err))
+		}
+
+		// remove the attributes and to get a pure resource ref
+		// validate the name of the resource
 		fqrn, err := resources.ParseFQRN(value)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf("error parsing resource link %s", err)
-			pe.Level = errors.ParserErrorLevelError
+			return createParserError(r, fmt.Sprintf("error parsing resource link %s", err))
+		}
 
-			return pe
+		fqrn.Attribute = ""
+
+		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
+		if err != nil {
+			return createParserError(r, fmt.Sprintf(`unable to set context variable: %s`, err))
+		}
+	}
+
+	return nil
+}
+
+// validateLinkedResources validates the linked resources in a resource
+// linked resources are extracted from the interpolated values in the resource
+// and are expected to be in the format of "module.module1.module2.resource.container.mine.id"
+
+// this function will check if the resource exists and if the attribute exists
+// it will also check if the attribute is a valid attribute of the resource
+func validateLinkedResources(c *Config, r types.Resource, values []string) error {
+	for _, value := range values {
+		fqrn, err := resources.ParseFQRN(value)
+		if err != nil {
+			return createParserError(r, fmt.Sprintf("error parsing resource link %s", err))
 		}
 
 		// get the value from the linked resource
 		l, err := c.FindRelativeResource(value, r.Metadata().Module)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, value, err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
+			return createParserError(
+				r,
+				fmt.Sprintf("unable to find dependent resource '%s': %s", value, err))
 		}
 
 		attr := fqrn.Attribute
@@ -482,57 +494,8 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 
 			err = validateAttribute(v, t, flattened)
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = err.Error()
-				pe.Level = errors.ParserErrorLevelError
-
-				return pe
+				return err
 			}
-		}
-
-		// can we set the context variables here?
-		var ctyRes cty.Value
-
-		// once we have found a resource convert it to a cty type and then
-		// set it on the context
-		switch l.Metadata().Type {
-		case resources.TypeLocal:
-			loc := l.(*resources.Local)
-			ctyRes = loc.CtyValue
-		case resources.TypeOutput:
-			out := l.(*resources.Output)
-			ctyRes = out.CtyValue
-		default:
-			ctyRes, err = convert.GoToCtyValue(l)
-		}
-
-		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, value, err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
-		}
-
-		// remove the attributes and to get a pure resource ref
-		fqrn.Attribute = ""
-
-		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
-		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
-			pe.Level = errors.ParserErrorLevelError
-
-			return pe
 		}
 	}
 
@@ -661,4 +624,26 @@ func validateAttribute(v reflect.Value, t reflect.Type, properties []string) err
 	}
 
 	return fmt.Errorf(`unable to find dependent attribute: "%s"`, properties[0])
+}
+
+func createParserError(r types.Resource, msg string) *errors.ParserError {
+	pe := &errors.ParserError{}
+	pe.Filename = r.Metadata().File
+	pe.Line = r.Metadata().Line
+	pe.Column = r.Metadata().Column
+	pe.Message = msg
+	pe.Level = errors.ParserErrorLevelError
+
+	return pe
+}
+
+func createParserWarning(r types.Resource, msg string) *errors.ParserError {
+	pe := &errors.ParserError{}
+	pe.Filename = r.Metadata().File
+	pe.Line = r.Metadata().Line
+	pe.Column = r.Metadata().Column
+	pe.Message = msg
+	pe.Level = errors.ParserErrorLevelWarning
+
+	return pe
 }

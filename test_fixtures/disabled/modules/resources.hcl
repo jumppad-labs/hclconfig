@@ -2,9 +2,18 @@ variable "disable_resources" {
   default = false
 }
 
+variable "is_true" {
+  default = true
+}
+
+resource "network" "dependent" {
+  disabled = true
+  subnet   = "0.0.0.0/24"
+}
+
 resource "network" "onprem" {
-  disabled = variable.disable_resources
-  subnet = "0.0.0.0/24"
+  disabled = variable.disable_resources == resource.network.dependent.disabled
+  subnet   = "0.0.0.0/24"
 }
 
 resource "container" "enabled" {
