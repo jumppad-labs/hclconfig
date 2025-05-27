@@ -229,7 +229,6 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 		}
 
 		// set the context variables from the linked resources
-		// this also validates the links
 		withContextLock(ctx, func() {
 			err := setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
 
@@ -254,7 +253,8 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 
 		if decodeDiags.HasErrors() {
 			// this error is set as warning as it is possible that the resource has
-			// interpolation that is not yet resolved
+			// interpolation that is not yet resolved.
+			// depending on the erro type we may later convert this to an error if it is a syntax error
 			parserErr := createParserWarning(r, fmt.Sprintf(`unable to decode body: %s`, decodeDiags.Error()))
 
 			// check the error types and determine if we should set a warning or error
@@ -502,6 +502,9 @@ func validateLinkedResources(c *Config, r types.Resource, values []string) error
 	return nil
 }
 
+// validateAttribute checks if the attribute exists in the resource,
+// this is to check if the user has created invalid references to attributes
+// and to provide better error messages
 func validateAttribute(v reflect.Value, t reflect.Type, properties []string) error {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
