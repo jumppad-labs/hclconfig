@@ -577,22 +577,27 @@ func validateAttribute(v reflect.Value, t reflect.Type, properties []string) err
 	case reflect.Slice:
 		nt := t.Elem()
 
+		// try to parse the index, if it fails its not a valid index
+		i, err := strconv.ParseInt(properties[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf(`invalid list index: "%s"`, properties[0])
+		}
+
+		// check that the index is not greater than the length of the slice
+		if int(i) >= v.Len() {
+			return fmt.Errorf(`list does not contain index: "%s"`, properties[0])
+		}
+
+		// set the nested value to the slice element
+		nv := v.Index(int(i))
+
+		// if we only have an index, we are done
 		if len(properties) == 1 {
-			// check that the index actually exists
-			index, err := strconv.Atoi(properties[0])
-			if err != nil {
-				return fmt.Errorf(`invalid list index: "%s"`, properties[0])
-			}
-
-			if index >= v.Len() {
-				return fmt.Errorf(`list does not contain index: "%s"`, properties[0])
-			}
-
 			return nil
 		}
 
-		// ignore the next property, because it is an index and we dont care about it
-		return validateAttribute(v, nt, properties[1:])
+		// ignore the next property (0), because it is an index and we dont care about it
+		return validateAttribute(nv, nt, properties[1:])
 
 	case reflect.Map:
 		nt := t.Elem()

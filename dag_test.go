@@ -89,5 +89,5 @@ func TestDependenciesInvalidError(t *testing.T) {
 	cfgErr, ok := err.(*errors.ConfigError)
 	require.True(t, ok)
 
-	require.Len(t, cfgErr.Errors, 12)
+	require.Len(t, cfgErr.Errors, 13)
 }

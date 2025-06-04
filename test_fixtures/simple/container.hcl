@@ -140,3 +140,7 @@ output "ip_addresses" {
     12
   ]
 }
+
+output "created_network_id" {
+  value = resource.container.consul.created_network.0.name
+}
