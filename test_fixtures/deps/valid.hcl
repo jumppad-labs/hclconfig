@@ -74,3 +74,7 @@ output "complex_map_bracket" {
 output "cty" {
   value = resource.container.nginx.output.value
 }
+
+output "created_network_id" {
+  value = resource.container.nginx.created_network.0.name
+}
