@@ -1,0 +1,113 @@
+syntax = "proto3";
+package proto;
+option go_package = "github.com/jumppad-labs/hclconfig/plugins/proto";
+
+// Main plugin service (runs in plugin process)
+service PluginService {
+  rpc GetTypes(GetTypesRequest) returns (GetTypesResponse);
+  rpc Validate(ValidateRequest) returns (ValidateResponse);
+  rpc Create(CreateRequest) returns (CreateResponse);
+  rpc Destroy(DestroyRequest) returns (DestroyResponse);
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+  rpc Changed(ChangedRequest) returns (ChangedResponse);
+}
+
+// Host callback service (run in host process) - consolidated logger and state
+service HostCallbackService {
+  // Logger methods
+  rpc Info(LogRequest) returns (LogResponse);
+  rpc Debug(LogRequest) returns (LogResponse);
+  rpc Warn(LogRequest) returns (LogResponse);
+  rpc Error(LogRequest) returns (LogResponse);
+  
+  // State methods
+  rpc Get(StateGetRequest) returns (StateGetResponse);
+  rpc Find(StateFindRequest) returns (StateFindResponse);
+}
+
+// Plugin service messages
+message GetTypesRequest {}
+
+message GetTypesResponse {
+  repeated RegisteredType types = 1;
+}
+
+message RegisteredType {
+  string type = 1;
+  string sub_type = 2;
+  bytes schema = 3;
+}
+
+message ValidateRequest {
+  string entity_type = 1;
+  string entity_sub_type = 2;
+  bytes entity_data = 3;
+}
+
+message ValidateResponse {
+  string error = 1;
+}
+
+message CreateRequest {
+  string entity_type = 1;
+  string entity_sub_type = 2;
+  bytes entity_data = 3;
+}
+
+message CreateResponse {
+  string error = 1;
+}
+
+message DestroyRequest {
+  string entity_type = 1;
+  string entity_sub_type = 2;
+  bytes entity_data = 3;
+}
+
+message DestroyResponse {
+  string error = 1;
+}
+
+message RefreshRequest {}
+
+message RefreshResponse {
+  string error = 1;
+}
+
+message ChangedRequest {
+  string entity_type = 1;
+  string entity_sub_type = 2;
+  bytes entity_data = 3;
+}
+
+message ChangedResponse {
+  bool changed = 1;
+  string error = 2;
+}
+
+// Logger service messages
+message LogRequest {
+  string message = 1;
+  repeated string args = 2;
+}
+
+message LogResponse {}
+
+// State service messages
+message StateGetRequest {
+  string key = 1;
+}
+
+message StateGetResponse {
+  bytes resource_data = 1;
+  string error = 2;
+}
+
+message StateFindRequest {
+  string pattern = 1;
+}
+
+message StateFindResponse {
+  repeated bytes resources_data = 1;
+  string error = 2;
+}

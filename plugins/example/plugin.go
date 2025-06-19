@@ -1,33 +1,39 @@
-package main
+package example
 
 import (
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/plugins/example/entities"
 )
 
-var _ plugins.Plugin = &ExamplePlugin{}
-
-type ExamplePlugin struct {
+// PersonPlugin demonstrates how to create a complete plugin
+// that implements the Plugin interface
+type PersonPlugin struct {
 	plugins.PluginBase
 }
 
+// Ensure PersonPlugin implements the Plugin interface
+var _ plugins.Plugin = (*PersonPlugin)(nil)
+
 // Init is called by the HCLConfig framework to initialize the plugin.
-func (p *ExamplePlugin) Init() error {
-	// Register the types that this plugin can handle
-	err := p.RegisterType(
-		"example",
-		"person",
-		&entities.Person{},
-		&entities.Provider{},
+// This is where you register all the resource types your plugin handles.
+func (p *PersonPlugin) Init(logger plugins.Logger, state plugins.State) error {
+	// Create instances of resources and providers
+	personResource := &Person{}
+	personProvider := &ExampleProvider{}
+
+	// Register the Person resource type
+	err := plugins.RegisterResourceProvider(
+		&p.PluginBase,
+		logger,
+		state,
+		"resource",     // Top-level type (usually "resource")
+		"person",       // Sub-type (your specific resource type)
+		personResource, // Instance of the resource struct
+		personProvider, // Instance of the provider
 	)
+
 	if err != nil {
-		p.Log().Error("Failed to register type", "error", err)
 		return err
 	}
-
-	// Log is a plugin method that passes the log message back to the main process
-	// logging can not be done in the plugin itself as there is no stdout/stderr
-	p.Log().Info("ExamplePlugin initialized")
 
 	return nil
 }

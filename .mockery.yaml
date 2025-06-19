@@ -1,0 +1,9 @@
+with-expecter: true
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: mocks
+filename: "Mock{{.InterfaceName}}.go"
+packages:
+  github.com/jumppad-labs/hclconfig/plugins:
+    interfaces:
+      State:

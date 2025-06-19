@@ -8,7 +8,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
-// RegisteredType is transfered over the wire
+// RegisteredType represents a registered resource type with its metadata
 type RegisteredType struct {
 	// The top level type name, i.e. resource
 	Type string
@@ -16,23 +16,10 @@ type RegisteredType struct {
 	SubType string
 	// The json schema for the type
 	Schema []byte
-}
-
-// RegisteredEntities is a struct that holds the registered types and their
-// concrete types. This is used to create the entities from the schema
-type RegisteredEntities struct {
-	entityType RegisteredType
-
 	// The concrete type that is used to create the entity
-	concreteType interface{}
-	// The provider that handles this type
-	provider Provider
-}
-
-// Plugin is a private interface that defines the contract between HCLConfig
-// and the providers
-type Plugin interface {
-	Init() error
+	ConcreteType interface{}
+	// The provider adapter that handles this type
+	Adapter ProviderAdapter
 }
 
 type PluginEntityProvider interface {
@@ -45,17 +32,45 @@ type PluginEntityProvider interface {
 	Changed(entityType, entitySubType string, entityData []byte) (bool, error)
 }
 
+// RegisterResourceProvider registers a typed resource provider with the plugin.
+// This creates a typed adapter and registers it with the plugin.
+func RegisterResourceProvider[T types.Resource](p *PluginBase, logger Logger, state State, typeName, subTypeName string, resourceInstance T, provider ResourceProvider[T]) error {
+	// Create a typed adapter for the provider
+	adapter := NewTypedProviderAdapter(provider, resourceInstance)
+	adapter.state = state
+	adapter.logger = logger
+
+	return p.RegisterType(typeName, subTypeName, resourceInstance, adapter)
+}
+
+// Plugin is a private interface that defines the contract between HCLConfig
+// and the providers
+type Plugin interface {
+	Init(Logger, State) error
+	SetLogger(logger Logger)
+	SetState(state State)
+	PluginEntityProvider
+}
+
 type PluginBase struct {
-	logger          Logger
+	logger          Logger // external logger passed to the plugin via Init
+	state           State  // state functions passed to the plugin via Init
 	registeredTypes []RegisteredType
 }
 
-// RegisterType registers a type with the plugin. This is used to
-// register the types that the plugin can handle. The type name is
-// the top level type name, i.e. resource, and the sub type is the
-// sub type, i.e. k8s_config. The t parameter is a reference to a struct that
-// defines the type.
-func (p *PluginBase) RegisterType(typeName, subTypeName string, t interface{}, prov Provider) error {
+// SetLogger sets the logger for the plugin base
+func (p *PluginBase) SetLogger(logger Logger) {
+	p.logger = logger
+}
+
+// SetState sets the state for the plugin base
+func (p *PluginBase) SetState(state State) {
+	p.state = state
+}
+
+// RegisterType registers a type with the plugin using type-safe parameters.
+// This method ensures that t implements types.Resource.
+func (p *PluginBase) RegisterType(typeName, subTypeName string, t types.Resource, prov ProviderAdapter) error {
 	entitySchema, err := schema.GenerateFromInstance(t, 10)
 	if err != nil {
 		return err
@@ -69,72 +84,80 @@ func (p *PluginBase) RegisterType(typeName, subTypeName string, t interface{}, p
 		Type:         typeName,
 		SubType:      subTypeName,
 		Schema:       entitySchema,
-		Provider:     prov,
 		ConcreteType: t,
+		Adapter:      prov,
 	})
 
 	return nil
 }
 
-func (p *PluginBase) SetLogger(l Logger) {
-	p.logger = l
-}
-
-func (p *PluginBase) Log() Logger {
-	return p.logger
-}
-
 func (p *PluginBase) getRegisteredType(entityType, entitySubType string) *RegisteredType {
-	if len(p.registeredTypes) == 0 {
-		return nil
+	for i := range p.registeredTypes {
+		if p.registeredTypes[i].Type == entityType && p.registeredTypes[i].SubType == entitySubType {
+			return &p.registeredTypes[i]
+		}
 	}
+	return nil
+}
 
-	return &p.registeredTypes[0]
+// GetTypes returns all registered types
+func (p *PluginBase) GetTypes() []RegisteredType {
+	return p.registeredTypes
 }
 
 // lifecycle methods
 
 // Validate validates the given entity data.
 func (p *PluginBase) Validate(entityType, entitySubType string, entityData []byte) error {
-	// Example implementation
 	if entityType == "" || entitySubType == "" {
 		return errors.New("entityType and entitySubType cannot be empty")
 	}
-	return nil
+
+	rt := p.getRegisteredType(entityType, entitySubType)
+	if rt == nil {
+		return errors.New("no registered type found for " + entityType + "." + entitySubType)
+	}
+
+	return rt.Adapter.Validate(context.Background(), entityData)
 }
 
 // Create creates a new entity.
 func (p *PluginBase) Create(entityType, entitySubType string, entityData []byte) error {
 	rt := p.getRegisteredType(entityType, entitySubType)
-
-	// convert to a concrete type
-	c, err := schema.CreateStructFromSchema(rt.Schema)
-	if err != nil {
-		return err
+	if rt == nil {
+		return errors.New("no registered type found for " + entityType + "." + entitySubType)
 	}
 
-	ct := schema.UnmarshalUntyped(c, rt.ConcreteType)
-
-	// Get the provider for this type
-	provider := rt.Provider
-	provider.Init(ct.(types.Resource), p.logger)
-	return provider.Create(context.Background())
+	return rt.Adapter.Create(context.Background(), entityData)
 }
 
 // Destroy deletes an existing entity.
 func (p *PluginBase) Destroy(entityType, entitySubType string, entityData []byte) error {
-	// Example implementation
-	return nil
+	rt := p.getRegisteredType(entityType, entitySubType)
+	if rt == nil {
+		return errors.New("no registered type found for " + entityType + "." + entitySubType)
+	}
+
+	return rt.Adapter.Destroy(context.Background(), entityData, false)
 }
 
 // Refresh refreshes the plugin state.
 func (p *PluginBase) Refresh(ctx context.Context) error {
-	// Example implementation
+	// Refresh all registered providers
+	for _, rt := range p.registeredTypes {
+		if err := rt.Adapter.Refresh(ctx, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // Changed checks if the entity has changed.
 func (p *PluginBase) Changed(entityType, entitySubType string, entityData []byte) (bool, error) {
-	// Example implementation
-	return false, nil
+	rt := p.getRegisteredType(entityType, entitySubType)
+	if rt == nil {
+		return false, errors.New("no registered type found for " + entityType + "." + entitySubType)
+	}
+
+	return rt.Adapter.Changed(context.Background(), entityData)
 }

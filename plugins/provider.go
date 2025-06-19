@@ -1,3 +1,4 @@
+// Package plugins provides interfaces and types for implementing HCL resource providers.
 package plugins
 
 import (
@@ -6,45 +7,70 @@ import (
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
-type Provider interface {
-	// Init is called when the provider is created, it is passed a logger that
-	// can be used for any logging purposes. Any other clients must be created
-	// by the provider
+// Jumppad uses a plugin model that allows you to register custom providers
+// each plugin can register can register multiple providers where
+// each provider is responsible for the lifecycle of a single type of resource.
+
+// ResourceProvider defines the generic interface that all resource providers must implement.
+// It provides lifecycle management for resources including creation, destruction,
+// refresh, and state checking operations.
+// T must be a type that implements types.Resource.
+type ResourceProvider[T types.Resource] interface {
+	// Init initializes the provider with state access, provider functions, and a logger.
+	// This method is called once when the provider is created and should be used
+	// to set up any required clients or dependencies.
 	//
-	// cfg is the configuration for the provider that has been deserialized
-	// from the configuration file
-	// log is the logger that the provider should use for any logging purposes
-	Init(cfg types.Resource, log Logger) error
+	// The state parameter provides access to the current state of resources.
+	// The functions parameter provides access to provider-defined functions.
+	// The logger parameter is the logger instance for all logging operations.
+	Init(state State, functions ProviderFunctions, logger Logger) error
 
-	// Create is called when a resource does not exist or creation has previously
-	// failed and 'up' is run
+	// Create creates a new resource or recreates a failed resource.
+	// This method is called when a resource does not exist or when creation
+	// has previously failed and 'up' is executed.
 	//
-	// The context is used to cancel the operation if it takes too long
-	// or the user cancels the operation. The plugin should check the context
-	// periodically to see if it has been cancelled
-	Create(ctx context.Context) error
-
-	// Destroy is called when a resource is failed or created and 'down' is run
+	// The ctx parameter provides cancellation and timeout control.
+	// The resource parameter contains the resource configuration to create.
+	// Returns the created resource with updated state and any creation error.
 	//
-	// The context is used to cancel the operation if it takes too long
-	// or the user cancels the operation. The plugin should check the context
-	// periodically to see if it has been cancelled
-	// force true indicates that the resource should be destroyed quickly and
-	// without waiting for any long running operations to complete
-	Destroy(ctx context.Context, force bool) error
+	// The implementation should periodically check the context for cancellation
+	// and return promptly if the context is cancelled.
+	Create(ctx context.Context, resource T) (T, error)
 
-	// Refresh is called when a resource is created and 'up' is run
+	// Destroy removes an existing resource.
+	// This method is called when a resource exists and 'down' is executed,
+	// or when cleanup is required after a failure.
 	//
-	// The context is used to cancel the operation if it takes too long
-	// or the user cancels the operation. The plugin should check the context
-	// periodically to see if it has been cancelled
-	// force true indicates that the resource should be destroyed quickly and
-	// without waiting for any long running operations to complete
-	Refresh(ctx context.Context) error
+	// The ctx parameter provides cancellation and timeout control.
+	// The resource parameter contains the resource configuration to destroy.
+	// The force parameter, when true, indicates resources should be destroyed quickly
+	// without waiting for graceful shutdown of long-running operations.
+	//
+	// The implementation should periodically check the context for cancellation.
+	Destroy(ctx context.Context, resource T, force bool) error
 
-	// Changed returns if a resource has changed since the last run
-	Changed() (bool, error)
+	// Refresh updates the state of an existing resource.
+	// This method is called when a resource exists and 'up' is executed
+	// to ensure the resource is in the desired state.
+	//
+	// The ctx parameter provides cancellation and timeout control.
+	// The resource parameter contains the resource configuration to refresh.
+	//
+	// The implementation should periodically check the context for cancellation.
+	Refresh(ctx context.Context, resource T) error
 
-	// Lookup is a utility to determine the existence of a resource
-	Lookup() ([]string, error)
+	// Changed determines if a resource has changed since the last operation.
+	// This method is used to detect drift and determine if a resource
+	// needs to be updated or recreated.
+	//
+	// The ctx parameter provides cancellation and timeout control.
+	// The resource parameter contains the resource configuration to check.
+	// Returns true if the resource has changed, false otherwise, and any error
+	// encountered while checking for changes.
+	Changed(ctx context.Context, resource T) (bool, error)
+
+	// Functions returns the functions exposed by the provider that can be called
+	// by other providers.
+	Functions() ProviderFunctions
 }
+
