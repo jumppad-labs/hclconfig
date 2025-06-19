@@ -1,4 +1,4 @@
-package resources
+package person
 
 import "github.com/jumppad-labs/hclconfig/types"
 

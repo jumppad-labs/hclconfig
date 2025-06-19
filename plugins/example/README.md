@@ -5,13 +5,12 @@ This example demonstrates how to create and use plugins with the HCL configurati
 ## Files Overview
 
 ### Core Implementation
-- **`person.go`** - Defines the Person resource struct
-- **`provider.go`** - Implements the ExampleProvider for Person resources
-- **`main.go`** - Demonstrates basic plugin usage and testing
-- **`plugin_example.go`** - Shows how to create complete plugin implementations
+- **`main.go`** - Plugin entry point with PersonPlugin implementation
+- **`person/resource.go`** - Defines the Person resource struct
+- **`person/provider.go`** - Implements the ExampleProvider for Person resources
 
-### Test Fixtures
-- **`test_fixtures/`** - Contains HCL files for testing
+### Examples
+- **`examples/`** - Contains HCL files for demonstration
   - `simple_person.hcl` - Basic single person resource
   - `person.hcl` - Multiple person resources with different configurations
   - `complex_person.hcl` - Advanced test cases with edge cases
@@ -23,15 +22,16 @@ This example demonstrates how to create and use plugins with the HCL configurati
 ```go
 // Create a plugin base
 plugin := &plugins.PluginBase{}
-plugin.SetLogger(&ExampleLogger{})
 
 // Register a resource type
 err := plugins.RegisterResourceProvider(
     plugin,
+    logger,
+    state,
     "resource",           // type name
     "person",            // sub type name
-    &example.Person{},   // resource instance
-    &example.ExampleProvider{}, // provider implementation
+    &person.Person{},    // resource instance
+    &person.ExampleProvider{}, // provider implementation
 )
 
 // Use the plugin
@@ -45,12 +45,14 @@ type PersonPlugin struct {
     plugins.PluginBase
 }
 
-func (p *PersonPlugin) Init() error {
+func (p *PersonPlugin) Init(logger plugins.Logger, state plugins.State) error {
     return plugins.RegisterResourceProvider(
         &p.PluginBase,
+        logger,
+        state,
         "resource", "person",
-        &example.Person{},
-        &example.ExampleProvider{},
+        &person.Person{},
+        &person.ExampleProvider{},
     )
 }
 ```
@@ -59,7 +61,7 @@ func (p *PersonPlugin) Init() error {
 
 ```bash
 # From the example directory
-go run *.go
+go run main.go
 ```
 
 This will:
@@ -70,7 +72,7 @@ This will:
 
 ## Architecture Overview
 
-### Resource Definition (`person.go`)
+### Resource Definition (`person/resource.go`)
 ```go
 type Person struct {
     types.ResourceBase `hcl:",remain"`
@@ -82,7 +84,7 @@ type Person struct {
 }
 ```
 
-### Provider Implementation (`provider.go`)
+### Provider Implementation (`person/provider.go`)
 ```go
 type ExampleProvider struct {
     // Implements plugins.ResourceProvider[*Person]
