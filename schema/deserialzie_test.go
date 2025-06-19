@@ -445,6 +445,26 @@ func TestDeserializeStructMapPtrSlice(t *testing.T) {
 	require.Equal(t, "struct", getKindForField(s, 1, 2))
 }
 
+func TestDeserializeEmbeddedStruct(t *testing.T) {
+	s, err := CreateStructFromSchema([]byte(fixtures.EmbeddedJson))
+	require.NoError(t, err)
+	
+	// Add proper assertions instead of t.Fail()
+	require.NotNil(t, s)
+	
+	// Verify the struct has the expected fields
+	structType := reflect.TypeOf(s).Elem()
+	require.Equal(t, 2, structType.NumField()) // ResourceBase + Name
+	
+	// Verify ResourceBase field exists
+	_, found := structType.FieldByName("ResourceBase")
+	require.True(t, found)
+	
+	// Verify Name field exists  
+	_, found = structType.FieldByName("Name")
+	require.True(t, found)
+}
+
 func getKindForField(t any, field, depth int) string {
 	switch depth {
 	case 0:

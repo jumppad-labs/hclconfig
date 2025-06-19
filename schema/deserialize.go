@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 )
 
 func CreateStructFromSchema(data []byte) (any, error) {
@@ -164,6 +165,14 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 		innerType = reflect.TypeOf(complex64(0))
 	case "complex128":
 		innerType = reflect.TypeOf(complex128(0))
+	default:
+		// Handle interface{} and other unrecognized types
+		if strings.Contains(t.Type, "interface") {
+			innerType = reflect.TypeOf((*interface{})(nil)).Elem()
+		} else {
+			// For any other unrecognized type, use interface{} as fallback
+			innerType = reflect.TypeOf((*interface{})(nil)).Elem()
+		}
 	}
 
 	// if the property is a pointer, we need to wrap the inner type in a pointer

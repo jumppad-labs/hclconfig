@@ -59,10 +59,6 @@ func (h *PluginHost) Start(pluginPath string) error {
 	return nil
 }
 
-func (h *PluginHost) Ping() error {
-	return h.plugin.Validate("resource", "person", []byte("{}"))
-}
-
 // grpcPluginWrapper wraps a gRPC client to implement PluginEntityProvider
 type grpcPluginWrapper struct {
 	client proto.PluginServiceClient
@@ -166,4 +162,55 @@ func (w *grpcPluginWrapper) Changed(entityType, entitySubType string, entityData
 	}
 
 	return resp.Changed, nil
+}
+
+// Ensure PluginHost implements PluginEntityProvider interface
+var _ PluginEntityProvider = (*PluginHost)(nil)
+
+// GetTypes returns the types handled by the plugin
+func (h *PluginHost) GetTypes() []RegisteredType {
+	if h.plugin == nil {
+		return nil
+	}
+	return h.plugin.GetTypes()
+}
+
+// Validate validates the given entity data
+func (h *PluginHost) Validate(entityType, entitySubType string, entityData []byte) error {
+	if h.plugin == nil {
+		return fmt.Errorf("plugin not initialized")
+	}
+	return h.plugin.Validate(entityType, entitySubType, entityData)
+}
+
+// Create creates a new entity
+func (h *PluginHost) Create(entityType, entitySubType string, entityData []byte) error {
+	if h.plugin == nil {
+		return fmt.Errorf("plugin not initialized")
+	}
+	return h.plugin.Create(entityType, entitySubType, entityData)
+}
+
+// Destroy deletes an existing entity
+func (h *PluginHost) Destroy(entityType, entitySubType string, entityData []byte) error {
+	if h.plugin == nil {
+		return fmt.Errorf("plugin not initialized")
+	}
+	return h.plugin.Destroy(entityType, entitySubType, entityData)
+}
+
+// Refresh refreshes the plugin state
+func (h *PluginHost) Refresh(ctx context.Context) error {
+	if h.plugin == nil {
+		return fmt.Errorf("plugin not initialized")
+	}
+	return h.plugin.Refresh(ctx)
+}
+
+// Changed checks if the entity has changed
+func (h *PluginHost) Changed(entityType, entitySubType string, entityData []byte) (bool, error) {
+	if h.plugin == nil {
+		return false, fmt.Errorf("plugin not initialized")
+	}
+	return h.plugin.Changed(entityType, entitySubType, entityData)
 }

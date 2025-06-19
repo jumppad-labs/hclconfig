@@ -11,10 +11,11 @@ import (
 // GRPCServer wraps PluginBase and implements the gRPC PluginService
 type GRPCServer struct {
 	proto.UnimplementedPluginServiceServer
-	plugin Plugin
-	broker *plugin.GRPCBroker
-	logger Logger
-	state  State
+	plugin       Plugin
+	broker       *plugin.GRPCBroker
+	logger       Logger
+	state        State
+	cachedLogger Logger // cached logger instance
 }
 
 // NewGRPCServer creates a new gRPC server with provided logger and state
@@ -28,6 +29,16 @@ func NewGRPCServer(plugin Plugin, broker *plugin.GRPCBroker) (*GRPCServer, error
 }
 
 func (s *GRPCServer) GetTypes(ctx context.Context, req *proto.GetTypesRequest) (*proto.GetTypesResponse, error) {
+	l, err := s.getLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logger: %w", err)
+	}
+
+	// set the logger for the plugin
+	s.plugin.SetLogger(l)
+
+	l.Info("Getting types")
+
 	types := s.plugin.GetTypes()
 	protoTypes := make([]*proto.RegisteredType, len(types))
 
@@ -82,13 +93,20 @@ func (s *GRPCServer) Changed(ctx context.Context, req *proto.ChangedRequest) (*p
 }
 
 func (s *GRPCServer) getLogger() (Logger, error) {
-	//Try to connect to logger service
+	// Return cached logger if already created
+	if s.cachedLogger != nil {
+		return s.cachedLogger, nil
+	}
+
+	// Try to connect to logger service
 	hostConn, err := s.broker.Dial(HostCallbackServiceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to host callback service: %w", err)
 	}
 
-	return &GRPCLogger{client: proto.NewHostCallbackServiceClient(hostConn)}, nil
+	// Cache the logger for future use
+	s.cachedLogger = &GRPCLogger{client: proto.NewHostCallbackServiceClient(hostConn)}
+	return s.cachedLogger, nil
 }
 
 // Helper function to convert error to string

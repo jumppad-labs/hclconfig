@@ -1,8 +1,6 @@
 package plugins
 
-import (
-	"fmt"
-)
+import "log"
 
 // TestLogger implements the Logger interface and writes to stdout
 // This logger is useful for testing and can be imported by other packages
@@ -12,33 +10,29 @@ type TestLogger struct{}
 var _ Logger = (*TestLogger)(nil)
 
 func (l *TestLogger) Info(msg string, args ...interface{}) {
-	fmt.Printf("[INFO] %s", msg)
+	log.Printf("Remote Plugin::[INFO] %s", msg)
 	if len(args) > 0 {
-		fmt.Printf(" %v", args)
+		log.Printf(" %v", args)
 	}
-	fmt.Println()
 }
 
 func (l *TestLogger) Debug(msg string, args ...interface{}) {
-	fmt.Printf("[DEBUG] %s", msg)
+	log.Printf("Remote Plugin::[DEBUG] %s", msg)
 	if len(args) > 0 {
-		fmt.Printf(" %v", args)
+		log.Printf(" %v", args)
 	}
-	fmt.Println()
 }
 
 func (l *TestLogger) Warn(msg string, args ...interface{}) {
-	fmt.Printf("[WARN] %s", msg)
+	log.Printf("[WARN] %s", msg)
 	if len(args) > 0 {
-		fmt.Printf(" %v", args)
+		log.Printf(" %v", args)
 	}
-	fmt.Println()
 }
 
 func (l *TestLogger) Error(msg string, args ...interface{}) {
-	fmt.Printf("[ERROR] %s", msg)
+	log.Printf("Remote Plugin::[ERROR] %s", msg)
 	if len(args) > 0 {
-		fmt.Printf(" %v", args)
+		log.Printf(" %v", args)
 	}
-	fmt.Println()
 }

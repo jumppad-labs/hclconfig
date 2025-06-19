@@ -1,0 +1,23 @@
+syntax="proto3"
+
+package proto;
+option go_package = "./proto";
+
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_DEBUG = 1;
+  LOG_LEVEL_INFO = 2;
+  LOG_LEVEL_WARN = 3;
+  LOG_LEVEL_ERROR = 4;
+}
+
+message LogRequest {
+  enum level = 1;
+  string message = 1;
+}
+
+service Plugin {}
+
+service Config {
+  rpc Log(LogRequest) returns (LogResponse);
+}
