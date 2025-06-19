@@ -1,7 +1,9 @@
-package example
+package main
 
 import (
+	"github.com/hashicorp/go-plugin"
 	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/plugins/example/resources"
 )
 
 // PersonPlugin demonstrates how to create a complete plugin
@@ -17,8 +19,8 @@ var _ plugins.Plugin = (*PersonPlugin)(nil)
 // This is where you register all the resource types your plugin handles.
 func (p *PersonPlugin) Init(logger plugins.Logger, state plugins.State) error {
 	// Create instances of resources and providers
-	personResource := &Person{}
-	personProvider := &ExampleProvider{}
+	personResource := &resources.Person{}
+	personProvider := &resources.ExampleProvider{}
 
 	// Register the Person resource type
 	err := plugins.RegisterResourceProvider(
@@ -36,4 +38,21 @@ func (p *PersonPlugin) Init(logger plugins.Logger, state plugins.State) error {
 	}
 
 	return nil
+}
+
+// main function for the plugin binary
+func main() {
+	// Create the plugin implementation
+	personPlugin := &PersonPlugin{}
+
+	// Serve the plugin using go-plugin
+	plugin.Serve(&plugin.ServeConfig{
+		HandshakeConfig: plugins.HandshakeConfig,
+		Plugins: map[string]plugin.Plugin{
+			"plugin": &plugins.GRPCPlugin{
+				Impl: personPlugin,
+			},
+		},
+		GRPCServer: plugin.DefaultGRPCServer,
+	})
 }

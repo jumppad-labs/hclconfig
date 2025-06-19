@@ -1,2 +1,2 @@
 build:
-	go build -o bin/example ./cmd
+	go build -o bin/example ./main.go
