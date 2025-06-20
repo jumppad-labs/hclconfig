@@ -1,10 +1,11 @@
-package example
+package main
 
 import (
 	"encoding/json"
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	"github.com/jumppad-labs/hclconfig/plugins/mocks"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ func TestPluginCreateCallsTheProviderWithAConcreteType(t *testing.T) {
 	p := testInitPlugin(t)
 
 	// Create test person instance
-	testPerson := &Person{
+	testPerson := &person.Person{
 		FirstName: "John",
 		LastName:  "Doe",
 		Age:       30,

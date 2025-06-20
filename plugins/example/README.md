@@ -6,8 +6,8 @@ This example demonstrates how to create and use plugins with the HCL configurati
 
 ### Core Implementation
 - **`main.go`** - Plugin entry point with PersonPlugin implementation
-- **`person/resource.go`** - Defines the Person resource struct
-- **`person/provider.go`** - Implements the ExampleProvider for Person resources
+- **`pkg/person/resource.go`** - Defines the Person resource struct
+- **`pkg/person/provider.go`** - Implements the ExampleProvider for Person resources
 
 ### Examples
 - **`examples/`** - Contains HCL files for demonstration
@@ -72,7 +72,7 @@ This will:
 
 ## Architecture Overview
 
-### Resource Definition (`person/resource.go`)
+### Resource Definition (`pkg/person/resource.go`)
 ```go
 type Person struct {
     types.ResourceBase `hcl:",remain"`
@@ -84,7 +84,7 @@ type Person struct {
 }
 ```
 
-### Provider Implementation (`person/provider.go`)
+### Provider Implementation (`pkg/person/provider.go`)
 ```go
 type ExampleProvider struct {
     // Implements plugins.ResourceProvider[*Person]

@@ -11,23 +11,49 @@ import (
 
 // PluginHost manages remote plugin processes and provides host services
 type PluginHost struct {
-	logger Logger
-	state  State
-	client *plugin.Client
-	plugin PluginEntityProvider
+	logger         Logger
+	state          State
+	client         *plugin.Client
+	plugin         PluginEntityProvider
+	inProcessHost  *InProcessPluginHost
+	isInProcess    bool
 }
 
 // NewPluginHost creates a new plugin host with the specified plugin binary
 func NewPluginHost(logger Logger, state State, pluginPath string) *PluginHost {
 	return &PluginHost{
-		logger: logger,
-		state:  state,
+		logger:      logger,
+		state:       state,
+		isInProcess: false,
+	}
+}
+
+// NewPluginHostWithInstance creates a new plugin host with an in-process plugin instance
+func NewPluginHostWithInstance(logger Logger, state State, plugin Plugin) *PluginHost {
+	inProcessHost := NewInProcessPluginHost(logger, state, plugin)
+	return &PluginHost{
+		logger:        logger,
+		state:         state,
+		inProcessHost: inProcessHost,
+		isInProcess:   true,
 	}
 }
 
 // Start initializes and starts the plugin process
 func (h *PluginHost) Start(pluginPath string) error {
+	if h.isInProcess {
+		// Start in-process plugin
+		if h.inProcessHost == nil {
+			return fmt.Errorf("in-process plugin host not initialized")
+		}
+		if err := h.inProcessHost.Start(); err != nil {
+			return fmt.Errorf("failed to start in-process plugin: %w", err)
+		}
+		h.plugin = h.inProcessHost
+		return nil
+	}
 
+	// External process plugin (existing logic)
 	var PluginMap = map[string]plugin.Plugin{
 		"plugin": &GRPCPlugin{logger: h.logger},
 	}
@@ -57,6 +83,16 @@ func (h *PluginHost) Start(pluginPath string) error {
 	h.plugin = &grpcPluginWrapper{client: grpcClient}
 
 	return nil
+}
+
+// Stop shuts down the plugin host and cleans up resources
+func (h *PluginHost) Stop() {
+	if h.isInProcess && h.inProcessHost != nil {
+		h.inProcessHost.Stop()
+	}
+	if h.client != nil {
+		h.client.Kill()
+	}
 }
 
 // grpcPluginWrapper wraps a gRPC client to implement PluginEntityProvider

@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/hashicorp/go-plugin"
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/plugins/example/person"
+	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 )
 
 // PersonPlugin demonstrates how to create a complete plugin

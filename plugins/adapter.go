@@ -82,7 +82,18 @@ func (a *TypedProviderAdapter[T]) Init(state State, functions ProviderFunctions,
 }
 
 func (a *TypedProviderAdapter[T]) Validate(ctx context.Context, entityData []byte) error {
-	// TODO: Unmarshal entityData to concrete type and validate
+	// Create a new instance of type T to unmarshal into
+	var resource T
+
+	// Try to unmarshal JSON bytes into the concrete type
+	// This serves as basic validation - if it can't unmarshal, it's invalid
+	if err := json.Unmarshal(entityData, &resource); err != nil {
+		return err
+	}
+
+	// Additional validation could be added here by calling a Validate method
+	// on the resource if it implements a Validator interface
+	
 	return nil
 }
 
@@ -95,17 +106,24 @@ func (a *TypedProviderAdapter[T]) Create(ctx context.Context, entityData []byte)
 		return err
 	}
 
-	// Initialize the provider with the current state, functions, and logger
-	a.provider.Init(a.state, a.functions, a.logger)
-
 	// Call the provider's Create method with the concrete type
+	// (provider was already initialized during registration)
 	_, err := a.provider.Create(ctx, resource)
 	return err
 }
 
 func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte, force bool) error {
-	// TODO: Unmarshal entityData to concrete type and call provider.Destroy
-	return errors.New("typed adapter destroy not implemented")
+	// Create a new instance of type T to unmarshal into
+	var resource T
+
+	// Unmarshal JSON bytes into the concrete type
+	if err := json.Unmarshal(entityData, &resource); err != nil {
+		return err
+	}
+
+	// Call the provider's Destroy method with the concrete type
+	// (provider was already initialized during registration)
+	return a.provider.Destroy(ctx, resource, force)
 }
 
 func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte) error {
@@ -114,6 +132,15 @@ func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte
 }
 
 func (a *TypedProviderAdapter[T]) Changed(ctx context.Context, entityData []byte) (bool, error) {
-	// TODO: Unmarshal entityData to concrete type and call provider.Changed
-	return false, errors.New("typed adapter changed not implemented")
+	// Create a new instance of type T to unmarshal into
+	var resource T
+
+	// Unmarshal JSON bytes into the concrete type
+	if err := json.Unmarshal(entityData, &resource); err != nil {
+		return false, err
+	}
+
+	// Call the provider's Changed method with the concrete type
+	// (provider was already initialized during registration)
+	return a.provider.Changed(ctx, resource)
 }

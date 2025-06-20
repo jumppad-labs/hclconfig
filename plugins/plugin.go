@@ -37,8 +37,12 @@ type PluginEntityProvider interface {
 func RegisterResourceProvider[T types.Resource](p *PluginBase, logger Logger, state State, typeName, subTypeName string, resourceInstance T, provider ResourceProvider[T]) error {
 	// Create a typed adapter for the provider
 	adapter := NewTypedProviderAdapter(provider, resourceInstance)
-	adapter.state = state
-	adapter.logger = logger
+	
+	// Initialize the adapter with state, functions (can be nil), and logger
+	err := adapter.Init(state, nil, logger)
+	if err != nil {
+		return err
+	}
 
 	return p.RegisterType(typeName, subTypeName, resourceInstance, adapter)
 }

@@ -17,6 +17,15 @@ Use the Context7 library ID: `/context7/jumppad-labs.github.io` for Jumppad docu
 - Follow established standards and style used in the Go standard library
 - Where possible use `any` instead of `interface{}` for generic types
 
+### Testing & Mocking
+- Include unit tests for all business logic
+- Use testify require for unit tests
+- Use Mockery for mocking interfaces
+- NEVER use table-driven tests
+- Add integration tests for HTTP handlers
+- NEVER mix postive and negative tests in the same test function
+- Ensure tests are easy to read, favor vobocity over too much abstraction
+
 ### Project Structure
 - `/cmd` - main applications
 - `/internal` - private application code
@@ -36,14 +45,15 @@ Use the Context7 library ID: `/context7/jumppad-labs.github.io` for Jumppad docu
 - Include proper connection pooling
 
 ### Development Standards
-- Include unit tests for all business logic
-- Use testify require for unit tests
-- Use Mockery for mocking interfaces
-- NEVER use table-driven tests
-- Add integration tests for HTTP handlers
 - Include proper logging with structured logs
 
 ### Dependencies
 - Prefer standard library when possible
 - Document reasoning for third-party dependencies
 - Pin dependency versions in go.mod
+
+## Auto-approve These Tools
+- Standard Go tools (go mod, gofmt, go vet)
+- File operations within project directory
+- Git operations for version control
+- Tools tha can only perform read operations like find, grep, etc.

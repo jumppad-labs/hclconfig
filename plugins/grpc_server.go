@@ -69,22 +69,61 @@ func (s *GRPCServer) Validate(ctx context.Context, req *proto.ValidateRequest) (
 }
 
 func (s *GRPCServer) Create(ctx context.Context, req *proto.CreateRequest) (*proto.CreateResponse, error) {
-	err := s.plugin.Create(req.EntityType, req.EntitySubType, req.EntityData)
+	l, err := s.getLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logger: %w", err)
+	}
+
+	// set the logger for the plugin
+	s.plugin.SetLogger(l)
+
+	l.Info("Creating entity")
+
+	err = s.plugin.Create(req.EntityType, req.EntitySubType, req.EntityData)
 	return &proto.CreateResponse{Error: errorToString(err)}, nil
 }
 
 func (s *GRPCServer) Destroy(ctx context.Context, req *proto.DestroyRequest) (*proto.DestroyResponse, error) {
-	err := s.plugin.Destroy(req.EntityType, req.EntitySubType, req.EntityData)
+	l, err := s.getLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logger: %w", err)
+	}
+
+	// set the logger for the plugin
+	s.plugin.SetLogger(l)
+
+	l.Info("Destroying entity")
+
+	err = s.plugin.Destroy(req.EntityType, req.EntitySubType, req.EntityData)
 	return &proto.DestroyResponse{Error: errorToString(err)}, nil
 }
 
 func (s *GRPCServer) Refresh(ctx context.Context, req *proto.RefreshRequest) (*proto.RefreshResponse, error) {
+	l, err := s.getLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logger: %w", err)
+	}
 
-	err := s.plugin.Refresh(ctx)
+	// set the logger for the plugin
+	s.plugin.SetLogger(l)
+
+	l.Info("Refreshing entity")
+
+	err = s.plugin.Refresh(ctx)
 	return &proto.RefreshResponse{Error: errorToString(err)}, nil
 }
 
 func (s *GRPCServer) Changed(ctx context.Context, req *proto.ChangedRequest) (*proto.ChangedResponse, error) {
+	l, err := s.getLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logger: %w", err)
+	}
+
+	// set the logger for the plugin
+	s.plugin.SetLogger(l)
+
+	l.Info("Checking if entity changed")
+
 	changed, err := s.plugin.Changed(req.EntityType, req.EntitySubType, req.EntityData)
 	return &proto.ChangedResponse{
 		Changed: changed,
