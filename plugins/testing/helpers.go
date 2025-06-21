@@ -2,6 +2,7 @@ package testing
 
 import (
 	"encoding/json"
+	"os/exec"
 	"reflect"
 	"testing"
 
@@ -18,8 +19,8 @@ import (
 
 // TestPluginHost provides a convenient interface for testing plugins
 type TestPluginHost struct {
-	*plugins.PluginHost
-	t *testing.T
+	plugins.PluginHost // Embed the interface, not a specific implementation
+	t       *testing.T
 }
 
 // InProcessPluginSetup creates an in-process plugin host for testing
@@ -27,9 +28,8 @@ func InProcessPluginSetup(t *testing.T, plugin plugins.Plugin) *TestPluginHost {
 	logger := &plugins.TestLogger{}
 	state := mocks.NewMockState(t)
 
-	ph := plugins.NewPluginHostWithInstance(logger, state, plugin)
-	err := ph.Start("")
-	require.NoError(t, err, "In-process plugin should start without error")
+	ph, err := plugins.NewDirectPluginHost(logger, state, plugin)
+	require.NoError(t, err, "In-process plugin should initialize without error")
 
 	t.Cleanup(func() {
 		ph.Stop()
@@ -44,7 +44,7 @@ func InProcessPluginSetup(t *testing.T, plugin plugins.Plugin) *TestPluginHost {
 // ExternalPluginSetup creates an external process plugin host for testing
 func ExternalPluginSetup(t *testing.T, binaryPath string) *TestPluginHost {
 	logger := &plugins.TestLogger{}
-	ph := plugins.NewPluginHost(logger, nil, "")
+	ph := plugins.NewGRPCPluginHost(logger, nil)
 
 	err := ph.Start(binaryPath)
 	require.NoError(t, err, "External plugin should start without error")
@@ -292,4 +292,17 @@ func ParseHCLWithPluginSchemaToEntityData[T any](t *testing.T, host *TestPluginH
 	}
 
 	return entityData
+}
+
+// BuildPlugin builds a plugin binary for testing
+// Returns an error if the build fails
+func BuildPlugin(t *testing.T, pluginDir string) error {
+	cmd := exec.Command("make", "build")
+	cmd.Dir = pluginDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("Plugin build failed: %s", string(output))
+		return err
+	}
+	return nil
 }

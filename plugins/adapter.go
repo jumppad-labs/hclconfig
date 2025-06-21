@@ -3,7 +3,6 @@ package plugins
 import (
 	"context"
 	"encoding/json"
-	"errors"
 
 	"github.com/jumppad-labs/hclconfig/types"
 )
@@ -127,8 +126,20 @@ func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte
 }
 
 func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte) error {
-	// TODO: Unmarshal entityData to concrete type and call provider.Refresh
-	return errors.New("typed adapter refresh not implemented")
+	// Create a new instance of type T to unmarshal into
+	var resource T
+
+	// If entityData is provided, unmarshal it
+	if entityData != nil {
+		// Unmarshal JSON bytes into the concrete type
+		if err := json.Unmarshal(entityData, &resource); err != nil {
+			return err
+		}
+	}
+
+	// Call the provider's Refresh method with the concrete type
+	// Note: if entityData was nil, resource will be the zero value of T
+	return a.provider.Refresh(ctx, resource)
 }
 
 func (a *TypedProviderAdapter[T]) Changed(ctx context.Context, entityData []byte) (bool, error) {

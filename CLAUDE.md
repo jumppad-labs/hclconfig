@@ -28,7 +28,7 @@ Use the Context7 library ID: `/context7/jumppad-labs.github.io` for Jumppad docu
 
 ### Project Structure
 - `/cmd` - main applications
-- `/internal` - private application code
+- `/internal` - private application codle
 - `/pkg` - public library code
 - `/api` - API definitions (OpenAPI, protobuf)
 - `/configs` - configuration files

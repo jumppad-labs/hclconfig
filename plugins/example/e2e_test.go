@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
@@ -114,4 +115,72 @@ func TestInProcessPluginDestroy(t *testing.T) {
 		err := ph.Destroy("resource", "person", personJSON)
 		require.NoError(t, err, "Should destroy person %d", i)
 	}
+}
+
+// TestExternalPluginSchemaValidation tests that the external plugin returns valid schema
+func TestExternalPluginSchemaValidation(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	ph := setupExternalPlugin(t)
+
+	// Test schema validation
+	types := ph.GetTypes()
+	require.Len(t, types, 1, "Should have 1 registered type")
+	require.Equal(t, "resource", types[0].Type, "Type should be 'resource'")
+	require.Equal(t, "person", types[0].SubType, "SubType should be 'person'")
+	require.NotEmpty(t, types[0].Schema, "Schema should not be empty")
+
+	// Verify schema can create a concrete type
+	wireType, err := schema.CreateStructFromSchema(types[0].Schema)
+	require.NoError(t, err, "Should be able to create struct from schema")
+	require.NotNil(t, wireType, "Wire type should not be nil")
+}
+
+// TestExternalPluginCRUDOperations tests CRUD operations with external plugin
+func TestExternalPluginCRUDOperations(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	ph := setupExternalPlugin(t)
+
+	// Parse HCL file and get serialized JSON data for each person
+	peopleData := plugintesting.ParseHCLWithPluginSchemaToEntityData(t, ph, "./examples/simple_person.hcl", person.Person{})
+	require.NotEmpty(t, peopleData, "Should have parsed people from HCL file")
+
+	// Test each person individually
+	for i, personJSON := range peopleData {
+		// Test Validate
+		err := ph.Validate("resource", "person", personJSON)
+		require.NoError(t, err, "Should validate person %d", i)
+
+		// Test Create
+		err = ph.Create("resource", "person", personJSON)
+		require.NoError(t, err, "Should create person %d", i)
+
+		// Test Changed
+		changed, err := ph.Changed("resource", "person", personJSON)
+		require.NoError(t, err, "Should check changed status for person %d", i)
+		require.False(t, changed, "Person %d should not have changed", i)
+
+		// Test Destroy
+		err = ph.Destroy("resource", "person", personJSON)
+		require.NoError(t, err, "Should destroy person %d", i)
+	}
+}
+
+// TestExternalPluginRefresh tests the Refresh operation with external plugin
+func TestExternalPluginRefresh(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	ph := setupExternalPlugin(t)
+
+	// Test refresh
+	ctx := context.Background()
+	err := ph.Refresh(ctx)
+	require.NoError(t, err, "Should refresh successfully")
 }

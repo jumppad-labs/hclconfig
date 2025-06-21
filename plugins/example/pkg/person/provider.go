@@ -25,7 +25,9 @@ func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFu
 }
 
 func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, error) {
-	p.logger.Info("Creating person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	if p.logger != nil {
+		p.logger.Info("Creating person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	}
 
 	// Check for context cancellation
 	select {
@@ -41,7 +43,9 @@ func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, 
 }
 
 func (p *ExampleProvider) Destroy(ctx context.Context, person *Person, force bool) error {
-	p.logger.Info("Destroying person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName, "force", force)
+	if p.logger != nil {
+		p.logger.Info("Destroying person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName, "force", force)
+	}
 
 	// Check for context cancellation
 	select {
@@ -57,7 +61,9 @@ func (p *ExampleProvider) Destroy(ctx context.Context, person *Person, force boo
 }
 
 func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) error {
-	p.logger.Info("Refreshing person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	if p.logger != nil {
+		p.logger.Info("Refreshing person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	}
 
 	// Check for context cancellation
 	select {
@@ -73,7 +79,9 @@ func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) error {
 }
 
 func (p *ExampleProvider) Changed(ctx context.Context, person *Person) (bool, error) {
-	p.logger.Info("Checking if person changed", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	if p.logger != nil {
+		p.logger.Info("Checking if person changed", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	}
 
 	// Check for context cancellation
 	select {
