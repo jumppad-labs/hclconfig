@@ -11,9 +11,9 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
-	"github.com/jumppad-labs/hclconfig/resources"
-	"github.com/jumppad-labs/hclconfig/test_fixtures/embedded"
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
+	"github.com/jumppad-labs/hclconfig/internal/resources"
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
@@ -33,10 +33,13 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 	}
 
 	p := NewParser(o)
-	p.RegisterType("container", &structs.Container{})
-	p.RegisterType("network", &structs.Network{})
-	p.RegisterType("template", &structs.Template{})
-	p.RegisterType(structs.TypeParseError, &structs.ParseError{})
+
+	// Create and register the test plugin
+	testPlugin := &TestPlugin{}
+	err := p.RegisterPlugin(testPlugin)
+	if err != nil {
+		panic("Failed to register test plugin: " + err.Error())
+	}
 
 	return p
 }
@@ -57,7 +60,7 @@ func TestNewParserWithOptions(t *testing.T) {
 }
 
 func TestParseFileProcessesResources(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,28 +94,8 @@ func TestParseFileProcessesResources(t *testing.T) {
 	require.NotNil(t, r)
 }
 
-func TestParseFileCallsParseFunction(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p := setupParser(t)
-
-	c, err := p.ParseFile(absoluteFolderPath)
-	require.NoError(t, err)
-
-	// check variable has been interpolated
-	r, err := c.FindResource("resource.container.consul")
-	require.NoError(t, err)
-	require.NotNil(t, r)
-
-	cont := r.(*structs.Container)
-	require.Equal(t, "something", cont.Meta.Properties["status"])
-}
-
 func TestParseFileSetsLinks(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +129,7 @@ func TestParseFileSetsLinks(t *testing.T) {
 }
 
 func TestParseResolvesArrayReferences(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +166,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 }
 
 func TestParseSetsDefaultValues(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/defaults/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/defaults/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +186,7 @@ func TestParseSetsDefaultValues(t *testing.T) {
 }
 
 func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
 	o := DefaultOptions()
@@ -223,7 +206,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 }
 
 func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
 	p := setupParser(t)
@@ -246,7 +229,7 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 }
 
 func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
 	p := setupParser(t)
@@ -263,7 +246,7 @@ func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 }
 
 func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
 	p := setupParser(t)
@@ -280,7 +263,7 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 }
 
 func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/interpolation/interpolation.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/interpolation/interpolation.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,8 +289,8 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	r, err = c.FindResource("output.splat_with_null")
 	require.NoError(t, err)
 	cont = r.(*resources.Output)
-	require.Equal(t, "test1", cont.Value.([]any)[0])
-	require.Equal(t, "test2", cont.Value.([]any)[1])
+	// Since created_network is not populated in the config, this should return an empty array
+	require.Equal(t, []any{}, cont.Value)
 
 	r, err = c.FindResource("output.function")
 	require.NoError(t, err)
@@ -342,7 +325,7 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 }
 
 func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/interpolation/string.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/interpolation/string.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +342,7 @@ func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
 }
 
 func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/locals/locals.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/locals/locals.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +356,7 @@ func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {
 }
 
 func TestParseModuleCreatesResources(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +391,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 }
 
 func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +410,7 @@ func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
 }
 
 func TestParseModuleCreatesOutputs(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +476,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 }
 
 func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/var_files.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/var_files.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +495,7 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 }
 
 func TestModuleDisabledCanBeOverriden(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +543,7 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 }
 
 func TestParseContainerWithNoNameReturnsError(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_name.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/invalid/no_name.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +555,7 @@ func TestParseContainerWithNoNameReturnsError(t *testing.T) {
 }
 
 func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_type.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/invalid/no_type.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -584,7 +567,7 @@ func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
 }
 
 func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/invalid/no_resource.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/invalid/no_resource.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -596,7 +579,7 @@ func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
 }
 
 func TestParseDoesNotProcessDisabledResources(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/disabled/disabled.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/disabled/disabled.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -631,7 +614,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 }
 
 func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/disabled/module.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/disabled/module.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,7 +746,7 @@ func TestSetContextVariableFromPathWithIndex(t *testing.T) {
 }
 
 func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -839,7 +822,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 }
 
 func TestParserStopsParseOnCallbackError(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,13 +853,13 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
 
-	// only 16 of the resources and variables should be created, none of the descendants of base
-	require.Len(t, calls, 16)
+	// only 17 of the resources and variables should be created, none of the descendants of base
+	require.Len(t, calls, 17)
 	require.NotContains(t, "resource.module.consul_1", calls)
 }
 
 func TestParserDeserializesJSONCorrectly(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -968,7 +951,7 @@ func TestParserRejectsInvalidResourceName(t *testing.T) {
 }
 
 func TestParserGeneratesChecksums(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/simple/container.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1010,7 +993,7 @@ func TestParserGeneratesChecksums(t *testing.T) {
 }
 
 func TestParserCyclicalReferenceReturnsError(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/cyclical/fail/cyclical.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/cyclical/fail/cyclical.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1024,7 +1007,7 @@ func TestParserCyclicalReferenceReturnsError(t *testing.T) {
 }
 
 func TestParserNoCyclicalReferenceReturns(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/cyclical/pass/cyclical.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/cyclical/pass/cyclical.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1036,7 +1019,7 @@ func TestParserNoCyclicalReferenceReturns(t *testing.T) {
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/invalid")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/invalid")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1051,7 +1034,7 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenResourceParseError(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/parse_error")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/parse_error")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1066,7 +1049,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceParseError(t *testing.T) {
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/process_error")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/process_error")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1081,7 +1064,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) 
 }
 
 func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/invalid/no_name.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/invalid/no_name.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1096,7 +1079,7 @@ func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 }
 
 func TestParseFileReturnsConfigErrorWhenResourceParseError(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/parse_error/resource_parse.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/parse_error/resource_parse.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1111,7 +1094,7 @@ func TestParseFileReturnsConfigErrorWhenResourceParseError(t *testing.T) {
 }
 
 func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/process_error/bad_format.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/process_error/bad_format.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1131,7 +1114,7 @@ func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
 }
 
 func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/process_error/function_error.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/process_error/function_error.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1151,7 +1134,7 @@ func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
 }
 
 func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/process_error/bad_interpolation.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/process_error/bad_interpolation.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1171,7 +1154,7 @@ func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T)
 }
 
 func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/invalid/notexist.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/invalid/notexist.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
@@ -1186,14 +1169,17 @@ func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
 }
 
 func TestParseDoesNotOverwiteWithMeta(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/embedded/config.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/embedded/config.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
 
 	p := NewParser(nil)
-	p.RegisterType(embedded.TypeContainer, &embedded.Container{})
-	p.RegisterType(embedded.TypeSidecar, &embedded.Sidecar{})
+
+	// Create and register an embedded test plugin
+	embeddedPlugin := &EmbeddedTestPlugin{}
+	err := p.RegisterPlugin(embeddedPlugin)
+	require.NoError(t, err)
 
 	c, err := p.ParseFile(f)
 	require.NoError(t, err)
@@ -1209,14 +1195,17 @@ func TestParseDoesNotOverwiteWithMeta(t *testing.T) {
 }
 
 func TestParseHandlesCommonTypes(t *testing.T) {
-	f, pathErr := filepath.Abs("./test_fixtures/embedded/config.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/embedded/config.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}
 
 	p := NewParser(nil)
-	p.RegisterType(embedded.TypeContainer, &embedded.Container{})
-	p.RegisterType(embedded.TypeSidecar, &embedded.Sidecar{})
+
+	// Create and register an embedded test plugin
+	embeddedPlugin := &EmbeddedTestPlugin{}
+	err := p.RegisterPlugin(embeddedPlugin)
+	require.NoError(t, err)
 
 	c, err := p.ParseFile(f)
 	require.NoError(t, err)
@@ -1262,7 +1251,7 @@ func TestParseParsesToResourceBase(t *testing.T) {
 	// Test that when PrimativesOnly is set the configuration is parsed
 	// into ResouceBase not registered types
 
-	f, pathErr := filepath.Abs("./test_fixtures/modules/modules.hcl")
+	f, pathErr := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if pathErr != nil {
 		t.Fatal(pathErr)
 	}

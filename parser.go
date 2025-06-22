@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -17,8 +18,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/registry"
-	"github.com/jumppad-labs/hclconfig/resources"
+	"github.com/jumppad-labs/hclconfig/internal/registry"
+	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -92,9 +93,8 @@ func DefaultOptions() *ParserOptions {
 // Parser can parse HCL configuration files
 type Parser struct {
 	options             ParserOptions
-	registeredTypes     types.RegisteredTypes
 	registeredFunctions map[string]function.Function
-	registeredPlugins   plugins.PluginEntityProvider
+	pluginHosts         []plugins.PluginHost
 }
 
 // NewParser creates a new parser with the given options
@@ -105,14 +105,13 @@ func NewParser(options *ParserOptions) *Parser {
 		o = DefaultOptions()
 	}
 
-	return &Parser{options: *o, registeredTypes: resources.DefaultResources(), registeredFunctions: map[string]function.Function{}}
+	return &Parser{
+		options:             *o,
+		registeredFunctions: map[string]function.Function{},
+		pluginHosts:         []plugins.PluginHost{},
+	}
 }
 
-// RegisterType type registers a struct that implements Resource with the given name
-// the parser uses this list to convert hcl defined resources into concrete types
-func (p *Parser) RegisterType(name string, resource types.Resource) {
-	p.registeredTypes[name] = resource
-}
 
 // RegisterFunction type registers a custom interpolation function
 // with the given name
@@ -126,6 +125,84 @@ func (p *Parser) RegisterFunction(name string, f any) error {
 	p.registeredFunctions[name] = ctyFunc
 
 	return nil
+}
+
+// RegisterPlugin registers an in-process plugin with the parser
+// This creates a DirectPluginHost internally for the plugin
+func (p *Parser) RegisterPlugin(plugin plugins.Plugin) error {
+	// Create a simple logger for in-process plugins
+	logger := &plugins.TestLogger{}
+	
+	// Create a DirectPluginHost for the in-process plugin
+	host, err := plugins.NewDirectPluginHost(logger, nil, plugin)
+	if err != nil {
+		return fmt.Errorf("failed to create plugin host: %w", err)
+	}
+
+	// Add to the list of plugin hosts
+	p.pluginHosts = append(p.pluginHosts, host)
+
+	return nil
+}
+
+// RegisterPluginWithPath registers an external plugin binary with the parser
+// This creates a GRPCPluginHost internally for the external plugin
+func (p *Parser) RegisterPluginWithPath(pluginPath string) error {
+	// Create a simple logger for external plugins
+	logger := &plugins.TestLogger{}
+
+	// Create a GRPCPluginHost for the external plugin
+	host := plugins.NewGRPCPluginHost(logger, nil)
+
+	// Start the external plugin
+	err := host.Start(pluginPath)
+	if err != nil {
+		return fmt.Errorf("failed to start external plugin %s: %w", pluginPath, err)
+	}
+
+	// Add to the list of plugin hosts
+	p.pluginHosts = append(p.pluginHosts, host)
+
+	return nil
+}
+
+// createResourceFromPlugins attempts to create a resource using registered plugins
+// Returns the resource if found, or an error if no plugin handles this resource type
+func (p *Parser) createResourceFromPlugins(resourceType, resourceName string) (types.Resource, error) {
+	// Iterate through all plugin hosts
+	for _, host := range p.pluginHosts {
+		pluginTypes := host.GetTypes()
+		
+		// Look for a matching type
+		for _, t := range pluginTypes {
+			if t.Type == "resource" && t.SubType == resourceType {
+				// Found a matching plugin type, create resource from concrete type
+				if t.ConcreteType == nil {
+					return nil, fmt.Errorf("plugin type %s has no concrete type", resourceType)
+				}
+
+				// Create a new instance of the concrete type using reflection
+				ptr := reflect.New(reflect.TypeOf(t.ConcreteType).Elem())
+				resource := ptr.Interface().(types.Resource)
+				
+				// Initialize the resource metadata
+				resource.Metadata().Name = resourceName
+				resource.Metadata().Type = resourceType
+				resource.Metadata().Properties = map[string]any{}
+				
+				return resource, nil
+			}
+		}
+	}
+
+	// No plugin found for this resource type
+	return nil, fmt.Errorf("resource type %s not found in any registered plugin", resourceType)
+}
+
+// createBuiltinResource creates built-in resource types (local, output, variable, module)
+func (p *Parser) createBuiltinResource(resourceType, resourceName string) (types.Resource, error) {
+	builtinTypes := resources.DefaultResources()
+	return builtinTypes.CreateResource(resourceType, resourceName)
 }
 
 // ParseDirectory parses all resources in the given file
@@ -252,9 +329,14 @@ func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
 
 		meta := mm["meta"].(map[string]any)
 
-		r, err := p.registeredTypes.CreateResource(meta["type"].(string), meta["name"].(string))
+		// Try plugins first, then built-in resources
+		r, err := p.createResourceFromPlugins(meta["type"].(string), meta["name"].(string))
 		if err != nil {
-			return nil, err
+			// Fallback to built-in resources
+			r, err = p.createBuiltinResource(meta["type"].(string), meta["name"].(string))
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		resData, _ := json.Marshal(mm)
@@ -435,7 +517,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	for _, b := range body.Blocks {
 		switch b.Type {
 		case resources.TypeVariable:
-			r, _ := p.registeredTypes.CreateResource(resources.TypeVariable, b.Labels[0])
+			r, _ := p.createBuiltinResource(resources.TypeVariable, b.Labels[0])
 			v := r.(*resources.Variable)
 
 			// add the checksum for the resource
@@ -596,7 +678,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		return []error{de}
 	}
 
-	rt, _ := resources.DefaultResources().CreateResource(string(resources.TypeModule), b.Labels[0])
+	rt, _ := p.createBuiltinResource(string(resources.TypeModule), b.Labels[0])
 
 	rt.Metadata().Module = moduleName
 	rt.Metadata().File = file
@@ -871,7 +953,8 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			// ignore any errors when parsing
 			ignoreErrors = true
 		} else {
-			rt, err = p.registeredTypes.CreateResource(b.Labels[0], name)
+			// Create resource using plugins
+			rt, err = p.createResourceFromPlugins(b.Labels[0], name)
 			if err != nil {
 				de := &errors.ParserError{}
 				de.Line = b.TypeRange.Start.Line
@@ -909,7 +992,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(resources.TypeLocal, name)
+		rt, err = p.createBuiltinResource(resources.TypeLocal, name)
 		if err != nil {
 			de := &errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
@@ -946,7 +1029,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		rt, err = p.registeredTypes.CreateResource(resources.TypeOutput, name)
+		rt, err = p.createBuiltinResource(resources.TypeOutput, name)
 		if err != nil {
 			de := &errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line

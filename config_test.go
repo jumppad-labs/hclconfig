@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/resources"
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
+	"github.com/jumppad-labs/hclconfig/internal/resources"
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -163,7 +163,7 @@ func TestCreateFunctionHandlesInputParams(t *testing.T) {
 }
 
 func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions/default.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/functions/default.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
 }
 
 func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/functions")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
 }
 
 func TestParseProcessesCustomFunctions(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/functions/custom.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/functions/custom.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jumppad-labs/hclconfig/schema"
+	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 

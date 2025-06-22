@@ -6,7 +6,7 @@ import (
 
 	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
-	"github.com/jumppad-labs/hclconfig/schema"
+	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/stretchr/testify/require"
 )
 

@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/plugins/mocks"
-	"github.com/jumppad-labs/hclconfig/schema"
+	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )

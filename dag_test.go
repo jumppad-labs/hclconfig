@@ -4,20 +4,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 )
 
 func setupGraphConfig(t *testing.T) *Config {
-	absoluteFolderPath, err := filepath.Abs("./test_fixtures/simple/container.hcl")
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	p := NewParser(DefaultOptions())
-	p.RegisterType("container", &structs.Container{})
-	p.RegisterType("network", &structs.Network{})
-	p.RegisterType("template", &structs.Template{})
+	p := setupTestParser()
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)

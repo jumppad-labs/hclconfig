@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
 
 	"github.com/jumppad-labs/hclconfig"
-	"github.com/jumppad-labs/hclconfig/resources"
+	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -26,9 +28,14 @@ func main() {
 	// o.PrimativesOnly = true
 
 	p := hclconfig.NewParser(o)
-	// register the types
-	p.RegisterType("config", &Config{})
-	p.RegisterType("postgres", &PostgreSQL{})
+	
+	// register the example plugin with config and postgres types
+	examplePlugin := &ExamplePlugin{}
+	err := p.RegisterPlugin(examplePlugin)
+	if err != nil {
+		fmt.Printf("Failed to register example plugin: %s\n", err)
+		os.Exit(1)
+	}
 
 	// register a custom function
 	p.RegisterFunction("random_number", func() (int, error) {
@@ -146,4 +153,81 @@ func printPostgres(p *PostgreSQL, indent int) string {
 	fmt.Fprintf(str, "%s--- ConnectionString: %s\n", pad, p.ConnectionString)
 
 	return str.String()
+}
+
+// ExamplePlugin provides the Config and PostgreSQL resource types for the example
+type ExamplePlugin struct {
+	plugins.PluginBase
+}
+
+// Init initializes the example plugin
+func (p *ExamplePlugin) Init(logger plugins.Logger, state plugins.State) error {
+	// Register Config resource
+	configResource := &Config{}
+	configProvider := &ExampleResourceProvider[*Config]{}
+	err := plugins.RegisterResourceProvider(
+		&p.PluginBase,
+		logger,
+		state,
+		"resource",
+		"config", 
+		configResource,
+		configProvider,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Register PostgreSQL resource
+	postgresResource := &PostgreSQL{}
+	postgresProvider := &ExampleResourceProvider[*PostgreSQL]{}
+	return plugins.RegisterResourceProvider(
+		&p.PluginBase,
+		logger,
+		state,
+		"resource",
+		"postgres",
+		postgresResource,
+		postgresProvider,
+	)
+}
+
+// ExampleResourceProvider is a generic provider for example resources
+type ExampleResourceProvider[T types.Resource] struct {
+	logger    plugins.Logger
+	state     plugins.State  
+	functions plugins.ProviderFunctions
+}
+
+// Init initializes the provider
+func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger plugins.Logger) error {
+	p.state = state
+	p.functions = functions
+	p.logger = logger
+	return nil
+}
+
+// Create is a no-op for the example
+func (p *ExampleResourceProvider[T]) Create(ctx context.Context, resource T) (T, error) {
+	return resource, nil
+}
+
+// Destroy is a no-op for the example
+func (p *ExampleResourceProvider[T]) Destroy(ctx context.Context, resource T, force bool) error {
+	return nil
+}
+
+// Refresh is a no-op for the example  
+func (p *ExampleResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
+	return nil
+}
+
+// Changed always returns false for the example
+func (p *ExampleResourceProvider[T]) Changed(ctx context.Context, resource T) (bool, error) {
+	return false, nil
+}
+
+// Functions returns no functions
+func (p *ExampleResourceProvider[T]) Functions() plugins.ProviderFunctions {
+	return p.functions
 }
