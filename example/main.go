@@ -25,17 +25,41 @@ func main() {
 		return nil
 	}
 
+	// Configure plugin discovery
+	// By default, plugins are auto-discovered from:
+	// - ./.hclconfig/plugins/
+	// - ~/.hclconfig/plugins/
+	// - Directories in HCLCONFIG_PLUGIN_PATH environment variable
+	//
+	// You can customize this behavior:
+	// o.AutoDiscoverPlugins = false  // Disable auto-discovery
+	// o.PluginDirectories = append(o.PluginDirectories, "/custom/plugin/path")
+	// o.PluginNamePattern = "my-plugin-*"  // Change pattern (default: "hclconfig-plugin-*")
+	
+	// Add a logger to see plugin discovery in action
+	o.Logger = func(msg string) {
+		fmt.Printf("[Plugin Discovery] %s\n", msg)
+	}
+
 	// o.PrimativesOnly = true
 
 	p := hclconfig.NewParser(o)
 	
-	// register the example plugin with config and postgres types
+	// You can still manually register plugins alongside auto-discovery
+	// This in-process plugin will be registered in addition to any discovered plugins
 	examplePlugin := &ExamplePlugin{}
 	err := p.RegisterPlugin(examplePlugin)
 	if err != nil {
 		fmt.Printf("Failed to register example plugin: %s\n", err)
 		os.Exit(1)
 	}
+	
+	// You can also manually register external plugin binaries
+	// This is useful for plugins that aren't in the standard discovery directories
+	// err = p.RegisterPluginWithPath("/path/to/external/plugin")
+	// if err != nil {
+	//     fmt.Printf("Failed to register external plugin: %s\n", err)
+	// }
 
 	// register a custom function
 	p.RegisterFunction("random_number", func() (int, error) {

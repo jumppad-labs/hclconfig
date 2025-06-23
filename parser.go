@@ -63,6 +63,15 @@ type ParserOptions struct {
 	// * the graph of resources is not walked, any interpolated properties
 	//   are not resolved.
 	PrimativesOnly bool
+
+	// PluginDirectories is a list of directories to search for plugins
+	PluginDirectories []string
+	// AutoDiscoverPlugins enables automatic plugin discovery from configured directories
+	AutoDiscoverPlugins bool
+	// PluginNamePattern is the pattern to match plugin binaries (default: "hclconfig-plugin-*")
+	PluginNamePattern string
+	// Logger function for plugin discovery logging (optional)
+	Logger func(string)
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -83,10 +92,35 @@ func DefaultOptions() *ParserOptions {
 
 	registryCredentials := map[string]string{}
 
+	// Default plugin directories
+	homeDir, _ := os.UserHomeDir()
+	pluginDirs := []string{
+		filepath.Join(".", ".hclconfig", "plugins"),
+	}
+	if homeDir != "" {
+		pluginDirs = append(pluginDirs, filepath.Join(homeDir, ".hclconfig", "plugins"))
+	}
+
+	// Add directories from environment variable
+	if envPath := os.Getenv("HCLCONFIG_PLUGIN_PATH"); envPath != "" {
+		separator := ":"
+		if runtime.GOOS == "windows" {
+			separator = ";"
+		}
+		envDirs := strings.Split(envPath, separator)
+		pluginDirs = append(pluginDirs, envDirs...)
+	}
+
+	// Check if auto-discovery is disabled
+	autoDiscover := os.Getenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY") != "true"
+
 	return &ParserOptions{
 		ModuleCache:         cacheDir,
 		VariableEnvPrefix:   "HCL_VAR_",
 		RegistryCredentials: registryCredentials,
+		PluginDirectories:   pluginDirs,
+		AutoDiscoverPlugins: autoDiscover,
+		PluginNamePattern:   "hclconfig-plugin-*",
 	}
 }
 
@@ -105,11 +139,23 @@ func NewParser(options *ParserOptions) *Parser {
 		o = DefaultOptions()
 	}
 
-	return &Parser{
+	p := &Parser{
 		options:             *o,
 		registeredFunctions: map[string]function.Function{},
 		pluginHosts:         []plugins.PluginHost{},
 	}
+
+	// Auto-discover and load plugins if enabled
+	if o.AutoDiscoverPlugins {
+		if err := p.discoverAndLoadPlugins(); err != nil {
+			// Log error but don't fail parser creation
+			if o.Logger != nil {
+				o.Logger(fmt.Sprintf("Plugin discovery warning: %s", err))
+			}
+		}
+	}
+
+	return p
 }
 
 // RegisterFunction type registers a custom interpolation function
@@ -162,6 +208,49 @@ func (p *Parser) RegisterPluginWithPath(pluginPath string) error {
 	// Add to the list of plugin hosts
 	p.pluginHosts = append(p.pluginHosts, host)
 
+	return nil
+}
+
+// discoverAndLoadPlugins finds and loads all plugins from configured directories
+func (p *Parser) discoverAndLoadPlugins() error {
+	// Expand directories (handle ~ and env vars)
+	expandedDirs := ExpandPluginDirectories(p.options.PluginDirectories)
+	
+	// Create plugin discovery instance
+	pd := NewPluginDiscovery(expandedDirs, p.options.PluginNamePattern, p.options.Logger)
+	
+	// Discover plugins
+	pluginPaths, err := pd.DiscoverPlugins()
+	if err != nil {
+		return err
+	}
+	
+	// Load each discovered plugin
+	var loadErrors []string
+	for _, pluginPath := range pluginPaths {
+		if err := p.RegisterPluginWithPath(pluginPath); err != nil {
+			errorMsg := fmt.Sprintf("failed to load plugin %s: %v", pluginPath, err)
+			loadErrors = append(loadErrors, errorMsg)
+			if p.options.Logger != nil {
+				p.options.Logger(errorMsg)
+			}
+		} else {
+			if p.options.Logger != nil {
+				p.options.Logger(fmt.Sprintf("Successfully loaded plugin: %s", pluginPath))
+			}
+		}
+	}
+	
+	// Report summary
+	successCount := len(pluginPaths) - len(loadErrors)
+	if p.options.Logger != nil {
+		p.options.Logger(fmt.Sprintf("Plugin discovery complete: %d loaded, %d failed", successCount, len(loadErrors)))
+	}
+	
+	if len(loadErrors) > 0 && successCount == 0 {
+		return fmt.Errorf("all plugin loads failed: %s", strings.Join(loadErrors, "; "))
+	}
+	
 	return nil
 }
 

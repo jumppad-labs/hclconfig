@@ -234,8 +234,8 @@
     "line": 49,
     "column": 1,
     "checksum": {
-     "parsed": "068e6344b8ff62228d00d8ea8c6f1885",
-     "processed": "f16237be0978cc197ab72647b2a093d0"
+     "parsed": "c35b4158cc71c98364afb12749858cbb",
+     "processed": "c2bc73d62b06582430cba24d042c7bc0"
     },
     "links": [
      "resource.postgres.mydb",
@@ -244,7 +244,7 @@
      "resource.postgres.other2"
     ]
    },
-   "FQN": "myapp_97",
+   "FQN": "myapp_37",
    "DBConnectionString": "postgresql://admin:password@localhost:5432/mydatabase",
    "MainDBConnection": {
     "meta": {
