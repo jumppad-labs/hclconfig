@@ -15,7 +15,7 @@ type getterCall struct {
 	working string
 }
 
-func setupMockGetter(t *testing.T, err error) (Getter, *[]getterCall) {
+func setupMockGetter(err error) (Getter, *[]getterCall) {
 	calls := &[]getterCall{}
 
 	g := &GoGetter{
@@ -38,7 +38,7 @@ func TestGetterDoesNothingWhenFolderExistsAndIgnoreCacheFalse(t *testing.T) {
 	downloadPath := path.Join(dest, "github.com_test")
 	os.MkdirAll(downloadPath, os.ModePerm)
 
-	g, calls := setupMockGetter(t, nil)
+	g, calls := setupMockGetter(nil)
 
 	_, err := g.Get("github.com/test", dest, false)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestGetterDoesNothingWhenFolderExistsAndIgnoreCacheFalse(t *testing.T) {
 func TestGetterCallsGetWhenFolderExistsAndIgnoreCacheTrue(t *testing.T) {
 	dest := t.TempDir()
 
-	g, calls := setupMockGetter(t, nil)
+	g, calls := setupMockGetter(nil)
 
 	_, err := g.Get("github.com/test", dest, true)
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestGetterCallsGetWhenFolderExistsAndIgnoreCacheTrue(t *testing.T) {
 }
 
 func TestGetterCallsGetWithURLEncodedOutputFolder(t *testing.T) {
-	g, calls := setupMockGetter(t, nil)
+	g, calls := setupMockGetter(nil)
 
 	_, err := g.Get("github.com/jumppad-labs/hclconfig?ref=7271da1cd14778d3762304954d7061cc753da204", "/mycache", false)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestGetterReturnsFullDownloadPath(t *testing.T) {
 	dest := t.TempDir()
 	downloadPath := path.Join(dest, "github.com_test")
 
-	g, calls := setupMockGetter(t, nil)
+	g, calls := setupMockGetter(nil)
 
 	path, err := g.Get("github.com/test", dest, true)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestGetterReturnsFullDownloadPath(t *testing.T) {
 func TestGetterReturnsErrorWhenUnableToDownload(t *testing.T) {
 	dest := t.TempDir()
 
-	g, calls := setupMockGetter(t, fmt.Errorf("unable to download"))
+	g, calls := setupMockGetter(fmt.Errorf("unable to download"))
 
 	_, err := g.Get("github.com/test", dest, true)
 	require.Error(t, err)

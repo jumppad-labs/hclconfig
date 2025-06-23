@@ -17,9 +17,9 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
-	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/internal/registry"
 	"github.com/jumppad-labs/hclconfig/internal/resources"
+	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -112,7 +112,6 @@ func NewParser(options *ParserOptions) *Parser {
 	}
 }
 
-
 // RegisterFunction type registers a custom interpolation function
 // with the given name
 // the parser uses this list to convert hcl defined resources into concrete types
@@ -132,7 +131,7 @@ func (p *Parser) RegisterFunction(name string, f any) error {
 func (p *Parser) RegisterPlugin(plugin plugins.Plugin) error {
 	// Create a simple logger for in-process plugins
 	logger := &plugins.TestLogger{}
-	
+
 	// Create a DirectPluginHost for the in-process plugin
 	host, err := plugins.NewDirectPluginHost(logger, nil, plugin)
 	if err != nil {
@@ -172,7 +171,7 @@ func (p *Parser) createResourceFromPlugins(resourceType, resourceName string) (t
 	// Iterate through all plugin hosts
 	for _, host := range p.pluginHosts {
 		pluginTypes := host.GetTypes()
-		
+
 		// Look for a matching type
 		for _, t := range pluginTypes {
 			if t.Type == "resource" && t.SubType == resourceType {
@@ -184,12 +183,12 @@ func (p *Parser) createResourceFromPlugins(resourceType, resourceName string) (t
 				// Create a new instance of the concrete type using reflection
 				ptr := reflect.New(reflect.TypeOf(t.ConcreteType).Elem())
 				resource := ptr.Interface().(types.Resource)
-				
+
 				// Initialize the resource metadata
 				resource.Metadata().Name = resourceName
 				resource.Metadata().Type = resourceType
 				resource.Metadata().Properties = map[string]any{}
-				
+
 				return resource, nil
 			}
 		}
@@ -422,7 +421,7 @@ func (p *Parser) parseFile(
 	// override default values for variables from environment or variables map
 	p.setVariables(ctx, variables)
 
-	errs := p.parseResourcesInFile(ctx, file, c, "", false, []string{})
+	errs := p.parseResourcesInFile(ctx, file, c, "", []string{})
 	if errs != nil {
 		return errs
 	}
@@ -442,6 +441,8 @@ func (p *Parser) loadVariablesFromFile(ctx *hcl.EvalContext, path string) error 
 		de.Filename = path
 		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+
+		return de
 	}
 
 	attrs, _ := f.Body.JustAttributes()
@@ -528,7 +529,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 			r.Metadata().Checksum.Parsed = HashString(cs)
 
-			err = decodeBody(ctx, c, file, b, v, false)
+			err = decodeBody(ctx, c, b, v, false)
 			if err != nil {
 				return err
 			}
@@ -545,7 +546,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 }
 
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
-func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, disabled bool, dependsOn []string) []error {
+func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, dependsOn []string) []error {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(file)
@@ -608,7 +609,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		case resources.TypeLocal:
 			fallthrough
 		case types.TypeResource:
-			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn, disabled)
+			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn)
 			if err != nil {
 				return []error{err}
 			}
@@ -685,7 +686,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt.Metadata().Line = b.TypeRange.Start.Line
 	rt.Metadata().Column = b.TypeRange.Start.Column
 
-	err := decodeBody(ctx, c, file, b, rt, false)
+	err := decodeBody(ctx, c, b, rt, false)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -908,7 +909,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	return nil
 }
 
-func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string, disabled bool) error {
+func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
 	var rt types.Resource
 	var err error
 
@@ -1047,7 +1048,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	rt.Metadata().Line = b.TypeRange.Start.Line
 	rt.Metadata().Column = b.TypeRange.Start.Column
 
-	err = decodeBody(ctx, c, file, b, rt, ignoreErrors)
+	err = decodeBody(ctx, c, b, rt, ignoreErrors)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -1319,7 +1320,7 @@ func buildContext(filePath string, customFunctions map[string]function.Function)
 	return ctx
 }
 
-func decodeBody(ctx *hcl.EvalContext, config *Config, path string, b *hclsyntax.Block, p any, ignoreErrors bool) error {
+func decodeBody(ctx *hcl.EvalContext, config *Config, b *hclsyntax.Block, p any, ignoreErrors bool) error {
 	dr, err := getDependentResources(b, ctx, config, p, "")
 	if err != nil {
 		return err

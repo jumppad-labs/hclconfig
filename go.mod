@@ -17,7 +17,6 @@ require (
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.15.0
-	golang.org/x/text v0.23.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 )
@@ -76,6 +75,7 @@ require (
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	google.golang.org/api v0.190.0 // indirect
