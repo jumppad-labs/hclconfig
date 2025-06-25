@@ -599,7 +599,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-	require.Equal(t, 4, c.ResourceCount())
+	require.Equal(t, 5, c.ResourceCount())
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
@@ -609,8 +609,8 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, r.GetDisabled())
 
-	// should have only be called for the variable
-	require.Len(t, calls, 1)
+	// should have been called for the variable and network (not disabled)
+	require.Len(t, calls, 2)
 }
 
 func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
@@ -950,47 +950,6 @@ func TestParserRejectsInvalidResourceName(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestParserGeneratesChecksums(t *testing.T) {
-	f, pathErr := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
-	if pathErr != nil {
-		t.Fatal(pathErr)
-	}
-
-	p := setupParser(t)
-
-	c, err := p.ParseFile(f)
-	require.NoError(t, err)
-
-	r1, err := c.FindResource("resource.network.onprem")
-	require.NoError(t, err)
-	require.NotEmpty(t, r1.Metadata().Checksum.Parsed)
-
-	r2, err := c.FindResource("variable.cpu_resources")
-	require.NoError(t, err)
-	require.NotEmpty(t, r2.Metadata().Checksum.Parsed)
-
-	r3, err := c.FindResource("output.ip_address_1")
-	require.NoError(t, err)
-	require.NotEmpty(t, r3.Metadata().Checksum.Parsed)
-
-	// parse a second time, the checksums should be equal
-	p = setupParser(t)
-
-	c, err = p.ParseFile(f)
-	require.NoError(t, err)
-
-	c1, err := c.FindResource("resource.network.onprem")
-	require.NoError(t, err)
-	require.Equal(t, r1.Metadata().Checksum.Parsed, c1.Metadata().Checksum.Parsed)
-
-	c2, err := c.FindResource("variable.cpu_resources")
-	require.NoError(t, err)
-	require.Equal(t, r2.Metadata().Checksum.Parsed, c2.Metadata().Checksum.Parsed)
-
-	c3, err := c.FindResource("output.ip_address_1")
-	require.NoError(t, err)
-	require.Equal(t, r3.Metadata().Checksum.Parsed, c3.Metadata().Checksum.Parsed)
-}
 
 func TestParserCyclicalReferenceReturnsError(t *testing.T) {
 	f, pathErr := filepath.Abs("./internal/test_fixtures/config/cyclical/fail/cyclical.hcl")

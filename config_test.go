@@ -18,63 +18,31 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	typs[structs.TypeTemplate] = &structs.Template{}
 
 	var1, _ := typs.CreateResource(resources.TypeVariable, "var1")
-	var1.Metadata().Checksum = types.Checksum{
-		Parsed:    "123",
-		Processed: "abc",
-	}
 
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
-	net1.Metadata().Checksum = types.Checksum{
-		Parsed:    "234",
-		Processed: "bcd",
-	}
 
 	mod1, _ := typs.CreateResource(resources.TypeModule, "module1")
 	mod1.AddDependency("resource.network.cloud")
 
-	mod1.Metadata().Checksum = types.Checksum{
-		Parsed:    "345",
-		Processed: "cde",
-	}
 
 	var2, _ := typs.CreateResource(resources.TypeVariable, "var2")
 	var2.Metadata().Module = "module1"
-	var2.Metadata().Checksum = types.Checksum{
-		Parsed:    "456",
-		Processed: "def",
-	}
 
 	mod2, _ := typs.CreateResource(resources.TypeModule, "module2")
 	mod2.Metadata().Module = "module1"
-	mod2.Metadata().Checksum = types.Checksum{
-		Parsed:    "567",
-		Processed: "efg",
-	}
 
 	// depending on a module should return all resources and
 	// all child resources
 	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con1.AddDependency("module.module1")
-	con1.Metadata().Checksum = types.Checksum{
-		Parsed:    "678",
-		Processed: "fgh",
-	}
 
 	// con2 is embedded in module1
 	con2, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con2.Metadata().Module = "module1"
-	con2.Metadata().Checksum = types.Checksum{
-		Parsed:    "789",
-		Processed: "ghi",
-	}
 
 	// con3 is loaded from a module inside module2
 	con3, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
 	con3.Metadata().Module = "module1.module2"
-	con3.Metadata().Checksum = types.Checksum{
-		Parsed:    "890",
-		Processed: "hij",
-	}
 
 	// con4 is loaded from a module inside module2
 	con4, _ := typs.CreateResource(structs.TypeContainer, "test_dev2")
@@ -84,25 +52,13 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	// when a resource is defined, it has no idea on its
 	// module
 	con4.AddDependency("resource.container.test_dev")
-	con4.Metadata().Checksum = types.Checksum{
-		Parsed:    "90a",
-		Processed: "ijk",
-	}
 
 	out1, _ := typs.CreateResource(resources.TypeOutput, "fqdn")
 	out1.Metadata().Module = "module1.module2"
-	out1.Metadata().Checksum = types.Checksum{
-		Parsed:    "0ab",
-		Processed: "jkl",
-	}
 
 	out2, _ := typs.CreateResource(resources.TypeOutput, "out")
 	out2.SetDependencies([]string{"resource.network.cloud.id", "resource.container.test_dev"})
 
-	out2.Metadata().Checksum = types.Checksum{
-		Parsed:    "abc",
-		Processed: "klm",
-	}
 
 	c := NewConfig()
 	err := c.addResource(net1, nil, nil)
@@ -457,80 +413,3 @@ func copyConfig(t *testing.T, c *Config) *Config {
 	return new
 }
 
-func TestDiffReturnsResourcesAdded(t *testing.T) {
-	c, _ := testSetupConfig(t)
-	new := copyConfig(t, c)
-
-	typs := resources.DefaultResources()
-	var1, _ := typs.CreateResource(resources.TypeVariable, "var22")
-	var1.Metadata().Checksum = types.Checksum{
-		Parsed:    "zzz",
-		Processed: "111",
-	}
-	new.AppendResource(var1)
-
-	changes, err := c.Diff(new)
-	require.NoError(t, err)
-	require.NotNil(t, changes)
-	require.Len(t, changes.Added, 1)
-	require.Len(t, changes.ParseUpdated, 0)
-	require.Len(t, changes.ProcessedUpdated, 0)
-	require.Len(t, changes.Removed, 0)
-	require.Len(t, changes.Unchanged, 11)
-}
-
-func TestDiffReturnsResourcesUpdated(t *testing.T) {
-	c, _ := testSetupConfig(t)
-	new := copyConfig(t, c)
-
-	var1, _ := new.FindResource("variable.var1")
-	var1.Metadata().Checksum.Parsed = "zzz"
-
-	var2, _ := new.FindResource("module.module1.variable.var2")
-	var2.Metadata().Checksum.Processed = "zzz"
-
-	changes, err := c.Diff(new)
-	require.NoError(t, err)
-	require.NotNil(t, changes)
-	require.Len(t, changes.Added, 0)
-	require.Len(t, changes.ParseUpdated, 1)
-	require.Len(t, changes.ProcessedUpdated, 1)
-	require.Len(t, changes.Removed, 0)
-	require.Len(t, changes.Unchanged, 9)
-}
-
-func TestDiffReturnsResourcesRemoved(t *testing.T) {
-	c, _ := testSetupConfig(t)
-	new := copyConfig(t, c)
-
-	var1, _ := new.FindResource("variable.var1")
-	var1.Metadata().Checksum = types.Checksum{
-		Parsed:    "zzz",
-		Processed: "111",
-	}
-
-	new.RemoveResource(var1)
-
-	changes, err := c.Diff(new)
-	require.NoError(t, err)
-	require.NotNil(t, changes)
-	require.Len(t, changes.Added, 0)
-	require.Len(t, changes.ParseUpdated, 0)
-	require.Len(t, changes.ProcessedUpdated, 0)
-	require.Len(t, changes.Removed, 1)
-	require.Len(t, changes.Unchanged, 10)
-}
-
-func TestDiffReturnsResourcesUnchanged(t *testing.T) {
-	c, _ := testSetupConfig(t)
-	new := copyConfig(t, c)
-
-	changes, err := c.Diff(new)
-	require.NoError(t, err)
-	require.NotNil(t, changes)
-	require.Len(t, changes.Added, 0)
-	require.Len(t, changes.ParseUpdated, 0)
-	require.Len(t, changes.ProcessedUpdated, 0)
-	require.Len(t, changes.Removed, 0)
-	require.Len(t, changes.Unchanged, 11)
-}

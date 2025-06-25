@@ -25,21 +25,6 @@ type Parsable interface {
 	Parse(config Findable) error
 }
 
-// Processable defines an optional interface that allows a resource to define a callback
-// that is executed when the resources is processed by the graph.
-//
-// Unlike Parsable, Process for a resource is called in strict order based upon
-// its dependency to other resources. You can set calculated fields and perform
-// operations in Process and this information will be available to dependent
-// resources.
-type Processable interface {
-	// Process is called by the parser when when the graph of resources is walked.
-	//
-	// Returning an error from Process stops the processing of other resources
-	// and terminates all parsing.
-	Process() error
-}
-
 // Resource is an interface that all
 type Resource interface {
 	// return the resource Metadata
@@ -81,9 +66,6 @@ type Meta struct {
 	// file from where it was originally parsed
 	Column int `hcl:"column,optional" json:"column"`
 
-	// Checksum is the md5 hash of the resource
-	Checksum Checksum `hcl:"checksum,optional" json:"checksum"`
-
 	// Properties holds a collection that can be used to store adhoc data
 	Properties map[string]any `json:"properties,omitempty"`
 
@@ -102,17 +84,6 @@ type ResourceBase struct {
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
 
 	Meta Meta `hcl:"meta,optional" json:"meta,omitempty"`
-}
-
-type Checksum struct {
-	// Parsed is the checksum of the resource properties after the resource has
-	// been read and the Parse method has been called.
-	Parsed string `hcl:"parsed,optional" json:"parsed,omitempty"`
-	// Processed is the checksum of the object after the Process method, and
-	// any parser callbacks have been called.
-	// The checksum is evaluated in the graph so any dependent properties will be
-	// used in the checksum .
-	Processed string `hcl:"processed,optional" json:"processed,omitempty"`
 }
 
 // Metadata is a function that ensures the struct that embeds the ResourceBase

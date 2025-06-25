@@ -610,15 +610,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			r, _ := p.createBuiltinResource(resources.TypeVariable, b.Labels[0])
 			v := r.(*resources.Variable)
 
-			// add the checksum for the resource
-			cs, err := ReadFileLocation(b.Range().Filename, b.Range().Start.Line, b.TypeRange.Start.Column, b.Range().End.Line, b.Range().End.Column)
-			if err != nil {
-				panic(err)
-			}
-
-			r.Metadata().Checksum.Parsed = HashString(cs)
-
-			err = decodeBody(ctx, c, b, v, false)
+			err := decodeBody(ctx, c, b, v, false)
 			if err != nil {
 				return err
 			}
@@ -1712,18 +1704,6 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 func (p *Parser) process(c *Config) error {
 	ce := errors.NewConfigError()
 
-	// process the files and resolve dependency, do this first without any
-	// callbacks so we can calculate the checksum
-	// we are going to ignore the errors at this stage
-	// as there might be interpolation errors
-	c.walk(createCallback(
-		c,
-		func(r types.Resource) error {
-			r.Metadata().Checksum.Parsed = generateChecksum(r)
-			return nil
-		},
-	), false)
-
 	// variables are not added to the dag so we need to process these
 	// separately
 	vars, err := c.FindResourcesByType(resources.TypeVariable)
@@ -1737,25 +1717,16 @@ func (p *Parser) process(c *Config) error {
 		}
 	}
 
-	// now re-run this time with the callback and the Process function
-	// to calculate a final checksum after any computed properties have been
-	// set
+	// walk the dag and process resources
 	errs := c.walk(createCallback(
 		c,
 		func(r types.Resource) error {
-			if p, ok := r.(types.Processable); ok {
-				if err := p.Process(); err != nil {
-					return err
-				}
-			}
-
 			if p.options.Callback != nil {
 				if err := p.options.Callback(r); err != nil {
 					return err
 				}
 			}
 
-			r.Metadata().Checksum.Processed = generateChecksum(r)
 			return nil
 		},
 	), false)
