@@ -2,19 +2,15 @@ package hclconfig
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
-	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -500,19 +496,8 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	callbackMutext := sync.Mutex{}
-
-	calls := []string{}
 	o := DefaultOptions()
-	o.Callback = func(r types.Resource) error {
-		callbackMutext.Lock()
-		log.Printf("callback: %s", r.Metadata().ID)
-		calls = append(calls, r.Metadata().ID)
-
-		callbackMutext.Unlock()
-
-		return nil
-	}
+	calls := []string{} // TODO: remove when lifecycle is implemented
 
 	p := setupParser(t, o)
 
@@ -585,15 +570,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	}
 
 	o := DefaultOptions()
-	calls := []string{}
-	callSync := sync.Mutex{}
-	o.Callback = func(r types.Resource) error {
-		callSync.Lock()
-		calls = append(calls, r.Metadata().ID)
-		callSync.Unlock()
-
-		return nil
-	}
+	calls := []string{} // TODO: remove when lifecycle is implemented
 
 	p := setupParser(t, o)
 
@@ -620,15 +597,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	}
 
 	o := DefaultOptions()
-	calls := []string{}
-	callSync := sync.Mutex{}
-	o.Callback = func(r types.Resource) error {
-		callSync.Lock()
-		calls = append(calls, r.Metadata().ID)
-		callSync.Unlock()
-
-		return nil
-	}
+	calls := []string{} // TODO: remove when lifecycle is implemented
 
 	p := setupParser(t, o)
 
@@ -752,20 +721,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	}
 
 	o := DefaultOptions()
-	calls := []string{}
-	callSync := sync.Mutex{}
-	o.Callback = func(r types.Resource) error {
-		callSync.Lock()
-
-		calls = append(calls, r.Metadata().ID)
-
-		// add a fake delay
-		time.Sleep(10 * time.Millisecond)
-
-		callSync.Unlock()
-
-		return nil
-	}
+	calls := []string{} // TODO: remove when lifecycle is implemented
 
 	p := setupParser(t, o)
 
@@ -828,25 +784,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 	}
 
 	o := DefaultOptions()
-	calls := []string{}
-	callSync := sync.Mutex{}
-	o.Callback = func(r types.Resource) error {
-		callSync.Lock()
-
-		calls = append(calls, resources.FQRN{
-			Module:   r.Metadata().Module,
-			Resource: r.Metadata().Name,
-			Type:     r.Metadata().Type,
-		}.String())
-
-		callSync.Unlock()
-
-		if r.Metadata().Name == "base" {
-			return fmt.Errorf("container base error")
-		}
-
-		return nil
-	}
+	calls := []string{} // TODO: remove when lifecycle is implemented
 
 	p := setupParser(t, o)
 

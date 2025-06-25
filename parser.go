@@ -49,13 +49,6 @@ type ParserOptions struct {
 	DefaultRegistry string
 	// credentials to use with the registries
 	RegistryCredentials map[string]string
-	// Callback executed when the parser reads a resource stanza, callbacks are
-	// executed based on a directed acyclic graph. If resource 'a' references
-	// a property defined in resource 'b', i.e 'resource.a.myproperty' then the
-	// callback for resource 'b' will be executed before resource 'a'. This allows
-	// you to set the dependent properties of resource 'b' before resource 'a'
-	// consumes them.
-	Callback WalkCallback
 
 	// PrimativesOnly will parse a structure including modules:
 	// * registered types for the resources are not loaded, all resources are
@@ -215,16 +208,16 @@ func (p *Parser) RegisterPluginWithPath(pluginPath string) error {
 func (p *Parser) discoverAndLoadPlugins() error {
 	// Expand directories (handle ~ and env vars)
 	expandedDirs := ExpandPluginDirectories(p.options.PluginDirectories)
-	
+
 	// Create plugin discovery instance
 	pd := NewPluginDiscovery(expandedDirs, p.options.PluginNamePattern, p.options.Logger)
-	
+
 	// Discover plugins
 	pluginPaths, err := pd.DiscoverPlugins()
 	if err != nil {
 		return err
 	}
-	
+
 	// Load each discovered plugin
 	var loadErrors []string
 	for _, pluginPath := range pluginPaths {
@@ -240,17 +233,17 @@ func (p *Parser) discoverAndLoadPlugins() error {
 			}
 		}
 	}
-	
+
 	// Report summary
 	successCount := len(pluginPaths) - len(loadErrors)
 	if p.options.Logger != nil {
 		p.options.Logger(fmt.Sprintf("Plugin discovery complete: %d loaded, %d failed", successCount, len(loadErrors)))
 	}
-	
+
 	if len(loadErrors) > 0 && successCount == 0 {
 		return fmt.Errorf("all plugin loads failed: %s", strings.Join(loadErrors, "; "))
 	}
-	
+
 	return nil
 }
 
@@ -1704,32 +1697,8 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 func (p *Parser) process(c *Config) error {
 	ce := errors.NewConfigError()
 
-	// variables are not added to the dag so we need to process these
-	// separately
-	vars, err := c.FindResourcesByType(resources.TypeVariable)
-	if err == nil {
-		for _, v := range vars {
-			if p.options.Callback != nil {
-				if err := p.options.Callback(v); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
 	// walk the dag and process resources
-	errs := c.walk(createCallback(
-		c,
-		func(r types.Resource) error {
-			if p.options.Callback != nil {
-				if err := p.options.Callback(r); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		},
-	), false)
+	errs := c.walk(walkCallback(c), false)
 
 	for _, e := range errs {
 		ce.AppendError(e)

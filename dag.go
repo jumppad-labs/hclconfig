@@ -7,8 +7,8 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 
-	"github.com/jumppad-labs/hclconfig/internal/convert"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/internal/convert"
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/silas/dag"
@@ -138,11 +138,10 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	return graph, nil
 }
 
-// createCallback creates the internal callback that is called when a node in the
-// dag is visited. This callback is responsible for processing the resource, setting
-// any linked values and calling the user defined callback so that external work
-// can be performed
-func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Diagnostics) {
+// walkCallback creates the internal callback that is called when a node in the
+// dag is visited. This callback is responsible for processing the resource and setting
+// any linked values
+func walkCallback(c *Config) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		r, ok := v.(types.Resource)
@@ -319,26 +318,10 @@ func createCallback(c *Config, wf WalkCallback) func(v dag.Vertex) (diags dag.Di
 			}
 		}
 
-		// if the config implements the processable interface call the resource process method
-		// and the resource is not disabled
-		//
 		// if disabled was set through interpolation, the value has only been set here
 		// we need to handle an additional check
 		if !r.GetDisabled() {
-			// call the callbacks
-			if wf != nil {
-				err := wf(r)
-				if err != nil {
-					pe := &errors.ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
-					pe.Message = fmt.Sprintf(`unable to create resource "%s": %s`, r.Metadata().ID, err)
-					pe.Level = errors.ParserErrorLevelError
-
-					return diags.Append(pe)
-				}
-			}
+			// TODO: call the plugin lifecycle methods when implemented
 		}
 
 		return nil

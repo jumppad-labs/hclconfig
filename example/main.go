@@ -17,13 +17,6 @@ func main() {
 
 	o := hclconfig.DefaultOptions()
 
-	// set the callback that will be executed when a resource has been created
-	// this function can be used to execute any external work required for the
-	// resource.
-	o.Callback = func(r types.Resource) error {
-		fmt.Printf("  resource '%s' named '%s' has been parsed from the file: %s\n", r.Metadata().Type, r.Metadata().Name, r.Metadata().File)
-		return nil
-	}
 
 	// Configure plugin discovery
 	// By default, plugins are auto-discovered from:
