@@ -72,17 +72,21 @@ func main() {
 	printConfig(c)
 	fmt.Println("")
 
-	// serialize the config to a file
-	d, _ := c.ToJSON()
-	err = os.WriteFile("./config.json", d, os.ModePerm)
+	// demonstrate state store usage
+	// create a resource registry with the same plugin hosts as the parser
+	registry := hclconfig.NewResourceRegistry([]plugins.PluginHost{})
+	stateStore := hclconfig.NewFileStateStore("./example-state", registry)
+	
+	// save the parsed config
+	err = stateStore.Save(c)
 	if err != nil {
-		fmt.Println("unable to write config", err)
+		fmt.Println("unable to save config", err)
 	}
 
-	// deserialize the config
-	nc, err := p.UnmarshalJSON(d)
+	// load the config from state
+	nc, err := stateStore.Load()
 	if err != nil {
-		fmt.Printf("An error occurred unmarshalling the config: %s\n", err)
+		fmt.Printf("An error occurred loading the config: %s\n", err)
 		os.Exit(1)
 	}
 

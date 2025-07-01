@@ -8,182 +8,330 @@ import (
 	"testing"
 )
 
-func TestPluginDiscovery_DiscoverPlugins(t *testing.T) {
+func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	setup := newTestPluginSetup(t)
-
-	// Create test directory structure
 	validDir := setup.createPluginDir("valid")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-test")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 1 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+	
+	for _, plugin := range plugins {
+		if !filepath.IsAbs(plugin) {
+			t.Errorf("Plugin path is not absolute: %s", plugin)
+		}
+		if _, err := os.Stat(plugin); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin)
+		}
+	}
+}
+
+func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	validDir := setup.createPluginDir("valid")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-one")
+	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-two")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 2 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+	
+	for _, plugin := range plugins {
+		if !filepath.IsAbs(plugin) {
+			t.Errorf("Plugin path is not absolute: %s", plugin)
+		}
+		if _, err := os.Stat(plugin); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin)
+		}
+	}
+}
+
+func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
+	setup := newTestPluginSetup(t)
 	invalidDir := setup.createPluginDir("invalid")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, invalidDir, "not-a-plugin")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 0 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+}
+
+func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	invalidDir := setup.createPluginDir("invalid")
+	
+	setup.createNonExecutable(invalidDir, "hclconfig-plugin-fake")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 0 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+}
+
+func TestPluginDiscoveryMixedDirectory(t *testing.T) {
+	setup := newTestPluginSetup(t)
 	mixedDir := setup.createPluginDir("mixed")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-good")
+	setup.createNonPlugin(mixedDir, "hclconfig-plugin-bad")
+	setup.createNonExecutable(mixedDir, "hclconfig-plugin-text.txt")
+	setup.copyPlugin(examplePlugin, mixedDir, "wrong-pattern")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{mixedDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	// plugin-good and plugin-bad (both executables)
+	if len(plugins) != 2 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+	
+	for _, plugin := range plugins {
+		if !filepath.IsAbs(plugin) {
+			t.Errorf("Plugin path is not absolute: %s", plugin)
+		}
+		if _, err := os.Stat(plugin); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin)
+		}
+	}
+}
+
+func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
+	setup := newTestPluginSetup(t)
 	emptyDir := setup.createPluginDir("empty")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{emptyDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 0 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+}
+
+func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
+	setup := newTestPluginSetup(t)
 	nonExistentDir := filepath.Join(setup.testDir, "non-existent")
 
-	// Build the example plugin once
-	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
-
-	// Test cases
-	tests := []struct {
-		name        string
-		setupFunc   func()
-		dirs        []string
-		pattern     string
-		wantPlugins int
-		wantErr     bool
-	}{
-		{
-			name: "single valid plugin",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-test")
-			},
-			dirs:        []string{validDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 1,
-			wantErr:     false,
-		},
-		{
-			name: "multiple valid plugins",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-one")
-				setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-two")
-			},
-			dirs:        []string{validDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 2,
-			wantErr:     false,
-		},
-		{
-			name: "plugin not matching pattern",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, invalidDir, "not-a-plugin")
-			},
-			dirs:        []string{invalidDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 0,
-			wantErr:     false,
-		},
-		{
-			name: "non-executable file",
-			setupFunc: func() {
-				setup.createNonExecutable(invalidDir, "hclconfig-plugin-fake")
-			},
-			dirs:        []string{invalidDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 0,
-			wantErr:     false,
-		},
-		{
-			name: "mixed directory",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-good")
-				setup.createNonPlugin(mixedDir, "hclconfig-plugin-bad")
-				setup.createNonExecutable(mixedDir, "hclconfig-plugin-text.txt")
-				setup.copyPlugin(examplePlugin, mixedDir, "wrong-pattern")
-			},
-			dirs:        []string{mixedDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 2, // plugin-good and plugin-bad (both executables)
-			wantErr:     false,
-		},
-		{
-			name:        "empty directory",
-			setupFunc:   func() {},
-			dirs:        []string{emptyDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 0,
-			wantErr:     false,
-		},
-		{
-			name:        "non-existent directory",
-			setupFunc:   func() {},
-			dirs:        []string{nonExistentDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 0,
-			wantErr:     false,
-		},
-		{
-			name: "multiple directories",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-dir1")
-				setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-dir2")
-			},
-			dirs:        []string{validDir, mixedDir, emptyDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 2,
-			wantErr:     false,
-		},
-		{
-			name: "custom pattern",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, validDir, "my-custom-plugin-test")
-				setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-ignored")
-			},
-			dirs:        []string{validDir},
-			pattern:     "my-custom-plugin-*",
-			wantPlugins: 1,
-			wantErr:     false,
-		},
-		{
-			name: "duplicate directories",
-			setupFunc: func() {
-				setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-unique")
-			},
-			dirs:        []string{validDir, validDir, validDir},
-			pattern:     "hclconfig-plugin-*",
-			wantPlugins: 1, // Should deduplicate
-			wantErr:     false,
-		},
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
 	}
+	
+	pd := NewPluginDiscovery([]string{nonExistentDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 0 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Clean up directories before each test
-			os.RemoveAll(validDir)
-			os.RemoveAll(invalidDir)
-			os.RemoveAll(mixedDir)
-			os.RemoveAll(emptyDir)
-			
-			setup.createPluginDir("valid")
-			setup.createPluginDir("invalid")
-			setup.createPluginDir("mixed")
-			setup.createPluginDir("empty")
+func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	validDir := setup.createPluginDir("valid")
+	mixedDir := setup.createPluginDir("mixed")
+	emptyDir := setup.createPluginDir("empty")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-dir1")
+	setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-dir2")
 
-			// Run setup
-			tt.setupFunc()
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{validDir, mixedDir, emptyDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 2 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+	
+	for _, plugin := range plugins {
+		if !filepath.IsAbs(plugin) {
+			t.Errorf("Plugin path is not absolute: %s", plugin)
+		}
+		if _, err := os.Stat(plugin); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin)
+		}
+	}
+}
 
-			// Create discovery instance
-			var logs []string
-			logger := func(msg string) {
-				logs = append(logs, msg)
-			}
-			
-			pd := NewPluginDiscovery(tt.dirs, tt.pattern, logger)
-			
-			// Discover plugins
-			plugins, err := pd.DiscoverPlugins()
-			
-			// Check error
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DiscoverPlugins() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			
-			// Check plugin count
-			if len(plugins) != tt.wantPlugins {
-				t.Errorf("DiscoverPlugins() found %d plugins, want %d", len(plugins), tt.wantPlugins)
-				t.Logf("Found plugins: %v", plugins)
-				t.Logf("Logs: %v", logs)
-			}
-			
-			// Verify all returned paths exist and are absolute
-			for _, plugin := range plugins {
-				if !filepath.IsAbs(plugin) {
-					t.Errorf("Plugin path is not absolute: %s", plugin)
-				}
-				if _, err := os.Stat(plugin); err != nil {
-					t.Errorf("Plugin file does not exist: %s", plugin)
-				}
-			}
-		})
+func TestPluginDiscoveryCustomPattern(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	validDir := setup.createPluginDir("valid")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, validDir, "my-custom-plugin-test")
+	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-ignored")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{validDir}, "my-custom-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	if len(plugins) != 1 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+	
+	for _, plugin := range plugins {
+		if !filepath.IsAbs(plugin) {
+			t.Errorf("Plugin path is not absolute: %s", plugin)
+		}
+		if _, err := os.Stat(plugin); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin)
+		}
+	}
+}
+
+func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	validDir := setup.createPluginDir("valid")
+	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
+	
+	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-unique")
+
+	var logs []string
+	logger := func(msg string) {
+		logs = append(logs, msg)
+	}
+	
+	pd := NewPluginDiscovery([]string{validDir, validDir, validDir}, "hclconfig-plugin-*", logger)
+	plugins, err := pd.DiscoverPlugins()
+	
+	if err != nil {
+		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
+		return
+	}
+	
+	// Should deduplicate
+	if len(plugins) != 1 {
+		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
+		t.Logf("Found plugins: %v", plugins)
+		t.Logf("Logs: %v", logs)
+	}
+	
+	for _, plugin := range plugins {
+		if !filepath.IsAbs(plugin) {
+			t.Errorf("Plugin path is not absolute: %s", plugin)
+		}
+		if _, err := os.Stat(plugin); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin)
+		}
 	}
 }
 
@@ -223,7 +371,7 @@ func TestPluginDiscovery_WindowsExecutables(t *testing.T) {
 	}
 }
 
-func TestExpandPluginDirectories(t *testing.T) {
+func TestExpandPluginDirectoriesExpandHomeDirectory(t *testing.T) {
 	// Save original env
 	originalHome := os.Getenv("HOME")
 	originalTestVar := os.Getenv("TEST_PLUGIN_DIR")
@@ -236,51 +384,120 @@ func TestExpandPluginDirectories(t *testing.T) {
 	os.Setenv("TEST_PLUGIN_DIR", "/test/plugins")
 	homeDir, _ := os.UserHomeDir()
 
-	tests := []struct {
-		name     string
-		input    []string
-		expected []string
-	}{
-		{
-			name:     "expand home directory",
-			input:    []string{"~/plugins", "~/.config/plugins"},
-			expected: []string{filepath.Join(homeDir, "plugins"), filepath.Join(homeDir, ".config/plugins")},
-		},
-		{
-			name:     "expand environment variables",
-			input:    []string{"$TEST_PLUGIN_DIR", "${TEST_PLUGIN_DIR}/sub"},
-			expected: []string{"/test/plugins", "/test/plugins/sub"},
-		},
-		{
-			name:     "no expansion needed",
-			input:    []string{"/absolute/path", "./relative/path"},
-			expected: []string{"/absolute/path", "./relative/path"},
-		},
-		{
-			name:     "mixed paths",
-			input:    []string{"~/plugins", "$TEST_PLUGIN_DIR", "/absolute"},
-			expected: []string{filepath.Join(homeDir, "plugins"), "/test/plugins", "/absolute"},
-		},
+	input := []string{"~/plugins", "~/.config/plugins"}
+	expected := []string{filepath.Join(homeDir, "plugins"), filepath.Join(homeDir, ".config/plugins")}
+	
+	result := ExpandPluginDirectories(input)
+	
+	if len(result) != len(expected) {
+		t.Fatalf("Expected %d paths, got %d", len(expected), len(result))
 	}
+	
+	for i, path := range result {
+		// Normalize paths for comparison
+		expectedPath := filepath.Clean(expected[i])
+		got := filepath.Clean(path)
+		
+		if got != expectedPath {
+			t.Errorf("Path %d: expected %s, got %s", i, expectedPath, got)
+		}
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ExpandPluginDirectories(tt.input)
-			
-			if len(result) != len(tt.expected) {
-				t.Fatalf("Expected %d paths, got %d", len(tt.expected), len(result))
-			}
-			
-			for i, path := range result {
-				// Normalize paths for comparison
-				expected := filepath.Clean(tt.expected[i])
-				got := filepath.Clean(path)
-				
-				if got != expected {
-					t.Errorf("Path %d: expected %s, got %s", i, expected, got)
-				}
-			}
-		})
+func TestExpandPluginDirectoriesExpandEnvironmentVariables(t *testing.T) {
+	// Save original env
+	originalHome := os.Getenv("HOME")
+	originalTestVar := os.Getenv("TEST_PLUGIN_DIR")
+	defer func() {
+		os.Setenv("HOME", originalHome)
+		os.Setenv("TEST_PLUGIN_DIR", originalTestVar)
+	}()
+
+	// Set test environment
+	os.Setenv("TEST_PLUGIN_DIR", "/test/plugins")
+
+	input := []string{"$TEST_PLUGIN_DIR", "${TEST_PLUGIN_DIR}/sub"}
+	expected := []string{"/test/plugins", "/test/plugins/sub"}
+	
+	result := ExpandPluginDirectories(input)
+	
+	if len(result) != len(expected) {
+		t.Fatalf("Expected %d paths, got %d", len(expected), len(result))
+	}
+	
+	for i, path := range result {
+		// Normalize paths for comparison
+		expectedPath := filepath.Clean(expected[i])
+		got := filepath.Clean(path)
+		
+		if got != expectedPath {
+			t.Errorf("Path %d: expected %s, got %s", i, expectedPath, got)
+		}
+	}
+}
+
+func TestExpandPluginDirectoriesNoExpansionNeeded(t *testing.T) {
+	// Save original env
+	originalHome := os.Getenv("HOME")
+	originalTestVar := os.Getenv("TEST_PLUGIN_DIR")
+	defer func() {
+		os.Setenv("HOME", originalHome)
+		os.Setenv("TEST_PLUGIN_DIR", originalTestVar)
+	}()
+
+	// Set test environment
+	os.Setenv("TEST_PLUGIN_DIR", "/test/plugins")
+
+	input := []string{"/absolute/path", "./relative/path"}
+	expected := []string{"/absolute/path", "./relative/path"}
+	
+	result := ExpandPluginDirectories(input)
+	
+	if len(result) != len(expected) {
+		t.Fatalf("Expected %d paths, got %d", len(expected), len(result))
+	}
+	
+	for i, path := range result {
+		// Normalize paths for comparison
+		expectedPath := filepath.Clean(expected[i])
+		got := filepath.Clean(path)
+		
+		if got != expectedPath {
+			t.Errorf("Path %d: expected %s, got %s", i, expectedPath, got)
+		}
+	}
+}
+
+func TestExpandPluginDirectoriesMixedPaths(t *testing.T) {
+	// Save original env
+	originalHome := os.Getenv("HOME")
+	originalTestVar := os.Getenv("TEST_PLUGIN_DIR")
+	defer func() {
+		os.Setenv("HOME", originalHome)
+		os.Setenv("TEST_PLUGIN_DIR", originalTestVar)
+	}()
+
+	// Set test environment
+	os.Setenv("TEST_PLUGIN_DIR", "/test/plugins")
+	homeDir, _ := os.UserHomeDir()
+
+	input := []string{"~/plugins", "$TEST_PLUGIN_DIR", "/absolute"}
+	expected := []string{filepath.Join(homeDir, "plugins"), "/test/plugins", "/absolute"}
+	
+	result := ExpandPluginDirectories(input)
+	
+	if len(result) != len(expected) {
+		t.Fatalf("Expected %d paths, got %d", len(expected), len(result))
+	}
+	
+	for i, path := range result {
+		// Normalize paths for comparison
+		expectedPath := filepath.Clean(expected[i])
+		got := filepath.Clean(path)
+		
+		if got != expectedPath {
+			t.Errorf("Path %d: expected %s, got %s", i, expectedPath, got)
+		}
 	}
 }
 

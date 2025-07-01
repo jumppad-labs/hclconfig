@@ -1,7 +1,6 @@
 package hclconfig
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -65,6 +64,10 @@ type ParserOptions struct {
 	PluginNamePattern string
 	// Logger function for plugin discovery logging (optional)
 	Logger func(string)
+
+	// StateStore is used to persist configuration state between runs.
+	// If nil, a default FileStateStore will be created.
+	StateStore StateStore
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -122,6 +125,7 @@ type Parser struct {
 	options             ParserOptions
 	registeredFunctions map[string]function.Function
 	pluginHosts         []plugins.PluginHost
+	stateStore          StateStore
 }
 
 // NewParser creates a new parser with the given options
@@ -136,6 +140,16 @@ func NewParser(options *ParserOptions) *Parser {
 		options:             *o,
 		registeredFunctions: map[string]function.Function{},
 		pluginHosts:         []plugins.PluginHost{},
+	}
+
+	// Initialize state store
+	if o.StateStore != nil {
+		p.stateStore = o.StateStore
+	} else {
+		// Create resource registry for the state store
+		registry := NewResourceRegistry(p.pluginHosts)
+		// Create default file-based state store
+		p.stateStore = NewFileStateStore("", registry)
 	}
 
 	// Auto-discover and load plugins if enabled
@@ -246,6 +260,7 @@ func (p *Parser) discoverAndLoadPlugins() error {
 
 	return nil
 }
+
 
 // createResourceFromPlugins attempts to create a resource using registered plugins
 // Returns the resource if found, or an error if no plugin handles this resource type
@@ -384,50 +399,6 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	return c, p.process(c)
 }
 
-// UnmarshalJSON parses a JSON string from a serialized Config and returns a
-// valid Config.
-func (p *Parser) UnmarshalJSON(d []byte) (*Config, error) {
-	conf := NewConfig()
-
-	var objMap map[string]*json.RawMessage
-	err := json.Unmarshal(d, &objMap)
-	if err != nil {
-		return nil, err
-	}
-
-	var rawMessagesForResources []*json.RawMessage
-	err = json.Unmarshal(*objMap["resources"], &rawMessagesForResources)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, m := range rawMessagesForResources {
-		mm := map[string]any{}
-		err := json.Unmarshal(*m, &mm)
-		if err != nil {
-			return nil, err
-		}
-
-		meta := mm["meta"].(map[string]any)
-
-		// Try plugins first, then built-in resources
-		r, err := p.createResourceFromPlugins(meta["type"].(string), meta["name"].(string))
-		if err != nil {
-			// Fallback to built-in resources
-			r, err = p.createBuiltinResource(meta["type"].(string), meta["name"].(string))
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		resData, _ := json.Marshal(mm)
-
-		json.Unmarshal(resData, r)
-		conf.addResource(r, nil, nil)
-	}
-
-	return conf, nil
-}
 
 // internal method
 func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) []error {

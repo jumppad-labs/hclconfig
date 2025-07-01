@@ -52,7 +52,7 @@ func (s *testPluginSetup) buildExamplePlugin(outputName string) string {
 	// Build the example plugin
 	cmd := exec.Command("go", "build", "-o", outputPath, "./plugins/example")
 	cmd.Dir = getRootDir()
-	
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		s.t.Fatalf("Failed to build example plugin: %v\nOutput: %s", err, output)
@@ -100,7 +100,7 @@ func (s *testPluginSetup) copyPlugin(src, dstDir, dstName string) string {
 // createNonPlugin creates a non-plugin executable file
 func (s *testPluginSetup) createNonPlugin(dir, name string) string {
 	path := filepath.Join(dir, name)
-	
+
 	var content string
 	if runtime.GOOS == "windows" {
 		path += ".bat"
@@ -131,29 +131,4 @@ func (s *testPluginSetup) createNonExecutable(dir, name string) string {
 // hasExeExtension checks if a filename has .exe extension
 func hasExeExtension(filename string) bool {
 	return len(filename) > 4 && filename[len(filename)-4:] == ".exe"
-}
-
-// captureLogOutput captures log output during a function execution
-func captureLogOutput(f func()) []string {
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
-	}
-
-	// Create a parser with our logger
-	opts := DefaultOptions()
-	opts.Logger = logger
-	opts.AutoDiscoverPlugins = false // We'll trigger discovery manually
-
-	p := NewParser(opts)
-	
-	// Store the logger in the parser for use by the function
-	oldLogger := p.options.Logger
-	p.options.Logger = logger
-	
-	f()
-	
-	p.options.Logger = oldLogger
-	
-	return logs
 }

@@ -24,7 +24,6 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	mod1, _ := typs.CreateResource(resources.TypeModule, "module1")
 	mod1.AddDependency("resource.network.cloud")
 
-
 	var2, _ := typs.CreateResource(resources.TypeVariable, "var2")
 	var2.Metadata().Module = "module1"
 
@@ -58,7 +57,6 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 
 	out2, _ := typs.CreateResource(resources.TypeOutput, "out")
 	out2.SetDependencies([]string{"resource.network.cloud.id", "resource.container.test_dev"})
-
 
 	c := NewConfig()
 	err := c.addResource(net1, nil, nil)
@@ -263,15 +261,16 @@ func TestRemoveResourceNotFoundReturnsError(t *testing.T) {
 	require.Len(t, c.Resources, 11)
 }
 
-func TestToJSONSerializesJSON(t *testing.T) {
-	c, _ := testSetupConfig(t)
-
-	d, err := c.ToJSON()
-	require.NoError(t, err)
-	require.Greater(t, len(d), 0)
-
-	require.Contains(t, string(d), `"name": "test_dev"`)
-}
+// TestToJSONSerializesJSON - functionality moved to StateStore tests
+// func TestToJSONSerializesJSON(t *testing.T) {
+//	c, _ := testSetupConfig(t)
+//
+//	d, err := c.ToJSON()
+//	require.NoError(t, err)
+//	require.Greater(t, len(d), 0)
+//
+//	require.Contains(t, string(d), `"name": "test_dev"`)
+//}
 
 func TestAppendResourcesMerges(t *testing.T) {
 	typs := resources.DefaultResources()
@@ -401,15 +400,3 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 	// be one callback network cloud
 	require.Equal(t, 1, len(calls))
 }
-
-func copyConfig(t *testing.T, c *Config) *Config {
-	d, _ := c.ToJSON()
-	p := setupParser(t)
-
-	new, err := p.UnmarshalJSON(d)
-	require.NoError(t, err)
-	require.NotNil(t, new)
-
-	return new
-}
-

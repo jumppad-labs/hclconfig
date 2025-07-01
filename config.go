@@ -1,8 +1,6 @@
 package hclconfig
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -231,21 +229,6 @@ func (c *Config) AppendResource(r types.Resource) error {
 	return c.addResource(r, nil, nil)
 }
 
-// ToJSON converts the config to a serializable json string
-// to unmarshal the output of this method back into a config you can use
-// the Parser.UnmarshalJSON method
-func (c *Config) ToJSON() ([]byte, error) {
-	buf := bytes.NewBuffer([]byte{})
-	enc := json.NewEncoder(buf)
-
-	enc.SetIndent("", " ")
-	err := enc.Encode(c)
-	if err != nil {
-		return nil, fmt.Errorf("unable to encode config: %s", err)
-	}
-
-	return buf.Bytes(), nil
-}
 
 
 func (c *Config) RemoveResource(rf types.Resource) error {
