@@ -36,7 +36,22 @@ This document tracks the implementation of resource state tracking for the HCLCo
   - Concurrent access testing
   - Edge case handling
 
-### Phase 3: Resource State Management
+### Phase 3: Resource State Management ✅
+- [x] **Add state loading to parser** - `parser.go`
+  - Modified process() method to accept previousState parameter
+  - Added state loading and saving with defer statements in ParseFile and ParseDirectory
+  - Ensured state persistence even when errors occur for resuming failed operations
+
+- [x] **Implement dependency validation with context-aware errors** - `parser.go`
+  - Created validateResourceDependencies function that checks for missing dependencies
+  - Added context-aware error messages that differentiate between "resource was removed" vs "resource never existed"
+  - Integrated dependency validation into ParseFile and ParseDirectory methods
+
+- [x] **Clean up obsolete Parse validation infrastructure**
+  - Removed ParseError resource type from test plugins
+  - Deleted obsolete test functions and test fixtures
+  - Fixed require.IsType parameter order issues in tests
+
 - [ ] **Add state tracking to resources**
   - Extend resource metadata or create separate state structure
   - Track resource fingerprints for change detection
