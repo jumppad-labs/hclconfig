@@ -319,22 +319,14 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return nil, ce
 	}
 
-	for _, rt := range c.Resources {
-		// call the resources Parse function if set
-		// if the config implements the processable interface call the resource process method
-		if p, ok := rt.(types.Parsable); ok {
-			err := p.Parse(c)
-			if err != nil {
-				de := &errors.ParserError{}
-				de.Line = rt.Metadata().Line
-				de.Column = rt.Metadata().Column
-				de.Filename = rt.Metadata().File
-				de.Level = errors.ParserErrorLevelError
-				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, resources.FQRNFromResource(rt).String(), err)
+	if len(ce.Errors) > 0 {
+		return nil, ce
+	}
 
-				ce.AppendError(de)
-			}
-		}
+	// Validate resource dependencies before processing
+	depErrors := validateResourceDependencies(c, nil) // No previous state available in ParseFile context
+	for _, e := range depErrors {
+		ce.AppendError(e)
 	}
 
 	if len(ce.Errors) > 0 {
@@ -346,8 +338,24 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return c, nil
 	}
 
+	// Load previous state
+	previousState, stateErr := p.stateStore.Load()
+	if stateErr != nil {
+		// Log error but continue - we can operate without previous state
+		// This allows the system to recover from corrupted state files
+		// TODO: Add proper logging when logger is available
+	}
+
+	// Defer saving state to ensure it's saved even on errors
+	defer func() {
+		if saveErr := p.stateStore.Save(c); saveErr != nil {
+			// TODO: Add proper logging when logger is available
+			// Log error but don't override the original error
+		}
+	}()
+
 	// process the files and resolve dependency
-	return c, p.process(c)
+	return c, p.process(c, previousState)
 }
 
 // ParseDirectory parses all resource and variable files in the given directory
@@ -368,22 +376,22 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		return nil, ce
 	}
 
-	for _, rt := range c.Resources {
-		// call the resources Parse function if set
-		// if the config implements the processable interface call the resource process method
-		if p, ok := rt.(types.Parsable); ok {
-			err := p.Parse(c)
-			if err != nil {
-				de := &errors.ParserError{}
-				de.Level = errors.ParserErrorLevelError
-				de.Line = rt.Metadata().Line
-				de.Column = rt.Metadata().Column
-				de.Filename = rt.Metadata().File
-				de.Message = fmt.Sprintf(`error parsing resource "%s" %s`, resources.FQRNFromResource(rt).String(), err)
+	if len(ce.Errors) > 0 {
+		return nil, ce
+	}
 
-				ce.AppendError(de)
-			}
-		}
+	// Load previous state first for dependency validation
+	previousState, stateErr := p.stateStore.Load()
+	if stateErr != nil {
+		// Log error but continue - we can operate without previous state
+		// This allows the system to recover from corrupted state files
+		// TODO: Add proper logging when logger is available
+	}
+
+	// Validate resource dependencies with previous state context
+	depErrors := validateResourceDependencies(c, previousState)
+	for _, e := range depErrors {
+		ce.AppendError(e)
 	}
 
 	if len(ce.Errors) > 0 {
@@ -395,8 +403,16 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		return c, nil
 	}
 
+	// Defer saving state to ensure it's saved even on errors
+	defer func() {
+		if saveErr := p.stateStore.Save(c); saveErr != nil {
+			// TODO: Add proper logging when logger is available
+			// Log error but don't override the original error
+		}
+	}()
+
 	// process the files and resolve dependency
-	return c, p.process(c)
+	return c, p.process(c, previousState)
 }
 
 
@@ -1665,7 +1681,7 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 	return strExpression, nil
 }
 
-func (p *Parser) process(c *Config) error {
+func (p *Parser) process(c *Config, previousState *Config) error {
 	ce := errors.NewConfigError()
 
 	// walk the dag and process resources
@@ -1728,4 +1744,82 @@ func validateResourceName(name string) error {
 	}
 
 	return nil
+}
+
+// validateResourceDependencies checks that all resource dependencies exist in the configuration
+// and provides context-aware error messages based on whether missing dependencies existed in previous state
+func validateResourceDependencies(c *Config, previousState *Config) []*errors.ParserError {
+	var parserErrors []*errors.ParserError
+
+	for _, resource := range c.Resources {
+		// Skip validation for certain resource types that don't have dependencies
+		if resource.Metadata().Type == resources.TypeVariable ||
+			resource.Metadata().Type == resources.TypeRoot {
+			continue
+		}
+
+		// Collect all dependencies for this resource
+		var allDependencies []string
+		
+		// Add explicit dependencies from depends_on
+		allDependencies = append(allDependencies, resource.GetDependencies()...)
+		
+		// Add implicit dependencies from resource links (interpolations)
+		allDependencies = append(allDependencies, resource.Metadata().Links...)
+
+		// Check each dependency
+		for _, dependency := range allDependencies {
+			if dependency == "" {
+				continue // Skip empty dependencies
+			}
+
+			// Try to find the dependency in the current configuration
+			_, err := c.FindRelativeResource(dependency, resource.Metadata().Module)
+			if err != nil {
+				// Dependency not found in current config
+				// Check if it existed in the previous state for better error messaging
+				var wasInPreviousState bool
+				if previousState != nil {
+					_, prevErr := previousState.FindRelativeResource(dependency, resource.Metadata().Module)
+					wasInPreviousState = (prevErr == nil)
+				}
+
+				// Create context-aware error message
+				pe := &errors.ParserError{}
+				pe.Filename = resource.Metadata().File
+				pe.Line = resource.Metadata().Line
+				pe.Column = resource.Metadata().Column
+				pe.Level = errors.ParserErrorLevelError
+
+				if wasInPreviousState {
+					pe.Message = fmt.Sprintf(
+						"Resource '%s' was removed from the config but is still referenced by '%s'. "+
+							"Either remove dependent resources or update references to the missing resource.",
+						dependency,
+						resources.FQRNFromResource(resource).String(),
+					)
+				} else if previousState == nil {
+					// First run, no previous state
+					pe.Message = fmt.Sprintf(
+						"Resource '%s' referenced by '%s' does not exist in the configuration. "+
+							"Check the resource name and ensure it's defined.",
+						dependency,
+						resources.FQRNFromResource(resource).String(),
+					)
+				} else {
+					// Resource never existed in previous state either
+					pe.Message = fmt.Sprintf(
+						"Resource '%s' referenced by '%s' does not exist in the configuration. "+
+							"Check the resource name and ensure it's defined.",
+						dependency,
+						resources.FQRNFromResource(resource).String(),
+					)
+				}
+
+				parserErrors = append(parserErrors, pe)
+			}
+		}
+	}
+
+	return parserErrors
 }

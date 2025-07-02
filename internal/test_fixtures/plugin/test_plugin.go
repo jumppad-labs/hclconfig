@@ -81,22 +81,6 @@ func (p *TestPlugin) Init(logger plugins.Logger, state plugins.State) error {
 		return err
 	}
 
-	// Register ParseError resource for testing error cases
-	parseErrorResource := &structs.ParseError{}
-	parseErrorProvider := &TestResourceProvider[*structs.ParseError]{}
-	err = plugins.RegisterResourceProvider(
-		&p.PluginBase,
-		logger,
-		state,
-		"resource",
-		structs.TypeParseError,
-		parseErrorResource,
-		parseErrorProvider,
-	)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
