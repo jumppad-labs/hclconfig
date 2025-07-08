@@ -1,6 +1,6 @@
 package resources
 
-import "github.com/jumppad-labs/hclconfig/types"
+import "github.com/instruqt/hclconfig/types"
 
 // TypeModule is the resource string for a Module resource
 const TypeRoot = "root"

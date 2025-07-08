@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/errors"
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
+	"github.com/instruqt/hclconfig/errors"
+	"github.com/instruqt/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 )
 

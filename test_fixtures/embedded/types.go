@@ -1,6 +1,6 @@
 package embedded
 
-import "github.com/jumppad-labs/hclconfig/types"
+import "github.com/instruqt/hclconfig/types"
 
 type ContainerBase struct {
 	// embedded type holding name, etc

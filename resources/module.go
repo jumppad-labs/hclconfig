@@ -2,7 +2,7 @@ package resources
 
 import (
 	"github.com/hashicorp/hcl/v2"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig/types"
 )
 
 // TypeModule is the resource string for a Module resource

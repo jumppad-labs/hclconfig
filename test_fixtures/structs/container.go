@@ -1,7 +1,7 @@
 package structs
 
 import (
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 )
 

@@ -3,7 +3,7 @@ package resources
 import (
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 

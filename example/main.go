@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"os"
 
-	"github.com/jumppad-labs/hclconfig"
-	"github.com/jumppad-labs/hclconfig/resources"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig"
+	"github.com/instruqt/hclconfig/resources"
+	"github.com/instruqt/hclconfig/types"
 )
 
 func main() {

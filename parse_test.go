@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/jumppad-labs/hclconfig/errors"
-	"github.com/jumppad-labs/hclconfig/resources"
-	"github.com/jumppad-labs/hclconfig/test_fixtures/embedded"
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig/errors"
+	"github.com/instruqt/hclconfig/resources"
+	"github.com/instruqt/hclconfig/test_fixtures/embedded"
+	"github.com/instruqt/hclconfig/test_fixtures/structs"
+	"github.com/instruqt/hclconfig/types"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -420,7 +420,7 @@ func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
 	require.NotNil(t, c)
 
 	// the remote module should be cached
-	require.DirExists(t, filepath.Join(p.options.ModuleCache, "github.com_jumppad-labs_hclconfig_test_fixtures_single"))
+	require.DirExists(t, filepath.Join(p.options.ModuleCache, "github.com_instruqt_hclconfig_test_fixtures_single"))
 
 	// the local module should not be cached
 	require.NoDirExists(t, filepath.Join(p.options.ModuleCache, "single"))

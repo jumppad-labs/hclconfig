@@ -3,7 +3,7 @@ package structs
 import (
 	"fmt"
 
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig/types"
 )
 
 // TypeParseError defines a resource that always retuns an error when parsing

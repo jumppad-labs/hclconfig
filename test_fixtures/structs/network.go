@@ -1,6 +1,6 @@
 package structs
 
-import "github.com/jumppad-labs/hclconfig/types"
+import "github.com/instruqt/hclconfig/types"
 
 // TypeNetwork is the string resource type for Network resources
 const TypeNetwork = "network"

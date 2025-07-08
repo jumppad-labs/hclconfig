@@ -39,7 +39,7 @@ module "consul_3" {
   // all resources in this module will only be created after all the 
   // resources in 'consul_1' have been created.
   depends_on = ["module.consul_1"]
-  source     = "github.com/jumppad-labs/hclconfig/test_fixtures//single"
+  source     = "github.com/instruqt/hclconfig/test_fixtures//single"
 }
 
 output "object" {

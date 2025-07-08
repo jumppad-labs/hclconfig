@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/test_fixtures/structs"
+	"github.com/instruqt/hclconfig/test_fixtures/structs"
 	"github.com/stretchr/testify/require"
 )
 

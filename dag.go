@@ -12,10 +12,10 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 
-	"github.com/jumppad-labs/hclconfig/convert"
-	"github.com/jumppad-labs/hclconfig/errors"
-	"github.com/jumppad-labs/hclconfig/resources"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/instruqt/hclconfig/convert"
+	"github.com/instruqt/hclconfig/errors"
+	"github.com/instruqt/hclconfig/resources"
+	"github.com/instruqt/hclconfig/types"
 	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
 )

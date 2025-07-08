@@ -1,4 +1,4 @@
-module github.com/jumppad-labs/hclconfig
+module github.com/instruqt/hclconfig
 
 go 1.24.3
 
