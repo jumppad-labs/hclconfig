@@ -499,7 +499,8 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	for _, b := range body.Blocks {
 		// check the resource has a name
-		if len(b.Labels) == 0 {
+		// b.Type != resources.TypeConfig -> has no labels
+		if len(b.Labels) == 0 && b.Type != resources.TypeConfig {
 			de := &errors.ParserError{}
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
@@ -519,6 +520,24 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			if err != nil {
 				return err
 			}
+		case resources.TypeConfig:
+			if len(b.Labels) > 0 {
+				de := &errors.ParserError{}
+				de.Line = b.TypeRange.Start.Line
+				de.Column = b.TypeRange.Start.Column
+				de.Filename = file
+				de.Level = errors.ParserErrorLevelError
+				de.Message = `config blocks should not have labels`
+				return []error{de}
+			}
+			rt, _ := p.registeredTypes.CreateResource(resources.TypeConfig, "config")
+			rt.Metadata().Module = moduleName
+			rt.Metadata().File = file
+			rt.Metadata().Line = b.TypeRange.Start.Line
+			rt.Metadata().Column = b.TypeRange.Start.Column
+			decodeBody(ctx, c, file, b, rt, false)
+			c.addResource(rt, ctx, b.Body)
+			continue
 		case resources.TypeOutput:
 			fallthrough
 		case resources.TypeLocal:
@@ -534,7 +553,7 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
 			de.Level = errors.ParserErrorLevelWarning
-			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
+			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', 'output', and 'config' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
 
 			return []error{de}
 		}

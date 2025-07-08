@@ -10,5 +10,6 @@ func DefaultResources() types.RegisteredTypes {
 		"local":    &Local{},
 		"module":   &Module{},
 		"root":     &Root{},
+		"config":   &Config{},
 	}
 }
