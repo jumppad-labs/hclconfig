@@ -115,8 +115,13 @@ func (p *TestResourceProvider[T]) Refresh(ctx context.Context, resource T) error
 	return nil
 }
 
+// Update is a no-op for testing
+func (p *TestResourceProvider[T]) Update(ctx context.Context, resource T) error {
+	return nil
+}
+
 // Changed always returns false for testing
-func (p *TestResourceProvider[T]) Changed(ctx context.Context, resource T) (bool, error) {
+func (p *TestResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bool, error) {
 	return false, nil
 }
 

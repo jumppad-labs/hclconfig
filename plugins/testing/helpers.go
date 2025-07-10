@@ -134,7 +134,7 @@ func (ops *TestPluginOperations) TestChanged(entityType, entitySubType string, h
 		dataJSON, err := json.Marshal(obj)
 		require.NoError(ops.host.t, err, "Should marshal test data to JSON for object %d", i)
 
-		changed, err := ops.host.Changed(entityType, entitySubType, dataJSON)
+		changed, err := ops.host.Changed(entityType, entitySubType, dataJSON, dataJSON)
 		require.NoError(ops.host.t, err, "Should check for changes without error for object %d", i)
 		require.False(ops.host.t, changed, "Newly created object %d should not be changed", i)
 	}
@@ -174,7 +174,7 @@ func (ops *TestPluginOperations) TestCRUDOperations(entityType, entitySubType st
 	require.NoError(ops.host.t, err, "Should create resource successfully")
 
 	// Test Changed
-	changed, err := ops.host.Changed(entityType, entitySubType, dataJSON)
+	changed, err := ops.host.Changed(entityType, entitySubType, dataJSON, dataJSON)
 	require.NoError(ops.host.t, err, "Should check for changes without error")
 	require.False(ops.host.t, changed, "Newly created resource should not be changed")
 

@@ -554,7 +554,7 @@ func (x *RefreshResponse) GetError() string {
 	return ""
 }
 
-type ChangedRequest struct {
+type UpdateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EntityType    string                 `protobuf:"bytes,1,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
 	EntitySubType string                 `protobuf:"bytes,2,opt,name=entity_sub_type,json=entitySubType,proto3" json:"entity_sub_type,omitempty"`
@@ -563,9 +563,114 @@ type ChangedRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *UpdateRequest) Reset() {
+	*x = UpdateRequest{}
+	mi := &file_plugins_plugin_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateRequest) ProtoMessage() {}
+
+func (x *UpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_plugins_plugin_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateRequest.ProtoReflect.Descriptor instead.
+func (*UpdateRequest) Descriptor() ([]byte, []int) {
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UpdateRequest) GetEntityType() string {
+	if x != nil {
+		return x.EntityType
+	}
+	return ""
+}
+
+func (x *UpdateRequest) GetEntitySubType() string {
+	if x != nil {
+		return x.EntitySubType
+	}
+	return ""
+}
+
+func (x *UpdateRequest) GetEntityData() []byte {
+	if x != nil {
+		return x.EntityData
+	}
+	return nil
+}
+
+type UpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateResponse) Reset() {
+	*x = UpdateResponse{}
+	mi := &file_plugins_plugin_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateResponse) ProtoMessage() {}
+
+func (x *UpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_plugins_plugin_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateResponse.ProtoReflect.Descriptor instead.
+func (*UpdateResponse) Descriptor() ([]byte, []int) {
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type ChangedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EntityType    string                 `protobuf:"bytes,1,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
+	EntitySubType string                 `protobuf:"bytes,2,opt,name=entity_sub_type,json=entitySubType,proto3" json:"entity_sub_type,omitempty"`
+	OldEntityData []byte                 `protobuf:"bytes,3,opt,name=old_entity_data,json=oldEntityData,proto3" json:"old_entity_data,omitempty"`
+	NewEntityData []byte                 `protobuf:"bytes,4,opt,name=new_entity_data,json=newEntityData,proto3" json:"new_entity_data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
 func (x *ChangedRequest) Reset() {
 	*x = ChangedRequest{}
-	mi := &file_plugins_plugin_proto_msgTypes[11]
+	mi := &file_plugins_plugin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +682,7 @@ func (x *ChangedRequest) String() string {
 func (*ChangedRequest) ProtoMessage() {}
 
 func (x *ChangedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[11]
+	mi := &file_plugins_plugin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +695,7 @@ func (x *ChangedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangedRequest.ProtoReflect.Descriptor instead.
 func (*ChangedRequest) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{11}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ChangedRequest) GetEntityType() string {
@@ -607,9 +712,16 @@ func (x *ChangedRequest) GetEntitySubType() string {
 	return ""
 }
 
-func (x *ChangedRequest) GetEntityData() []byte {
+func (x *ChangedRequest) GetOldEntityData() []byte {
 	if x != nil {
-		return x.EntityData
+		return x.OldEntityData
+	}
+	return nil
+}
+
+func (x *ChangedRequest) GetNewEntityData() []byte {
+	if x != nil {
+		return x.NewEntityData
 	}
 	return nil
 }
@@ -624,7 +736,7 @@ type ChangedResponse struct {
 
 func (x *ChangedResponse) Reset() {
 	*x = ChangedResponse{}
-	mi := &file_plugins_plugin_proto_msgTypes[12]
+	mi := &file_plugins_plugin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -636,7 +748,7 @@ func (x *ChangedResponse) String() string {
 func (*ChangedResponse) ProtoMessage() {}
 
 func (x *ChangedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[12]
+	mi := &file_plugins_plugin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -649,7 +761,7 @@ func (x *ChangedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangedResponse.ProtoReflect.Descriptor instead.
 func (*ChangedResponse) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{12}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ChangedResponse) GetChanged() bool {
@@ -677,7 +789,7 @@ type LogRequest struct {
 
 func (x *LogRequest) Reset() {
 	*x = LogRequest{}
-	mi := &file_plugins_plugin_proto_msgTypes[13]
+	mi := &file_plugins_plugin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -689,7 +801,7 @@ func (x *LogRequest) String() string {
 func (*LogRequest) ProtoMessage() {}
 
 func (x *LogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[13]
+	mi := &file_plugins_plugin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -702,7 +814,7 @@ func (x *LogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
 func (*LogRequest) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{13}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LogRequest) GetMessage() string {
@@ -727,7 +839,7 @@ type LogResponse struct {
 
 func (x *LogResponse) Reset() {
 	*x = LogResponse{}
-	mi := &file_plugins_plugin_proto_msgTypes[14]
+	mi := &file_plugins_plugin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -739,7 +851,7 @@ func (x *LogResponse) String() string {
 func (*LogResponse) ProtoMessage() {}
 
 func (x *LogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[14]
+	mi := &file_plugins_plugin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -752,7 +864,7 @@ func (x *LogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogResponse.ProtoReflect.Descriptor instead.
 func (*LogResponse) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{14}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{16}
 }
 
 // State service messages
@@ -765,7 +877,7 @@ type StateGetRequest struct {
 
 func (x *StateGetRequest) Reset() {
 	*x = StateGetRequest{}
-	mi := &file_plugins_plugin_proto_msgTypes[15]
+	mi := &file_plugins_plugin_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -777,7 +889,7 @@ func (x *StateGetRequest) String() string {
 func (*StateGetRequest) ProtoMessage() {}
 
 func (x *StateGetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[15]
+	mi := &file_plugins_plugin_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -790,7 +902,7 @@ func (x *StateGetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateGetRequest.ProtoReflect.Descriptor instead.
 func (*StateGetRequest) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{15}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *StateGetRequest) GetKey() string {
@@ -810,7 +922,7 @@ type StateGetResponse struct {
 
 func (x *StateGetResponse) Reset() {
 	*x = StateGetResponse{}
-	mi := &file_plugins_plugin_proto_msgTypes[16]
+	mi := &file_plugins_plugin_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -822,7 +934,7 @@ func (x *StateGetResponse) String() string {
 func (*StateGetResponse) ProtoMessage() {}
 
 func (x *StateGetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[16]
+	mi := &file_plugins_plugin_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -835,7 +947,7 @@ func (x *StateGetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateGetResponse.ProtoReflect.Descriptor instead.
 func (*StateGetResponse) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{16}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *StateGetResponse) GetResourceData() []byte {
@@ -861,7 +973,7 @@ type StateFindRequest struct {
 
 func (x *StateFindRequest) Reset() {
 	*x = StateFindRequest{}
-	mi := &file_plugins_plugin_proto_msgTypes[17]
+	mi := &file_plugins_plugin_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +985,7 @@ func (x *StateFindRequest) String() string {
 func (*StateFindRequest) ProtoMessage() {}
 
 func (x *StateFindRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[17]
+	mi := &file_plugins_plugin_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +998,7 @@ func (x *StateFindRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateFindRequest.ProtoReflect.Descriptor instead.
 func (*StateFindRequest) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{17}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *StateFindRequest) GetPattern() string {
@@ -906,7 +1018,7 @@ type StateFindResponse struct {
 
 func (x *StateFindResponse) Reset() {
 	*x = StateFindResponse{}
-	mi := &file_plugins_plugin_proto_msgTypes[18]
+	mi := &file_plugins_plugin_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -918,7 +1030,7 @@ func (x *StateFindResponse) String() string {
 func (*StateFindResponse) ProtoMessage() {}
 
 func (x *StateFindResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugins_plugin_proto_msgTypes[18]
+	mi := &file_plugins_plugin_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -931,7 +1043,7 @@ func (x *StateFindResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateFindResponse.ProtoReflect.Descriptor instead.
 func (*StateFindResponse) Descriptor() ([]byte, []int) {
-	return file_plugins_plugin_proto_rawDescGZIP(), []int{18}
+	return file_plugins_plugin_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *StateFindResponse) GetResourcesData() [][]byte {
@@ -986,13 +1098,21 @@ const file_plugins_plugin_proto_rawDesc = "" +
 	"\x05error\x18\x01 \x01(\tR\x05error\"\x10\n" +
 	"\x0eRefreshRequest\"'\n" +
 	"\x0fRefreshResponse\x12\x14\n" +
-	"\x05error\x18\x01 \x01(\tR\x05error\"z\n" +
-	"\x0eChangedRequest\x12\x1f\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\"y\n" +
+	"\rUpdateRequest\x12\x1f\n" +
 	"\ventity_type\x18\x01 \x01(\tR\n" +
 	"entityType\x12&\n" +
 	"\x0fentity_sub_type\x18\x02 \x01(\tR\rentitySubType\x12\x1f\n" +
 	"\ventity_data\x18\x03 \x01(\fR\n" +
-	"entityData\"A\n" +
+	"entityData\"&\n" +
+	"\x0eUpdateResponse\x12\x14\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\"\xa9\x01\n" +
+	"\x0eChangedRequest\x12\x1f\n" +
+	"\ventity_type\x18\x01 \x01(\tR\n" +
+	"entityType\x12&\n" +
+	"\x0fentity_sub_type\x18\x02 \x01(\tR\rentitySubType\x12&\n" +
+	"\x0fold_entity_data\x18\x03 \x01(\fR\roldEntityData\x12&\n" +
+	"\x0fnew_entity_data\x18\x04 \x01(\fR\rnewEntityData\"A\n" +
 	"\x0fChangedResponse\x12\x18\n" +
 	"\achanged\x18\x01 \x01(\bR\achanged\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\":\n" +
@@ -1010,13 +1130,14 @@ const file_plugins_plugin_proto_rawDesc = "" +
 	"\apattern\x18\x01 \x01(\tR\apattern\"P\n" +
 	"\x11StateFindResponse\x12%\n" +
 	"\x0eresources_data\x18\x01 \x03(\fR\rresourcesData\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error2\xee\x02\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error2\xa5\x03\n" +
 	"\rPluginService\x12;\n" +
 	"\bGetTypes\x12\x16.proto.GetTypesRequest\x1a\x17.proto.GetTypesResponse\x12;\n" +
 	"\bValidate\x12\x16.proto.ValidateRequest\x1a\x17.proto.ValidateResponse\x125\n" +
 	"\x06Create\x12\x14.proto.CreateRequest\x1a\x15.proto.CreateResponse\x128\n" +
 	"\aDestroy\x12\x15.proto.DestroyRequest\x1a\x16.proto.DestroyResponse\x128\n" +
-	"\aRefresh\x12\x15.proto.RefreshRequest\x1a\x16.proto.RefreshResponse\x128\n" +
+	"\aRefresh\x12\x15.proto.RefreshRequest\x1a\x16.proto.RefreshResponse\x125\n" +
+	"\x06Update\x12\x14.proto.UpdateRequest\x1a\x15.proto.UpdateResponse\x128\n" +
 	"\aChanged\x12\x15.proto.ChangedRequest\x1a\x16.proto.ChangedResponse2\xc6\x02\n" +
 	"\x13HostCallbackService\x12-\n" +
 	"\x04Info\x12\x11.proto.LogRequest\x1a\x12.proto.LogResponse\x12.\n" +
@@ -1038,7 +1159,7 @@ func file_plugins_plugin_proto_rawDescGZIP() []byte {
 	return file_plugins_plugin_proto_rawDescData
 }
 
-var file_plugins_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_plugins_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_plugins_plugin_proto_goTypes = []any{
 	(*GetTypesRequest)(nil),   // 0: proto.GetTypesRequest
 	(*GetTypesResponse)(nil),  // 1: proto.GetTypesResponse
@@ -1051,14 +1172,16 @@ var file_plugins_plugin_proto_goTypes = []any{
 	(*DestroyResponse)(nil),   // 8: proto.DestroyResponse
 	(*RefreshRequest)(nil),    // 9: proto.RefreshRequest
 	(*RefreshResponse)(nil),   // 10: proto.RefreshResponse
-	(*ChangedRequest)(nil),    // 11: proto.ChangedRequest
-	(*ChangedResponse)(nil),   // 12: proto.ChangedResponse
-	(*LogRequest)(nil),        // 13: proto.LogRequest
-	(*LogResponse)(nil),       // 14: proto.LogResponse
-	(*StateGetRequest)(nil),   // 15: proto.StateGetRequest
-	(*StateGetResponse)(nil),  // 16: proto.StateGetResponse
-	(*StateFindRequest)(nil),  // 17: proto.StateFindRequest
-	(*StateFindResponse)(nil), // 18: proto.StateFindResponse
+	(*UpdateRequest)(nil),     // 11: proto.UpdateRequest
+	(*UpdateResponse)(nil),    // 12: proto.UpdateResponse
+	(*ChangedRequest)(nil),    // 13: proto.ChangedRequest
+	(*ChangedResponse)(nil),   // 14: proto.ChangedResponse
+	(*LogRequest)(nil),        // 15: proto.LogRequest
+	(*LogResponse)(nil),       // 16: proto.LogResponse
+	(*StateGetRequest)(nil),   // 17: proto.StateGetRequest
+	(*StateGetResponse)(nil),  // 18: proto.StateGetResponse
+	(*StateFindRequest)(nil),  // 19: proto.StateFindRequest
+	(*StateFindResponse)(nil), // 20: proto.StateFindResponse
 }
 var file_plugins_plugin_proto_depIdxs = []int32{
 	2,  // 0: proto.GetTypesResponse.types:type_name -> proto.RegisteredType
@@ -1067,27 +1190,29 @@ var file_plugins_plugin_proto_depIdxs = []int32{
 	5,  // 3: proto.PluginService.Create:input_type -> proto.CreateRequest
 	7,  // 4: proto.PluginService.Destroy:input_type -> proto.DestroyRequest
 	9,  // 5: proto.PluginService.Refresh:input_type -> proto.RefreshRequest
-	11, // 6: proto.PluginService.Changed:input_type -> proto.ChangedRequest
-	13, // 7: proto.HostCallbackService.Info:input_type -> proto.LogRequest
-	13, // 8: proto.HostCallbackService.Debug:input_type -> proto.LogRequest
-	13, // 9: proto.HostCallbackService.Warn:input_type -> proto.LogRequest
-	13, // 10: proto.HostCallbackService.Error:input_type -> proto.LogRequest
-	15, // 11: proto.HostCallbackService.Get:input_type -> proto.StateGetRequest
-	17, // 12: proto.HostCallbackService.Find:input_type -> proto.StateFindRequest
-	1,  // 13: proto.PluginService.GetTypes:output_type -> proto.GetTypesResponse
-	4,  // 14: proto.PluginService.Validate:output_type -> proto.ValidateResponse
-	6,  // 15: proto.PluginService.Create:output_type -> proto.CreateResponse
-	8,  // 16: proto.PluginService.Destroy:output_type -> proto.DestroyResponse
-	10, // 17: proto.PluginService.Refresh:output_type -> proto.RefreshResponse
-	12, // 18: proto.PluginService.Changed:output_type -> proto.ChangedResponse
-	14, // 19: proto.HostCallbackService.Info:output_type -> proto.LogResponse
-	14, // 20: proto.HostCallbackService.Debug:output_type -> proto.LogResponse
-	14, // 21: proto.HostCallbackService.Warn:output_type -> proto.LogResponse
-	14, // 22: proto.HostCallbackService.Error:output_type -> proto.LogResponse
-	16, // 23: proto.HostCallbackService.Get:output_type -> proto.StateGetResponse
-	18, // 24: proto.HostCallbackService.Find:output_type -> proto.StateFindResponse
-	13, // [13:25] is the sub-list for method output_type
-	1,  // [1:13] is the sub-list for method input_type
+	11, // 6: proto.PluginService.Update:input_type -> proto.UpdateRequest
+	13, // 7: proto.PluginService.Changed:input_type -> proto.ChangedRequest
+	15, // 8: proto.HostCallbackService.Info:input_type -> proto.LogRequest
+	15, // 9: proto.HostCallbackService.Debug:input_type -> proto.LogRequest
+	15, // 10: proto.HostCallbackService.Warn:input_type -> proto.LogRequest
+	15, // 11: proto.HostCallbackService.Error:input_type -> proto.LogRequest
+	17, // 12: proto.HostCallbackService.Get:input_type -> proto.StateGetRequest
+	19, // 13: proto.HostCallbackService.Find:input_type -> proto.StateFindRequest
+	1,  // 14: proto.PluginService.GetTypes:output_type -> proto.GetTypesResponse
+	4,  // 15: proto.PluginService.Validate:output_type -> proto.ValidateResponse
+	6,  // 16: proto.PluginService.Create:output_type -> proto.CreateResponse
+	8,  // 17: proto.PluginService.Destroy:output_type -> proto.DestroyResponse
+	10, // 18: proto.PluginService.Refresh:output_type -> proto.RefreshResponse
+	12, // 19: proto.PluginService.Update:output_type -> proto.UpdateResponse
+	14, // 20: proto.PluginService.Changed:output_type -> proto.ChangedResponse
+	16, // 21: proto.HostCallbackService.Info:output_type -> proto.LogResponse
+	16, // 22: proto.HostCallbackService.Debug:output_type -> proto.LogResponse
+	16, // 23: proto.HostCallbackService.Warn:output_type -> proto.LogResponse
+	16, // 24: proto.HostCallbackService.Error:output_type -> proto.LogResponse
+	18, // 25: proto.HostCallbackService.Get:output_type -> proto.StateGetResponse
+	20, // 26: proto.HostCallbackService.Find:output_type -> proto.StateFindResponse
+	14, // [14:27] is the sub-list for method output_type
+	1,  // [1:14] is the sub-list for method input_type
 	1,  // [1:1] is the sub-list for extension type_name
 	1,  // [1:1] is the sub-list for extension extendee
 	0,  // [0:1] is the sub-list for field type_name
@@ -1104,7 +1229,7 @@ func file_plugins_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugins_plugin_proto_rawDesc), len(file_plugins_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

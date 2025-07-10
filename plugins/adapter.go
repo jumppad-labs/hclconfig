@@ -26,7 +26,8 @@ type ProviderAdapter interface {
 	Create(ctx context.Context, entityData []byte) error
 	Destroy(ctx context.Context, entityData []byte, force bool) error
 	Refresh(ctx context.Context, entityData []byte) error
-	Changed(ctx context.Context, entityData []byte) (bool, error)
+	Update(ctx context.Context, entityData []byte) error
+	Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error)
 }
 
 // TypedProviderAdapter wraps a ResourceProvider[T] to implement ProviderAdapter.
@@ -142,16 +143,33 @@ func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte
 	return a.provider.Refresh(ctx, resource)
 }
 
-func (a *TypedProviderAdapter[T]) Changed(ctx context.Context, entityData []byte) (bool, error) {
+func (a *TypedProviderAdapter[T]) Update(ctx context.Context, entityData []byte) error {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
 	// Unmarshal JSON bytes into the concrete type
 	if err := json.Unmarshal(entityData, &resource); err != nil {
+		return err
+	}
+
+	// Call the provider's Update method with the concrete type
+	return a.provider.Update(ctx, resource)
+}
+
+func (a *TypedProviderAdapter[T]) Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error) {
+	// Create instances for old and new resources
+	var oldResource, newResource T
+
+	// Unmarshal old resource data
+	if err := json.Unmarshal(oldEntityData, &oldResource); err != nil {
 		return false, err
 	}
 
-	// Call the provider's Changed method with the concrete type
-	// (provider was already initialized during registration)
-	return a.provider.Changed(ctx, resource)
+	// Unmarshal new resource data
+	if err := json.Unmarshal(newEntityData, &newResource); err != nil {
+		return false, err
+	}
+
+	// Call the provider's Changed method with both resources
+	return a.provider.Changed(ctx, oldResource, newResource)
 }

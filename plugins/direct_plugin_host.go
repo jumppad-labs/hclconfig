@@ -52,9 +52,14 @@ func (h *DirectPluginHost) Refresh(ctx context.Context) error {
 	return h.plugin.Refresh(ctx)
 }
 
-// Changed checks if the entity has changed
-func (h *DirectPluginHost) Changed(entityType, entitySubType string, entityData []byte) (bool, error) {
-	return h.plugin.Changed(entityType, entitySubType, entityData)
+// Update updates an existing entity
+func (h *DirectPluginHost) Update(entityType, entitySubType string, entityData []byte) error {
+	return h.plugin.Update(entityType, entitySubType, entityData)
+}
+
+// Changed checks if the entity has changed by comparing old and new
+func (h *DirectPluginHost) Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error) {
+	return h.plugin.Changed(entityType, entitySubType, oldEntityData, newEntityData)
 }
 
 // Stop is a no-op for direct plugins as there's nothing to clean up

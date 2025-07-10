@@ -113,6 +113,21 @@ func (s *GRPCServer) Refresh(ctx context.Context, req *proto.RefreshRequest) (*p
 	return &proto.RefreshResponse{Error: errorToString(err)}, nil
 }
 
+func (s *GRPCServer) Update(ctx context.Context, req *proto.UpdateRequest) (*proto.UpdateResponse, error) {
+	l, err := s.getLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logger: %w", err)
+	}
+
+	// set the logger for the plugin
+	s.plugin.SetLogger(l)
+
+	l.Info("Updating entity")
+
+	err = s.plugin.Update(req.EntityType, req.EntitySubType, req.EntityData)
+	return &proto.UpdateResponse{Error: errorToString(err)}, nil
+}
+
 func (s *GRPCServer) Changed(ctx context.Context, req *proto.ChangedRequest) (*proto.ChangedResponse, error) {
 	l, err := s.getLogger()
 	if err != nil {
@@ -124,7 +139,7 @@ func (s *GRPCServer) Changed(ctx context.Context, req *proto.ChangedRequest) (*p
 
 	l.Info("Checking if entity changed")
 
-	changed, err := s.plugin.Changed(req.EntityType, req.EntitySubType, req.EntityData)
+	changed, err := s.plugin.Changed(req.EntityType, req.EntitySubType, req.OldEntityData, req.NewEntityData)
 	return &proto.ChangedResponse{
 		Changed: changed,
 		Error:   errorToString(err),

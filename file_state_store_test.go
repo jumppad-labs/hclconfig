@@ -16,7 +16,7 @@ func TestFileStateStoreCreatesStateDirectoryIfNotExists(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	stateDir := filepath.Join(tmpDir, "test-state")
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore(stateDir, registry)
 
 	// Save should create the directory
@@ -34,7 +34,7 @@ func TestFileStateStoreSavesAndLoadsConfigCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore(filepath.Join(tmpDir, "save-load-test"), registry)
 
 	// Create test config with a builtin resource (variable)
@@ -75,7 +75,7 @@ func TestFileStateStoreReturnsNilWhenNoStateExists(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore(filepath.Join(tmpDir, "no-state-test"), registry)
 
 	config, err := store.Load()
@@ -88,7 +88,7 @@ func TestFileStateStoreExistsReturnsCorrectStatus(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore(filepath.Join(tmpDir, "exists-test"), registry)
 
 	// Should not exist initially
@@ -108,7 +108,7 @@ func TestFileStateStoreClearRemovesStateFile(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore(filepath.Join(tmpDir, "clear-test"), registry)
 
 	// Save state
@@ -132,7 +132,7 @@ func TestFileStateStoreHandlesConcurrentAccessSafely(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore(filepath.Join(tmpDir, "concurrent-test"), registry)
 
 	// Run multiple goroutines saving and loading
@@ -178,7 +178,7 @@ func TestFileStateStoreUsesDefaultDirectoryWhenEmptyStringProvided(t *testing.T)
 	os.Chdir(tmpDir)
 	defer os.Chdir(originalWd)
 
-	registry := NewResourceRegistry([]plugins.PluginHost{})
+	registry := NewPluginRegistry(&plugins.TestLogger{})
 	store := NewFileStateStore("", registry)
 
 	// Save state

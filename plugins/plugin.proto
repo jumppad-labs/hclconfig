@@ -9,6 +9,7 @@ service PluginService {
   rpc Create(CreateRequest) returns (CreateResponse);
   rpc Destroy(DestroyRequest) returns (DestroyResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
+  rpc Update(UpdateRequest) returns (UpdateResponse);
   rpc Changed(ChangedRequest) returns (ChangedResponse);
 }
 
@@ -74,10 +75,21 @@ message RefreshResponse {
   string error = 1;
 }
 
-message ChangedRequest {
+message UpdateRequest {
   string entity_type = 1;
   string entity_sub_type = 2;
   bytes entity_data = 3;
+}
+
+message UpdateResponse {
+  string error = 1;
+}
+
+message ChangedRequest {
+  string entity_type = 1;
+  string entity_sub_type = 2;
+  bytes old_entity_data = 3;
+  bytes new_entity_data = 4;
 }
 
 message ChangedResponse {

@@ -154,11 +154,29 @@ func (w *grpcPluginWrapper) Refresh(ctx context.Context) error {
 	return nil
 }
 
-func (w *grpcPluginWrapper) Changed(entityType, entitySubType string, entityData []byte) (bool, error) {
-	resp, err := w.client.Changed(context.Background(), &proto.ChangedRequest{
+func (w *grpcPluginWrapper) Update(entityType, entitySubType string, entityData []byte) error {
+	resp, err := w.client.Update(context.Background(), &proto.UpdateRequest{
 		EntityType:    entityType,
 		EntitySubType: entitySubType,
 		EntityData:    entityData,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.Error != "" {
+		return fmt.Errorf(resp.Error)
+	}
+
+	return nil
+}
+
+func (w *grpcPluginWrapper) Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error) {
+	resp, err := w.client.Changed(context.Background(), &proto.ChangedRequest{
+		EntityType:    entityType,
+		EntitySubType: entitySubType,
+		OldEntityData: oldEntityData,
+		NewEntityData: newEntityData,
 	})
 	if err != nil {
 		return false, err
@@ -214,10 +232,18 @@ func (h *GRPCPluginHost) Refresh(ctx context.Context) error {
 	return h.plugin.Refresh(ctx)
 }
 
-// Changed checks if the entity has changed
-func (h *GRPCPluginHost) Changed(entityType, entitySubType string, entityData []byte) (bool, error) {
+// Update updates an existing entity
+func (h *GRPCPluginHost) Update(entityType, entitySubType string, entityData []byte) error {
+	if h.plugin == nil {
+		return fmt.Errorf("plugin not initialized")
+	}
+	return h.plugin.Update(entityType, entitySubType, entityData)
+}
+
+// Changed checks if the entity has changed by comparing old and new
+func (h *GRPCPluginHost) Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error) {
 	if h.plugin == nil {
 		return false, fmt.Errorf("plugin not initialized")
 	}
-	return h.plugin.Changed(entityType, entitySubType, entityData)
+	return h.plugin.Changed(entityType, entitySubType, oldEntityData, newEntityData)
 }

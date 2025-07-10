@@ -52,50 +52,55 @@ This document tracks the implementation of resource state tracking for the HCLCo
   - Deleted obsolete test functions and test fixtures
   - Fixed require.IsType parameter order issues in tests
 
-- [ ] **Add state tracking to resources**
-  - Extend resource metadata or create separate state structure
-  - Track resource fingerprints for change detection
-  - Store provider-specific state data
+- [x] **Add state tracking to resources** - `types/resource.go`, `parser.go`
+  - Added Status field to Meta struct to track operational state ("pending", "created", "failed")
+  - Implemented preserve-by-default approach using previous state as working base
+  - Created mergeNewResources() method to merge new config into existing state
+  - Resources from new config are processed by DAG, resources not in new config are preserved
+  - Set new resources to "pending" status, preserve existing status for unchanged resources
+  - Ensured state integrity during partial failures by always saving working state
 
-- [ ] **Implement state comparison logic**
-  - Compare old vs new resources to determine changes
-  - Handle resource addition, modification, and removal
-  - Generate state transition events
+- [x] **Implement state comparison logic** ✅
+  - Created state resource map for quick lookups in walkCallback
+  - Implemented comparison between state resources (current reality) and config resources (desired state)
+  - Added proper lifecycle routing based on resource existence in state
 
-- [ ] **Define resource lifecycle states**
-  - New: Resource exists in config but not in state
-  - Existing: Resource exists in both config and state
-  - Changed: Resource exists in both but differs
-  - Removed: Resource exists in state but not in config
+- [x] **Define resource lifecycle states** ✅
+  - New: Resource doesn't exist in state, needs Create()
+  - Existing/Unchanged: Resource exists and unchanged, preserve existing status
+  - Existing/Changed: Resource exists but changed, call Update() after Changed() check
+  - Failed: Resource operation failed, set status to "failed"
 
-### Phase 4: Provider Lifecycle Integration
-- [ ] **Update walkCallback function** - `dag.go:144`
-  - Replace TODO comment with actual provider lifecycle calls
-  - Route operations based on resource state
-  - Handle provider operation errors
+### Phase 4: Provider Lifecycle Integration ✅
+- [x] **Update walkCallback function** - `dag.go:335-345`
+  - Replaced TODO comment with actual provider lifecycle calls via callProviderLifecycle()
+  - Added proper error handling and resource status tracking
+  - Integrated with PluginRegistry for provider lookup
 
-- [ ] **Implement operation sequencing**
-  - For existing resources: Call Changed() first
-  - Only call Refresh() if Changed() returns true
-  - Maintain correct dependency order
+- [x] **Implement operation sequencing** ✅
+  - For existing resources: Refresh() → Changed(old, new) → Update() (if changed)
+  - For new resources: Create()
+  - Maintains correct dependency order through DAG processing
 
-- [ ] **Add provider method routing**
-  - New resources → Create()
-  - Existing unchanged → skip processing
-  - Existing changed → Changed() → Refresh() (conditional)
-  - Removed resources → Destroy()
+- [x] **Add provider method routing** ✅
+  - New resources → Create() and set status to "created"
+  - Existing unchanged → preserve existing status  
+  - Existing changed → Update() and set status to "updated"
+  - Error handling → set status to "failed"
+  - Skips builtin types (Variable, Output, Local, Module, Root)
 
-### Phase 5: ParseDirectory Enhancement
-- [ ] **Enhance ParseDirectory flow** - `parser.go`
-  - Load previous state before parsing
-  - Compare old state with new configuration
-  - Execute provider operations based on state differences
-  - Save new state after successful operations
+### Phase 5: ParseDirectory Enhancement ✅
+- [x] **Enhance ParseDirectory flow** - `parser.go:400-420`
+  - Loads previous state before parsing new configuration
+  - Merges new config into working state using mergeNewResources()
+  - Executes provider operations through DAG walkCallback with lifecycle integration
+  - Saves working state after processing (even on errors for recovery)
 
-- [ ] **Add error handling and rollback**
-  - Handle provider operation failures gracefully
-  - Implement partial rollback on errors
-  - Preserve state consistency
+- [x] **Add error handling and rollback** ✅
+  - Added comprehensive error handling in callProviderLifecycle()
+  - Sets resource status to "failed" on provider operation errors
+  - Preserves state consistency by always saving working state
+  - Allows recovery from partial failures on subsequent runs
 
 ### Phase 6: Testing & Cleanup
 - [ ] **Fix broken tests** - `parse_test.go`
@@ -114,53 +119,100 @@ This document tracks the implementation of resource state tracking for the HCLCo
   - Add state store configuration examples
   - Document provider lifecycle requirements
 
-### Phase 7: Implementing Diff for resources
-- [ ] **Implement Diff functionality**
-  - The Changed plugin lifecycle method is responsible for determining if a resource has changed. 
-  - Previously we would generate a checksum for the raw config and then we would compare that to the 
-  checksum of the previous config. If the two were different, we would call the Refresh method.
-  - However, this was not particularly effective, as it only showed that the file had changed, it did not
-  show what had changed. It also did not highlight any changes that were set when the value of a dependency
-  changed, such as a variable or a data source.
-  - I think the best way to check this is going to be to add a helper method that compares the two stucts and returns
-  the changes that have been made.
-  - We have to think about values in the resource that are computed, i.e. they are set as part of the 
-  resource creation, but are not set in the config. If we are doing a compare between the previous and the current
-  config these attribues will not yet be set on the new config.
-  - One thing we could do is have a special annotation for computed values, such as `computed: true`, and then
-  we could ignore these values when doing the compare.
+### Phase 7: Provider Interface Updates ✅
+- [x] **Update ResourceProvider Interface** - `plugins/provider.go`
+  - Added Update(ctx context.Context, resource T) error method
+  - Modified Changed signature to: Changed(ctx context.Context, old T, new T) (bool, error)
+  - Updated all adapter layers and plugin implementations
 
+- [x] **Update Plugin Infrastructure** ✅
+  - Updated ProviderAdapter interface with new methods
+  - Modified TypedProviderAdapter implementation  
+  - Updated PluginHost interfaces (Direct and GRPC)
+  - Updated PluginEntityProvider and PluginBase
+  - Regenerated protobuf definitions with Update service and modified Changed request
+
+### Phase 8: Architecture Improvements ✅
+- [x] **Rename ResourceRegistry to PluginRegistry** - `plugin_registry.go`
+  - More accurate naming since it manages plugins, not resources
+  - Updated all references throughout codebase
+
+- [x] **Simplify Provider Access** ✅
+  - Renamed GetPluginHostAndAdapter() to GetProvider()
+  - Cleaner API that returns only the needed ProviderAdapter
+  - Removed confusing "host" terminology from public interface
+
+### Phase 9: Implementing Enhanced Diff for Resources
+- [ ] **Implement Enhanced Diff Functionality**
+  - The Changed() method now receives both old and new resources for comparison
+  - Providers can implement intelligent diff logic based on their resource types
+  - This replaces the previous checksum-based approach with semantic comparison
+  - Providers can ignore computed values or handle dependency-driven changes
+  - Each provider decides what constitutes a "change" worth updating
+
+### Phase 10: Final Cleanup and Documentation
+- [ ] **Final Cleanup**
+  - Make error messages consistent, when only a single error is returned from a function, use the 
+  compact format like below:
+
+    ```go
+    if err := someOperation(); err != nil {
+        return fmt.Errorf("error message: %w", err)
+    }
+    ```
+
+    If a tuple is returned, use the longer format:
+
+    ```go
+    value, err := someOperation(); 
+    if err != nil {
+        return fmt.Errorf("error message: %w", err)
+    }
+    ```
 
 ## Architecture Notes 📝
 
-### Key Design Principles
-1. **Leverage existing Config JSON serialization** - Don't reinvent serialization
-2. **Provider operation order**: Changed() → Refresh() (conditional) 
-3. **No backward compatibility concerns** - Clean slate implementation
-4. **Support multiple state store implementations** - Interface-based design
+### Key Design Principles ✅
+1. **Leverage existing Config JSON serialization** - Uses existing ToJSON/FromJSON for state persistence
+2. **Provider operation order**: Refresh() → Changed(old, new) → Update() (if changed) | Create() (if new)
+3. **State vs Config separation** - State = current reality, Config = desired state  
+4. **Support multiple state store implementations** - Interface-based design maintained
 5. **Maintain DAG dependency resolution** - State operations follow dependency order
+6. **Clear provider interface** - PluginRegistry.GetProvider() for clean provider access
 
 ### Code References
-- **Provider interface**: `plugins/provider.go` - ResourceProvider interface
-- **Resource metadata**: `types/resource.go` - Meta struct
-- **DAG processing**: `dag.go:144` - walkCallback function
-- **Parser entry point**: `parser.go` - ParseDirectory methods
+- **Provider interface**: `plugins/provider.go` - ResourceProvider interface with Update() and Changed(old, new)
+- **Resource metadata**: `types/resource.go` - Meta struct with Status field
+- **Lifecycle implementation**: `dag.go:351-426` - callProviderLifecycle function
+- **DAG processing**: `dag.go:146` - walkCallback function with PluginRegistry integration
+- **Plugin management**: `plugin_registry.go` - PluginRegistry with GetProvider() method
+- **Parser entry point**: `parser.go` - ParseDirectory methods with state management
 - **Config serialization**: `config.go:266-271` - ToJSON/FromJSON methods
+- **State persistence**: `file_state_store.go` - FileStateStore implementation
 
-### Provider States (Inferred from ResourceProvider interface)
-1. **New** - Resource doesn't exist, needs Create()
-2. **Existing/Unchanged** - Resource exists and unchanged, skip operations  
-3. **Existing/Changed** - Resource exists but changed, call Changed() then conditionally Refresh()
-4. **Removed** - Resource no longer in config, needs Destroy()
-5. **Unknown** - Error state, needs investigation
+### Provider States (Implemented in callProviderLifecycle)
+1. **New** - Resource doesn't exist in state, call Create() → status: "created"
+2. **Existing/Unchanged** - Resource exists, Changed() returns false → preserve existing status
+3. **Existing/Changed** - Resource exists, Changed(old, new) returns true → call Update() → status: "updated"  
+4. **Failed** - Any provider operation fails → status: "failed"
+5. **Removed** - Resource in state but not in config → preserved for future Destroy() implementation
 
-## Next Steps 🎯
+## Completed Implementation 🎯
 
-1. **Start with StateStore interface design** - Foundation for everything else
-2. **Implement FileStateStore** - Concrete implementation for testing
-3. **Add basic state tracking** - Simple state comparison logic
-4. **Integrate with walkCallback** - Connect state to provider operations
-5. **Test incrementally** - Validate each phase before moving to next
+✅ **All major lifecycle components implemented:**
+1. StateStore interface and FileStateStore implementation
+2. PluginRegistry with provider lookup capabilities  
+3. Enhanced provider interface with Update() and Changed(old, new)
+4. Complete lifecycle integration in walkCallback
+5. State comparison and resource status tracking
+6. Updated protobuf definitions and all plugin layers
+7. Improved naming and architecture
+
+## Remaining Work 🚧
+
+1. **Testing** - Update tests to work with new lifecycle
+2. **Documentation** - Update examples and docs
+3. **Provider Implementations** - Providers need to implement enhanced Changed() logic
 
 ## Notes
 - Tests that fail due to callback removal will be fixed in Phase 6

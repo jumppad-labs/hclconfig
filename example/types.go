@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -36,15 +34,6 @@ type Config struct {
 	Timeouts *Timeouts `hcl:"timeouts,block"`
 }
 
-func (t *Config) Process() error {
-	// override default values
-	if t.Timeouts.TLSHandshake == 0 {
-		t.Timeouts.TLSHandshake = 5
-	}
-
-	return nil
-}
-
 type DBCommon struct {
 	types.ResourceBase `hcl:",remain"`
 	ErikIsA            string `hcl:"erik_is_a,optional"`
@@ -66,11 +55,4 @@ type PostgreSQL struct {
 
 	// ConnectionString is a computed field and must be marked optional
 	ConnectionString string `hcl:"connection_string,optional"`
-}
-
-// Process is called using an order calculated from the dependency graph
-// this is where you can set any computed fields
-func (t *PostgreSQL) Process() error {
-	t.ConnectionString = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", t.Username, t.Password, t.Location, t.Port, t.DBName)
-	return nil
 }

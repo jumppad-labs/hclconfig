@@ -5,7 +5,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -83,19 +82,22 @@ func DefaultOptions() *ParserOptions {
 		cacheDir = "."
 	}
 
-	cacheDir = filepath.Join(cacheDir, ".hclconfig", "cache")
 	os.MkdirAll(cacheDir, os.ModePerm)
 
 	registryCredentials := map[string]string{}
 
 	// Default plugin directories
 	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		homeDir = "."
+	}
+
 	pluginDirs := []string{
 		filepath.Join(".", ".hclconfig", "plugins"),
 	}
-	if homeDir != "" {
-		pluginDirs = append(pluginDirs, filepath.Join(homeDir, ".hclconfig", "plugins"))
-	}
+
+	pluginDirs = append(pluginDirs, filepath.Join(homeDir, ".hclconfig", "plugins"))
+	cacheDir = filepath.Join(homeDir, ".hclconfig", "cache")
 
 	// Add directories from environment variable
 	if envPath := os.Getenv("HCLCONFIG_PLUGIN_PATH"); envPath != "" {
@@ -124,8 +126,8 @@ func DefaultOptions() *ParserOptions {
 type Parser struct {
 	options             ParserOptions
 	registeredFunctions map[string]function.Function
-	pluginHosts         []plugins.PluginHost
 	stateStore          StateStore
+	pluginRegistry      *PluginRegistry
 }
 
 // NewParser creates a new parser with the given options
@@ -136,25 +138,31 @@ func NewParser(options *ParserOptions) *Parser {
 		o = DefaultOptions()
 	}
 
+	// Create logger for plugin registry
+	var logger plugins.Logger
+	if o.Logger != nil {
+		logger = &plugins.TestLogger{}
+	}
+
 	p := &Parser{
 		options:             *o,
 		registeredFunctions: map[string]function.Function{},
-		pluginHosts:         []plugins.PluginHost{},
 	}
+
+	// Create plugin registry
+	p.pluginRegistry = NewPluginRegistry(logger)
 
 	// Initialize state store
 	if o.StateStore != nil {
 		p.stateStore = o.StateStore
 	} else {
-		// Create resource registry for the state store
-		registry := NewResourceRegistry(p.pluginHosts)
 		// Create default file-based state store
-		p.stateStore = NewFileStateStore("", registry)
+		p.stateStore = NewFileStateStore("", p.pluginRegistry)
 	}
 
 	// Auto-discover and load plugins if enabled
 	if o.AutoDiscoverPlugins {
-		if err := p.discoverAndLoadPlugins(); err != nil {
+		if err := p.pluginRegistry.DiscoverAndLoadPlugins(o); err != nil {
 			// Log error but don't fail parser creation
 			if o.Logger != nil {
 				o.Logger(fmt.Sprintf("Plugin discovery warning: %s", err))
@@ -180,120 +188,22 @@ func (p *Parser) RegisterFunction(name string, f any) error {
 }
 
 // RegisterPlugin registers an in-process plugin with the parser
-// This creates a DirectPluginHost internally for the plugin
+// This delegates to the PluginRegistry
 func (p *Parser) RegisterPlugin(plugin plugins.Plugin) error {
-	// Create a simple logger for in-process plugins
-	logger := &plugins.TestLogger{}
+	return p.pluginRegistry.RegisterPlugin(plugin)
+}
 
-	// Create a DirectPluginHost for the in-process plugin
-	host, err := plugins.NewDirectPluginHost(logger, nil, plugin)
-	if err != nil {
-		return fmt.Errorf("failed to create plugin host: %w", err)
-	}
-
-	// Add to the list of plugin hosts
-	p.pluginHosts = append(p.pluginHosts, host)
-
-	return nil
+// GetPluginRegistry returns the parser's plugin registry
+func (p *Parser) GetPluginRegistry() *PluginRegistry {
+	return p.pluginRegistry
 }
 
 // RegisterPluginWithPath registers an external plugin binary with the parser
-// This creates a GRPCPluginHost internally for the external plugin
+// This delegates to the PluginRegistry
 func (p *Parser) RegisterPluginWithPath(pluginPath string) error {
-	// Create a simple logger for external plugins
-	logger := &plugins.TestLogger{}
-
-	// Create a GRPCPluginHost for the external plugin
-	host := plugins.NewGRPCPluginHost(logger, nil)
-
-	// Start the external plugin
-	err := host.Start(pluginPath)
-	if err != nil {
-		return fmt.Errorf("failed to start external plugin %s: %w", pluginPath, err)
-	}
-
-	// Add to the list of plugin hosts
-	p.pluginHosts = append(p.pluginHosts, host)
-
-	return nil
+	return p.pluginRegistry.RegisterPluginWithPath(pluginPath)
 }
 
-// discoverAndLoadPlugins finds and loads all plugins from configured directories
-func (p *Parser) discoverAndLoadPlugins() error {
-	// Expand directories (handle ~ and env vars)
-	expandedDirs := ExpandPluginDirectories(p.options.PluginDirectories)
-
-	// Create plugin discovery instance
-	pd := NewPluginDiscovery(expandedDirs, p.options.PluginNamePattern, p.options.Logger)
-
-	// Discover plugins
-	pluginPaths, err := pd.DiscoverPlugins()
-	if err != nil {
-		return err
-	}
-
-	// Load each discovered plugin
-	var loadErrors []string
-	for _, pluginPath := range pluginPaths {
-		if err := p.RegisterPluginWithPath(pluginPath); err != nil {
-			errorMsg := fmt.Sprintf("failed to load plugin %s: %v", pluginPath, err)
-			loadErrors = append(loadErrors, errorMsg)
-			if p.options.Logger != nil {
-				p.options.Logger(errorMsg)
-			}
-		} else {
-			if p.options.Logger != nil {
-				p.options.Logger(fmt.Sprintf("Successfully loaded plugin: %s", pluginPath))
-			}
-		}
-	}
-
-	// Report summary
-	successCount := len(pluginPaths) - len(loadErrors)
-	if p.options.Logger != nil {
-		p.options.Logger(fmt.Sprintf("Plugin discovery complete: %d loaded, %d failed", successCount, len(loadErrors)))
-	}
-
-	if len(loadErrors) > 0 && successCount == 0 {
-		return fmt.Errorf("all plugin loads failed: %s", strings.Join(loadErrors, "; "))
-	}
-
-	return nil
-}
-
-
-// createResourceFromPlugins attempts to create a resource using registered plugins
-// Returns the resource if found, or an error if no plugin handles this resource type
-func (p *Parser) createResourceFromPlugins(resourceType, resourceName string) (types.Resource, error) {
-	// Iterate through all plugin hosts
-	for _, host := range p.pluginHosts {
-		pluginTypes := host.GetTypes()
-
-		// Look for a matching type
-		for _, t := range pluginTypes {
-			if t.Type == "resource" && t.SubType == resourceType {
-				// Found a matching plugin type, create resource from concrete type
-				if t.ConcreteType == nil {
-					return nil, fmt.Errorf("plugin type %s has no concrete type", resourceType)
-				}
-
-				// Create a new instance of the concrete type using reflection
-				ptr := reflect.New(reflect.TypeOf(t.ConcreteType).Elem())
-				resource := ptr.Interface().(types.Resource)
-
-				// Initialize the resource metadata
-				resource.Metadata().Name = resourceName
-				resource.Metadata().Type = resourceType
-				resource.Metadata().Properties = map[string]any{}
-
-				return resource, nil
-			}
-		}
-	}
-
-	// No plugin found for this resource type
-	return nil, fmt.Errorf("resource type %s not found in any registered plugin", resourceType)
-}
 
 // createBuiltinResource creates built-in resource types (local, output, variable, module)
 func (p *Parser) createBuiltinResource(resourceType, resourceName string) (types.Resource, error) {
@@ -323,16 +233,6 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return nil, ce
 	}
 
-	// Validate resource dependencies before processing
-	depErrors := validateResourceDependencies(c, nil) // No previous state available in ParseFile context
-	for _, e := range depErrors {
-		ce.AppendError(e)
-	}
-
-	if len(ce.Errors) > 0 {
-		return nil, ce
-	}
-
 	// do not walk the dag when we are only dealing with primatives
 	if p.options.PrimativesOnly {
 		return c, nil
@@ -346,16 +246,43 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		// TODO: Add proper logging when logger is available
 	}
 
-	// Defer saving state to ensure it's saved even on errors
+	// Create working config - start with previous state or empty config
+	var workingConfig *Config
+	if previousState != nil {
+		workingConfig = previousState
+		// Merge new resources into working config
+		p.mergeNewResources(workingConfig, c)
+	} else {
+		workingConfig = c
+		// Set status for new resources when no previous state
+		for _, r := range workingConfig.Resources {
+			if r.Metadata().Status == "" {
+				r.Metadata().Status = "pending"
+			}
+		}
+	}
+
+	// Defer saving working state to ensure it's saved even on errors
 	defer func() {
-		if saveErr := p.stateStore.Save(c); saveErr != nil {
+		if saveErr := p.stateStore.Save(workingConfig); saveErr != nil {
 			// TODO: Add proper logging when logger is available
 			// Log error but don't override the original error
 		}
 	}()
 
+	// Validate resource dependencies before processing
+	depErrors := validateResourceDependencies(c, previousState)
+	for _, e := range depErrors {
+		ce.AppendError(e)
+	}
+
+	if len(ce.Errors) > 0 {
+		return workingConfig, ce
+	}
+
 	// process the files and resolve dependency
-	return c, p.process(c, previousState)
+	processErr := p.process(c, previousState)
+	return workingConfig, processErr
 }
 
 // ParseDirectory parses all resource and variable files in the given directory
@@ -414,7 +341,6 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	// process the files and resolve dependency
 	return c, p.process(c, previousState)
 }
-
 
 // internal method
 func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) []error {
@@ -1015,8 +941,8 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			// ignore any errors when parsing
 			ignoreErrors = true
 		} else {
-			// Create resource using plugins
-			rt, err = p.createResourceFromPlugins(b.Labels[0], name)
+			// Create resource using plugin registry
+			rt, err = p.pluginRegistry.CreateResource(b.Labels[0], name)
 			if err != nil {
 				de := &errors.ParserError{}
 				de.Line = b.TypeRange.Start.Line
@@ -1681,11 +1607,52 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 	return strExpression, nil
 }
 
+// mergeNewResources merges resources from newConfig into workingConfig
+// preserving existing status and adding new resources
+func (p *Parser) mergeNewResources(workingConfig *Config, newConfig *Config) {
+	// Create a map of existing resources for quick lookup
+	existingMap := make(map[string]types.Resource)
+	for _, r := range workingConfig.Resources {
+		existingMap[r.Metadata().ID] = r
+	}
+
+	// For each resource in new config
+	for _, newResource := range newConfig.Resources {
+		if existingResource, exists := existingMap[newResource.Metadata().ID]; exists {
+			// Resource exists in both, preserve status and update with new config
+			if existingResource.Metadata().Status != "" {
+				newResource.Metadata().Status = existingResource.Metadata().Status
+			}
+			// Replace the existing resource with the new one (to get updated config)
+			for i, r := range workingConfig.Resources {
+				if r.Metadata().ID == newResource.Metadata().ID {
+					workingConfig.Resources[i] = newResource
+					break
+				}
+			}
+		} else {
+			// New resource, add it to working config with pending status
+			newResource.Metadata().Status = "pending"
+			workingConfig.Resources = append(workingConfig.Resources, newResource)
+		}
+	}
+
+	// Copy contexts and bodies from new config to working config for new/updated resources
+	for _, newResource := range newConfig.Resources {
+		if ctx, exists := newConfig.contexts[newResource]; exists {
+			workingConfig.contexts[newResource] = ctx
+		}
+		if body, exists := newConfig.bodies[newResource]; exists {
+			workingConfig.bodies[newResource] = body
+		}
+	}
+}
+
 func (p *Parser) process(c *Config, previousState *Config) error {
 	ce := errors.NewConfigError()
 
-	// walk the dag and process resources
-	errs := c.walk(walkCallback(c), false)
+	// walk the dag and process resources (only processes resources from c)
+	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry), false)
 
 	for _, e := range errs {
 		ce.AppendError(e)
@@ -1760,10 +1727,10 @@ func validateResourceDependencies(c *Config, previousState *Config) []*errors.Pa
 
 		// Collect all dependencies for this resource
 		var allDependencies []string
-		
+
 		// Add explicit dependencies from depends_on
 		allDependencies = append(allDependencies, resource.GetDependencies()...)
-		
+
 		// Add implicit dependencies from resource links (interpolations)
 		allDependencies = append(allDependencies, resource.Metadata().Links...)
 

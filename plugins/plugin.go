@@ -29,7 +29,8 @@ type PluginEntityProvider interface {
 	Create(entityType, entitySubType string, entityData []byte) error
 	Destroy(entityType, entitySubType string, entityData []byte) error
 	Refresh(ctx context.Context) error
-	Changed(entityType, entitySubType string, entityData []byte) (bool, error)
+	Update(entityType, entitySubType string, entityData []byte) error
+	Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error)
 }
 
 // RegisterResourceProvider registers a typed resource provider with the plugin.
@@ -156,12 +157,22 @@ func (p *PluginBase) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// Changed checks if the entity has changed.
-func (p *PluginBase) Changed(entityType, entitySubType string, entityData []byte) (bool, error) {
+// Update updates an existing entity.
+func (p *PluginBase) Update(entityType, entitySubType string, entityData []byte) error {
+	rt := p.getRegisteredType(entityType, entitySubType)
+	if rt == nil {
+		return errors.New("no registered type found for " + entityType + "." + entitySubType)
+	}
+
+	return rt.Adapter.Update(context.Background(), entityData)
+}
+
+// Changed checks if the entity has changed by comparing old and new.
+func (p *PluginBase) Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error) {
 	rt := p.getRegisteredType(entityType, entitySubType)
 	if rt == nil {
 		return false, errors.New("no registered type found for " + entityType + "." + entitySubType)
 	}
 
-	return rt.Adapter.Changed(context.Background(), entityData)
+	return rt.Adapter.Changed(context.Background(), oldEntityData, newEntityData)
 }

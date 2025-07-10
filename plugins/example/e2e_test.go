@@ -95,7 +95,7 @@ func TestInProcessPluginChanged(t *testing.T) {
 	// Test each person individually
 	for i, personJSON := range peopleData {
 		// Call Changed on the plugin
-		changed, err := ph.Changed("resource", "person", personJSON)
+		changed, err := ph.Changed("resource", "person", personJSON, personJSON)
 		require.NoError(t, err, "Should check changed status for person %d", i)
 		require.False(t, changed, "Person %d should not have changed", i)
 	}
@@ -161,7 +161,7 @@ func TestExternalPluginCRUDOperations(t *testing.T) {
 		require.NoError(t, err, "Should create person %d", i)
 
 		// Test Changed
-		changed, err := ph.Changed("resource", "person", personJSON)
+		changed, err := ph.Changed("resource", "person", personJSON, personJSON)
 		require.NoError(t, err, "Should check changed status for person %d", i)
 		require.False(t, changed, "Person %d should not have changed", i)
 

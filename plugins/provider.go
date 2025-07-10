@@ -59,15 +59,26 @@ type ResourceProvider[T types.Resource] interface {
 	// The implementation should periodically check the context for cancellation.
 	Refresh(ctx context.Context, resource T) error
 
-	// Changed determines if a resource has changed since the last operation.
-	// This method is used to detect drift and determine if a resource
-	// needs to be updated or recreated.
+	// Update updates an existing resource to match the desired configuration.
+	// This method is called after Changed() returns true, indicating the resource
+	// needs to be updated.
 	//
 	// The ctx parameter provides cancellation and timeout control.
-	// The resource parameter contains the resource configuration to check.
-	// Returns true if the resource has changed, false otherwise, and any error
-	// encountered while checking for changes.
-	Changed(ctx context.Context, resource T) (bool, error)
+	// The resource parameter contains the desired resource configuration.
+	// Returns an error if the update fails.
+	//
+	// The implementation should periodically check the context for cancellation.
+	Update(ctx context.Context, resource T) error
+
+	// Changed determines if a resource has changed by comparing the current state
+	// with the desired configuration.
+	//
+	// The ctx parameter provides cancellation and timeout control.
+	// The old parameter contains the resource as it currently exists (from state).
+	// The new parameter contains the desired resource configuration (from config).
+	// Returns true if the resource has changed and needs updating, false otherwise,
+	// and any error encountered while checking for changes.
+	Changed(ctx context.Context, old T, new T) (bool, error)
 
 	// Functions returns the functions exposed by the provider that can be called
 	// by other providers.

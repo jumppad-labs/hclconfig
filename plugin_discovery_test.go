@@ -545,7 +545,7 @@ func TestParserIntegration_AutoDiscovery(t *testing.T) {
 		}
 		
 		// Verify plugin is actually loaded by checking registered types
-		if len(p.pluginHosts) == 0 {
+		if len(p.pluginRegistry.GetPluginHosts()) == 0 {
 			t.Error("Expected at least one plugin host to be registered")
 		}
 	})
@@ -572,7 +572,7 @@ func TestParserIntegration_AutoDiscovery(t *testing.T) {
 		}
 		
 		// Verify no plugins loaded
-		if len(p.pluginHosts) != 0 {
+		if len(p.pluginRegistry.GetPluginHosts()) != 0 {
 			t.Error("Expected no plugin hosts when auto-discovery is disabled")
 		}
 	})
@@ -668,7 +668,7 @@ func TestParserIntegration_EnvironmentVariables(t *testing.T) {
 		p := NewParser(opts)
 		
 		// Verify no plugins were loaded
-		if len(p.pluginHosts) != 0 {
+		if len(p.pluginRegistry.GetPluginHosts()) != 0 {
 			t.Error("Expected no plugins to be loaded when discovery is disabled")
 		}
 	})

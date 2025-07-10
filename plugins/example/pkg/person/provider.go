@@ -78,9 +78,9 @@ func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) error {
 	return nil
 }
 
-func (p *ExampleProvider) Changed(ctx context.Context, person *Person) (bool, error) {
+func (p *ExampleProvider) Changed(ctx context.Context, old *Person, new *Person) (bool, error) {
 	if p.logger != nil {
-		p.logger.Info("Checking if person changed", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Checking if person changed", "id", new.Metadata().ID, "old_name", old.FirstName+" "+old.LastName, "new_name", new.FirstName+" "+new.LastName)
 	}
 
 	// Check for context cancellation
@@ -90,10 +90,32 @@ func (p *ExampleProvider) Changed(ctx context.Context, person *Person) (bool, er
 	default:
 	}
 
-	// Simulate drift detection for person (e.g., compare with database state)
-	// In a real implementation, this would compare desired vs actual state
+	// Simulate drift detection for person (e.g., compare old vs new state)
+	// In a real implementation, this would compare the old state with the new desired state
+	// For this example, we'll check if names or ages differ
+	if old.FirstName != new.FirstName || old.LastName != new.LastName || old.Age != new.Age {
+		return true, nil
+	}
 
 	return false, nil
+}
+
+func (p *ExampleProvider) Update(ctx context.Context, person *Person) error {
+	if p.logger != nil {
+		p.logger.Info("Updating person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+	}
+
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// Simulate person update (e.g., update in database, modify user account, etc.)
+	// In a real implementation, this would update the resource
+
+	return nil
 }
 
 func (p *ExampleProvider) Functions() plugins.ProviderFunctions {

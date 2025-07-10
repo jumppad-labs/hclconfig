@@ -21,8 +21,11 @@ type PluginHost interface {
 	// Refresh refreshes the plugin state
 	Refresh(ctx context.Context) error
 
-	// Changed checks if the entity has changed
-	Changed(entityType, entitySubType string, entityData []byte) (bool, error)
+	// Update updates an existing entity
+	Update(entityType, entitySubType string, entityData []byte) error
+
+	// Changed checks if the entity has changed by comparing old and new
+	Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error)
 
 	// Stop shuts down the plugin host and cleans up resources
 	Stop()

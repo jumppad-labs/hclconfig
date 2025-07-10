@@ -72,6 +72,11 @@ type Meta struct {
 	// Linked resources which must be set before this config can be processed
 	// this is an internal property that can not be set with hcl
 	Links []string `json:"links,omitempty"`
+
+	// Status tracks the operational state of the resource
+	// Possible values: "pending", "created", "failed"
+	// this is an internal property that can not be set with hcl
+	Status string `json:"status,omitempty"`
 }
 
 // ResourceBase is the embedded type for any config resources

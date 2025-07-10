@@ -1,6 +1,8 @@
 package hclconfig
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/creasty/defaults"
@@ -141,7 +143,8 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values
-func walkCallback(c *Config) func(v dag.Vertex) (diags dag.Diagnostics) {
+func walkCallback(c *Config, previousState *Config, registry *PluginRegistry) func(v dag.Vertex) (diags dag.Diagnostics) {
+
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		r, ok := v.(types.Resource)
@@ -321,11 +324,104 @@ func walkCallback(c *Config) func(v dag.Vertex) (diags dag.Diagnostics) {
 		// if disabled was set through interpolation, the value has only been set here
 		// we need to handle an additional check
 		if !r.GetDisabled() {
-			// TODO: call the plugin lifecycle methods when implemented
+			// Call provider lifecycle methods
+			if err := callProviderLifecycle(r, previousState, registry); err != nil {
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf("provider lifecycle error: %s", err)
+				pe.Level = errors.ParserErrorLevelError
+				
+				return diags.Append(pe)
+			}
 		}
 
 		return nil
 	}
+}
+
+// callProviderLifecycle calls the appropriate provider lifecycle methods for a resource
+func callProviderLifecycle(resource types.Resource, previousState *Config, registry *PluginRegistry) error {
+	// Skip builtin resource types that don't have providers
+	if resource.Metadata().Type == resources.TypeVariable ||
+		resource.Metadata().Type == resources.TypeOutput ||
+		resource.Metadata().Type == resources.TypeLocal ||
+		resource.Metadata().Type == resources.TypeModule ||
+		resource.Metadata().Type == resources.TypeRoot {
+		return nil
+	}
+
+	// Get the provider for this resource
+	adapter := registry.GetProvider(resource)
+	if adapter == nil {
+		// No provider found - this might be a builtin type without a provider
+		return nil
+	}
+
+	ctx := context.Background()
+	resourceID := resource.Metadata().ID
+	
+	// Serialize the current resource to JSON
+	currentJSON, err := json.Marshal(resource)
+	if err != nil {
+		return fmt.Errorf("failed to serialize resource: %w", err)
+	}
+
+	// Check if resource exists in state
+	var stateResource types.Resource
+	var existsInState bool
+	if previousState != nil {
+		var err error
+		stateResource, err = previousState.FindResource(resourceID)
+		existsInState = (err == nil)
+	}
+	
+	if existsInState {
+		// Resource exists - follow the lifecycle: Refresh -> Changed -> Update/Skip
+		
+		// 1. Call Refresh to ensure state is up to date
+		if err := adapter.Refresh(ctx, currentJSON); err != nil {
+			resource.Metadata().Status = "failed"
+			return fmt.Errorf("refresh failed: %w", err)
+		}
+		
+		// 2. Serialize state resource for comparison
+		stateJSON, err := json.Marshal(stateResource)
+		if err != nil {
+			return fmt.Errorf("failed to serialize state resource: %w", err)
+		}
+		
+		// 3. Check if resource has changed
+		changed, err := adapter.Changed(ctx, stateJSON, currentJSON)
+		if err != nil {
+			resource.Metadata().Status = "failed"
+			return fmt.Errorf("changed check failed: %w", err)
+		}
+		
+		// 4. If changed, call Update
+		if changed {
+			if err := adapter.Update(ctx, currentJSON); err != nil {
+				resource.Metadata().Status = "failed"
+				return fmt.Errorf("update failed: %w", err)
+			}
+			resource.Metadata().Status = "updated"
+		} else {
+			// No changes needed, preserve existing status
+			if stateResource.Metadata().Status != "" {
+				resource.Metadata().Status = stateResource.Metadata().Status
+			}
+		}
+	} else {
+		// Resource doesn't exist in state - create it
+		if err := adapter.Create(ctx, currentJSON); err != nil {
+			resource.Metadata().Status = "failed"
+			return fmt.Errorf("create failed: %w", err)
+		}
+		resource.Metadata().Status = "created"
+	}
+	
+	return nil
 }
 
 // setContextVariablesFromList sets the context variables from a list of resource links

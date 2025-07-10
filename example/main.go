@@ -1,22 +1,52 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
 
 	"github.com/jumppad-labs/hclconfig"
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
 func main() {
+	// Parse command line flags
+	var format = flag.String("format", "table", "Output format: table, tree, card, json, or all")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nDemo of HCL config parser with pretty printer\n\n")
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  %s -format=table    # Show resources in table format\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -format=tree     # Show resources in tree format\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -format=all      # Show all formats\n", os.Args[0])
+	}
+	flag.Parse()
+
+	// Validate format
+	validFormats := map[string]hclconfig.PrintFormat{
+		"table": hclconfig.FormatTable,
+		"tree":  hclconfig.FormatTree,
+		"card":  hclconfig.FormatCard,
+		"json":  hclconfig.FormatJSON,
+	}
+
+	var selectedFormat hclconfig.PrintFormat
+	var showAll bool
+	if *format == "all" {
+		showAll = true
+	} else if f, ok := validFormats[*format]; ok {
+		selectedFormat = f
+	} else {
+		fmt.Printf("Invalid format '%s'. Valid options: table, tree, card, json, all\n", *format)
+		os.Exit(1)
+	}
 
 	o := hclconfig.DefaultOptions()
-
 
 	// Configure plugin discovery
 	// By default, plugins are auto-discovered from:
@@ -28,16 +58,14 @@ func main() {
 	// o.AutoDiscoverPlugins = false  // Disable auto-discovery
 	// o.PluginDirectories = append(o.PluginDirectories, "/custom/plugin/path")
 	// o.PluginNamePattern = "my-plugin-*"  // Change pattern (default: "hclconfig-plugin-*")
-	
+
 	// Add a logger to see plugin discovery in action
-	o.Logger = func(msg string) {
-		fmt.Printf("[Plugin Discovery] %s\n", msg)
-	}
+	o.Logger = &plugins.TestLogger{}
 
 	// o.PrimativesOnly = true
 
 	p := hclconfig.NewParser(o)
-	
+
 	// You can still manually register plugins alongside auto-discovery
 	// This in-process plugin will be registered in addition to any discovered plugins
 	examplePlugin := &ExamplePlugin{}
@@ -46,7 +74,7 @@ func main() {
 		fmt.Printf("Failed to register example plugin: %s\n", err)
 		os.Exit(1)
 	}
-	
+
 	// You can also manually register external plugin binaries
 	// This is useful for plugins that aren't in the standard discovery directories
 	// err = p.RegisterPluginWithPath("/path/to/external/plugin")
@@ -68,112 +96,84 @@ func main() {
 
 	fmt.Println("")
 
-	// print the config
-	printConfig(c)
+	// demonstrate the new pretty printer
+	fmt.Printf("## Pretty Printer Demo (%s format)\n", *format)
+	printer := hclconfig.NewResourcePrinter()
+
+	// Find a resource to demonstrate
+	if len(c.Resources) > 0 {
+		if showAll {
+			// Show all formats
+			firstResource := c.Resources[0]
+
+			fmt.Println("### Table Format:")
+			printer.PrintResource(firstResource, hclconfig.FormatTable)
+			fmt.Println("")
+
+			fmt.Println("### Tree Format:")
+			printer.PrintResource(firstResource, hclconfig.FormatTree)
+			fmt.Println("")
+
+			fmt.Println("### Card Format:")
+			printer.PrintResource(firstResource, hclconfig.FormatCard)
+			fmt.Println("")
+
+			fmt.Println("### JSON Format:")
+			printer.PrintResource(firstResource, hclconfig.FormatJSON)
+			fmt.Println("")
+
+			// Show multiple resources in table format
+			if len(c.Resources) > 1 {
+				fmt.Println("### All Resources (Table Format):")
+				printer.PrintResources(c.Resources, hclconfig.FormatTable)
+				fmt.Println("")
+			}
+		} else {
+			// Show only selected format
+			if len(c.Resources) > 1 {
+				// Print all resources in selected format
+				printer.PrintResources(c.Resources, selectedFormat)
+			} else {
+				// Print single resource
+				printer.PrintResource(c.Resources[0], selectedFormat)
+			}
+		}
+	}
+
 	fmt.Println("")
 
 	// demonstrate state store usage
 	// create a resource registry with the same plugin hosts as the parser
-	registry := hclconfig.NewResourceRegistry([]plugins.PluginHost{})
-	stateStore := hclconfig.NewFileStateStore("./example-state", registry)
-	
-	// save the parsed config
-	err = stateStore.Save(c)
-	if err != nil {
-		fmt.Println("unable to save config", err)
-	}
+	//registry := p.GetPluginRegistry()
+	//stateStore := hclconfig.NewFileStateStore("./example-state", registry)
 
-	// load the config from state
-	nc, err := stateStore.Load()
-	if err != nil {
-		fmt.Printf("An error occurred loading the config: %s\n", err)
-		os.Exit(1)
-	}
+	//// save the parsed config
+	//err = stateStore.Save(c)
+	//if err != nil {
+	//	fmt.Println("unable to save config", err)
+	//}
 
-	fmt.Println("## Process config")
-	nc.Walk(func(r types.Resource) error {
-		fmt.Println("  ", r.Metadata().ID)
-		return nil
-	}, false)
+	//// load the config from state
+	//nc, err := stateStore.Load()
+	//if err != nil {
+	//	fmt.Printf("An error occurred loading the config: %s\n", err)
+	//	os.Exit(1)
+	//}
 
-	fmt.Println("")
-	fmt.Println("## Process config reverse")
+	//fmt.Println("## Process config")
+	//nc.Walk(func(r types.Resource) error {
+	//	fmt.Println("  ", r.Metadata().ID)
+	//	return nil
+	//}, false)
 
-	nc.Walk(func(r types.Resource) error {
-		fmt.Println("  ", r.Metadata().ID)
-		return nil
-	}, true)
+	//fmt.Println("")
+	//fmt.Println("## Process config reverse")
 
-}
+	//nc.Walk(func(r types.Resource) error {
+	//	fmt.Println("  ", r.Metadata().ID)
+	//	return nil
+	//}, true)
 
-func printConfig(c *hclconfig.Config) {
-	fmt.Println("## Dump config")
-
-	for _, r := range c.Resources {
-		switch r.Metadata().Type {
-		case "config":
-			t := r.(*Config)
-			fmt.Println(printConfigT(t, 2))
-
-		case "postgres":
-			t := r.(*PostgreSQL)
-			fmt.Println(printPostgres(t, 2))
-
-		case "output":
-			t := r.(*resources.Output)
-			fmt.Printf("  Postgres %s\n", t.Meta.Name)
-			fmt.Printf("  Module %s\n", t.Meta.Module)
-			fmt.Printf("  --- Value: %s\n", t.Value)
-		}
-
-		fmt.Println("")
-	}
-}
-
-func printConfigT(t *Config, indent int) string {
-	str := bytes.NewBufferString("")
-	pad := ""
-	for i := 0; i < indent; i++ {
-		pad += " "
-	}
-
-	fmt.Fprintf(str, "%sConfig %s\n", pad, t.Meta.Name)
-	fmt.Fprintf(str, "%sModule %s\n", pad, t.Meta.Module)
-	fmt.Fprintf(str, "%s--- ID: %s\n", pad, t.Meta.ID)
-	fmt.Fprintf(str, "%s--- DBConnectionString: %s\n", pad, t.DBConnectionString)
-	fmt.Fprintf(str, "%s--- Timeouts\n", pad)
-	fmt.Fprintf(str, "%s------ Connection: %d\n", pad, t.Timeouts.Connection)
-	fmt.Fprintf(str, "%s------ KeepAlive: %d\n", pad, t.Timeouts.KeepAlive)
-	fmt.Fprintf(str, "%s------ TLSHandshake: %d\n", pad, t.Timeouts.TLSHandshake)
-	fmt.Fprintf(str, "%s--- MainDBConnection:\n", pad)
-
-	fmt.Fprintf(str, "%s", printPostgres(&t.MainDBConnection, 8))
-
-	for i, p := range t.OtherDBConnections {
-		fmt.Fprintf(str, "%s--- OtherDBConnections[%d]:\n", pad, i)
-		fmt.Fprintf(str, "%s", printPostgres(&p, 8))
-	}
-
-	return str.String()
-}
-
-func printPostgres(p *PostgreSQL, indent int) string {
-	str := bytes.NewBufferString("")
-	pad := ""
-	for i := 0; i < indent; i++ {
-		pad += " "
-	}
-
-	fmt.Fprintf(str, "%sPostgres %s\n", pad, p.Meta.Name)
-	fmt.Fprintf(str, "%sModule %s\n", pad, p.Meta.Module)
-	fmt.Fprintf(str, "%s--- Location: %s\n", pad, p.Location)
-	fmt.Fprintf(str, "%s--- Port: %d\n", pad, p.Port)
-	fmt.Fprintf(str, "%s--- DBName: %s\n", pad, p.DBName)
-	fmt.Fprintf(str, "%s--- Username: %s\n", pad, p.Username)
-	fmt.Fprintf(str, "%s--- Password: %s\n", pad, p.Password)
-	fmt.Fprintf(str, "%s--- ConnectionString: %s\n", pad, p.ConnectionString)
-
-	return str.String()
 }
 
 // ExamplePlugin provides the Config and PostgreSQL resource types for the example
@@ -191,7 +191,7 @@ func (p *ExamplePlugin) Init(logger plugins.Logger, state plugins.State) error {
 		logger,
 		state,
 		"resource",
-		"config", 
+		"config",
 		configResource,
 		configProvider,
 	)
@@ -216,7 +216,7 @@ func (p *ExamplePlugin) Init(logger plugins.Logger, state plugins.State) error {
 // ExampleResourceProvider is a generic provider for example resources
 type ExampleResourceProvider[T types.Resource] struct {
 	logger    plugins.Logger
-	state     plugins.State  
+	state     plugins.State
 	functions plugins.ProviderFunctions
 }
 
@@ -230,6 +230,7 @@ func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins
 
 // Create is a no-op for the example
 func (p *ExampleResourceProvider[T]) Create(ctx context.Context, resource T) (T, error) {
+	p.logger.Info("Creating resource", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
 	return resource, nil
 }
 
@@ -238,13 +239,18 @@ func (p *ExampleResourceProvider[T]) Destroy(ctx context.Context, resource T, fo
 	return nil
 }
 
-// Refresh is a no-op for the example  
+// Refresh is a no-op for the example
 func (p *ExampleResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
 	return nil
 }
 
+// Update is a no-op for the example
+func (p *ExampleResourceProvider[T]) Update(ctx context.Context, resource T) error {
+	return nil
+}
+
 // Changed always returns false for the example
-func (p *ExampleResourceProvider[T]) Changed(ctx context.Context, resource T) (bool, error) {
+func (p *ExampleResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bool, error) {
 	return false, nil
 }
 

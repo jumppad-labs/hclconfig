@@ -24,6 +24,7 @@ const (
 	PluginService_Create_FullMethodName   = "/proto.PluginService/Create"
 	PluginService_Destroy_FullMethodName  = "/proto.PluginService/Destroy"
 	PluginService_Refresh_FullMethodName  = "/proto.PluginService/Refresh"
+	PluginService_Update_FullMethodName   = "/proto.PluginService/Update"
 	PluginService_Changed_FullMethodName  = "/proto.PluginService/Changed"
 )
 
@@ -38,6 +39,7 @@ type PluginServiceClient interface {
 	Create(ctx context.Context, in *CreateRequest, opts ...grpc.CallOption) (*CreateResponse, error)
 	Destroy(ctx context.Context, in *DestroyRequest, opts ...grpc.CallOption) (*DestroyResponse, error)
 	Refresh(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshResponse, error)
+	Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error)
 	Changed(ctx context.Context, in *ChangedRequest, opts ...grpc.CallOption) (*ChangedResponse, error)
 }
 
@@ -99,6 +101,16 @@ func (c *pluginServiceClient) Refresh(ctx context.Context, in *RefreshRequest, o
 	return out, nil
 }
 
+func (c *pluginServiceClient) Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateResponse)
+	err := c.cc.Invoke(ctx, PluginService_Update_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *pluginServiceClient) Changed(ctx context.Context, in *ChangedRequest, opts ...grpc.CallOption) (*ChangedResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChangedResponse)
@@ -120,6 +132,7 @@ type PluginServiceServer interface {
 	Create(context.Context, *CreateRequest) (*CreateResponse, error)
 	Destroy(context.Context, *DestroyRequest) (*DestroyResponse, error)
 	Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error)
+	Update(context.Context, *UpdateRequest) (*UpdateResponse, error)
 	Changed(context.Context, *ChangedRequest) (*ChangedResponse, error)
 	mustEmbedUnimplementedPluginServiceServer()
 }
@@ -145,6 +158,9 @@ func (UnimplementedPluginServiceServer) Destroy(context.Context, *DestroyRequest
 }
 func (UnimplementedPluginServiceServer) Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Refresh not implemented")
+}
+func (UnimplementedPluginServiceServer) Update(context.Context, *UpdateRequest) (*UpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
 }
 func (UnimplementedPluginServiceServer) Changed(context.Context, *ChangedRequest) (*ChangedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Changed not implemented")
@@ -260,6 +276,24 @@ func _PluginService_Refresh_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PluginService_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PluginServiceServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PluginService_Update_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PluginServiceServer).Update(ctx, req.(*UpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PluginService_Changed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChangedRequest)
 	if err := dec(in); err != nil {
@@ -304,6 +338,10 @@ var PluginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Refresh",
 			Handler:    _PluginService_Refresh_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _PluginService_Update_Handler,
 		},
 		{
 			MethodName: "Changed",

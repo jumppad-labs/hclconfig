@@ -14,13 +14,13 @@ import (
 type FileStateStore struct {
 	stateDir  string
 	stateFile string
-	registry  *ResourceRegistry
+	registry  *PluginRegistry
 	mu        sync.Mutex
 }
 
 // NewFileStateStore creates a new file-based state store.
 // If stateDir is empty, it defaults to ".hclconfig/state" in the current directory.
-func NewFileStateStore(stateDir string, registry *ResourceRegistry) *FileStateStore {
+func NewFileStateStore(stateDir string, registry *PluginRegistry) *FileStateStore {
 	if stateDir == "" {
 		stateDir = filepath.Join(".", ".hclconfig", "state")
 	}
