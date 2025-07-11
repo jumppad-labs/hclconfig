@@ -8,6 +8,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/state"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -196,11 +197,11 @@ func (r *PluginRegistry) GetPluginHosts() []plugins.PluginHost {
 // This is useful when loading resources from state storage
 func (r *PluginRegistry) CastResource(resource types.Resource) (types.Resource, error) {
 	// If it's already a concrete type (not GenericResource), return as-is
-	if _, isGeneric := resource.(*GenericResource); !isGeneric {
+	if _, isGeneric := resource.(*state.GenericResource); !isGeneric {
 		return resource, nil
 	}
 	
-	genericResource := resource.(*GenericResource)
+	genericResource := resource.(*state.GenericResource)
 	resourceType := genericResource.Metadata().Type
 	resourceName := genericResource.Metadata().Name
 	
@@ -235,7 +236,7 @@ func CastResourceTo[T types.Resource](registry *PluginRegistry, resource types.R
 	}
 	
 	// If it's a generic resource, try casting through the registry
-	if _, isGeneric := resource.(*GenericResource); isGeneric {
+	if _, isGeneric := resource.(*state.GenericResource); isGeneric {
 		cast, err := registry.CastResource(resource)
 		if err != nil {
 			return zero, err

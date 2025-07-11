@@ -1,4 +1,4 @@
-package hclconfig
+package state
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/jumppad-labs/hclconfig/types"
@@ -18,29 +19,34 @@ type GenericResource struct {
 	Data map[string]any `json:",inline"`
 }
 
+// ConfigFactory creates a new Config instance to avoid circular imports
+type ConfigFactory func() any
+
 // FileStateStore implements StateStore using file-based persistence.
 // State is stored as JSON in a file within the state directory.
 type FileStateStore struct {
-	stateDir  string
-	stateFile string
-	mu        sync.Mutex
+	stateDir      string
+	stateFile     string
+	mu            sync.Mutex
+	configFactory ConfigFactory
 }
 
 // NewFileStateStore creates a new file-based state store.
 // If stateDir is empty, it defaults to ".hclconfig/state" in the current directory.
-func NewFileStateStore(stateDir string) *FileStateStore {
+func NewFileStateStore(stateDir string, configFactory ConfigFactory) *FileStateStore {
 	if stateDir == "" {
 		stateDir = filepath.Join(".", ".hclconfig", "state")
 	}
 
 	return &FileStateStore{
-		stateDir:  stateDir,
-		stateFile: filepath.Join(stateDir, "state.json"),
+		stateDir:      stateDir,
+		stateFile:     filepath.Join(stateDir, "state.json"),
+		configFactory: configFactory,
 	}
 }
 
 // Load retrieves the previously saved configuration state from the file.
-func (f *FileStateStore) Load() (*Config, error) {
+func (f *FileStateStore) Load() (any, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -57,7 +63,7 @@ func (f *FileStateStore) Load() (*Config, error) {
 }
 
 // Save persists the current configuration state to the file.
-func (f *FileStateStore) Save(config *Config) error {
+func (f *FileStateStore) Save(config any) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -111,7 +117,7 @@ func (f *FileStateStore) Clear() error {
 }
 
 // marshalConfig serializes a Config to JSON
-func (f *FileStateStore) marshalConfig(config *Config) ([]byte, error) {
+func (f *FileStateStore) marshalConfig(config any) ([]byte, error) {
 	buf := bytes.NewBuffer([]byte{})
 	enc := json.NewEncoder(buf)
 	enc.SetIndent("", " ")
@@ -125,8 +131,8 @@ func (f *FileStateStore) marshalConfig(config *Config) ([]byte, error) {
 }
 
 // unmarshalConfig deserializes JSON to a Config with generic resource types
-func (f *FileStateStore) unmarshalConfig(data []byte) (*Config, error) {
-	conf := NewConfig()
+func (f *FileStateStore) unmarshalConfig(data []byte) (any, error) {
+	conf := f.configFactory()
 
 	var objMap map[string]*json.RawMessage
 	err := json.Unmarshal(data, &objMap)
@@ -152,7 +158,12 @@ func (f *FileStateStore) unmarshalConfig(data []byte) (*Config, error) {
 			return nil, fmt.Errorf("failed to unmarshal resource: %w", err)
 		}
 
-		conf.addResource(genericResource, nil, nil)
+		// Use reflection to access Resources field
+		confValue := reflect.ValueOf(conf).Elem()
+		resourcesField := confValue.FieldByName("Resources")
+		if resourcesField.IsValid() && resourcesField.CanSet() {
+			resourcesField.Set(reflect.Append(resourcesField, reflect.ValueOf(genericResource)))
+		}
 	}
 
 	return conf, nil

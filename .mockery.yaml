@@ -7,3 +7,6 @@ packages:
   github.com/jumppad-labs/hclconfig/plugins:
     interfaces:
       State:
+  github.com/jumppad-labs/hclconfig/state:
+    interfaces:
+      StateStore:

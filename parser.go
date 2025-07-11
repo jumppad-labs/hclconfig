@@ -19,6 +19,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/state"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -67,7 +68,7 @@ type ParserOptions struct {
 
 	// StateStore is used to persist configuration state between runs.
 	// If nil, a default FileStateStore will be created.
-	StateStore StateStore
+	StateStore state.StateStore
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -130,7 +131,7 @@ func DefaultOptions() *ParserOptions {
 type Parser struct {
 	options             ParserOptions
 	registeredFunctions map[string]function.Function
-	stateStore          StateStore
+	stateStore          state.StateStore
 	pluginRegistry      *PluginRegistry
 }
 
@@ -160,7 +161,7 @@ func NewParser(options *ParserOptions) *Parser {
 		p.stateStore = o.StateStore
 	} else {
 		// Create default file-based state store
-		p.stateStore = NewFileStateStore("")
+		p.stateStore = state.NewFileStateStore("", func() any { return NewConfig() })
 	}
 
 	// Auto-discover and load plugins if enabled
@@ -240,11 +241,19 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 	}
 
 	// Load previous state
-	previousState, stateErr := p.stateStore.Load()
+	prevState, stateErr := p.stateStore.Load()
 	if stateErr != nil {
 		// Log error but continue - we can operate without previous state
 		// This allows the system to recover from corrupted state files
 		// TODO: Add proper logging when logger is available
+	}
+
+	// Type assert the loaded state to *Config
+	var previousState *Config
+	if prevState != nil {
+		if config, ok := prevState.(*Config); ok {
+			previousState = config
+		}
 	}
 
 	// Create working config - start with previous state or empty config
@@ -309,11 +318,19 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	}
 
 	// Load previous state first for dependency validation
-	previousState, stateErr := p.stateStore.Load()
+	prevState, stateErr := p.stateStore.Load()
 	if stateErr != nil {
 		// Log error but continue - we can operate without previous state
 		// This allows the system to recover from corrupted state files
 		// TODO: Add proper logging when logger is available
+	}
+
+	// Type assert the loaded state to *Config
+	var previousState *Config
+	if prevState != nil {
+		if config, ok := prevState.(*Config); ok {
+			previousState = config
+		}
 	}
 
 	// Validate resource dependencies with previous state context

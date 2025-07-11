@@ -12,6 +12,8 @@ import (
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/logger"
+	"github.com/jumppad-labs/hclconfig/state/mocks"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -24,7 +26,13 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 		os.Setenv("HOME", home)
 	})
 
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
 	o := DefaultOptions()
+	o.StateStore = ms
+
 	if len(options) > 0 {
 		o = options[0]
 	}
@@ -190,7 +198,12 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
 	o := DefaultOptions()
+	o.StateStore = ms
 	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
 
 	p := setupParser(t, o)
@@ -501,10 +514,7 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	o := DefaultOptions()
-	// calls := []string{} // TODO: remove when lifecycle is implemented
-
-	p := setupParser(t, o)
+	p := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -576,10 +586,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	o := DefaultOptions()
-	// calls := []string{} // TODO: remove when lifecycle is implemented
-
-	p := setupParser(t, o)
+	p := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -604,10 +611,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	o := DefaultOptions()
-	// calls := []string{} // TODO: remove when lifecycle is implemented
-
-	p := setupParser(t, o)
+	p := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -729,10 +733,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	o := DefaultOptions()
-	// calls := []string{} // TODO: remove when lifecycle is implemented
-
-	p := setupParser(t, o)
+	p := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -800,10 +801,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	o := DefaultOptions()
-	// calls := []string{} // TODO: remove when lifecycle is implemented
-
-	p := setupParser(t, o)
+	p := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	// TODO: re-enable when lifecycle is implemented - this test expects a callback error
@@ -907,7 +905,6 @@ func TestParserRejectsInvalidResourceName(t *testing.T) {
 	err = validateResourceName("my_Module")
 	require.NoError(t, err)
 }
-
 
 func TestParserCyclicalReferenceReturnsError(t *testing.T) {
 	f, pathErr := filepath.Abs("./internal/test_fixtures/config/cyclical/fail/cyclical.hcl")
@@ -1143,7 +1140,13 @@ func TestParseParsesToResourceBase(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
 	o := DefaultOptions()
+	o.StateStore = ms
+
 	o.PrimativesOnly = true
 
 	p := NewParser(o)

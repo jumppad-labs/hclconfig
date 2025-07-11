@@ -1,10 +1,12 @@
-package hclconfig
+package state_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig"
+	"github.com/jumppad-labs/hclconfig/state"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
@@ -15,10 +17,10 @@ func TestFileStateStoreCreatesStateDirectoryIfNotExists(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	stateDir := filepath.Join(tmpDir, "test-state")
-	store := NewFileStateStore(stateDir)
+	store := state.NewFileStateStore(stateDir, func() any { return hclconfig.NewConfig() })
 
 	// Save should create the directory
-	config := &Config{Resources: []types.Resource{}}
+	config := &hclconfig.Config{Resources: []types.Resource{}}
 	err = store.Save(config)
 	require.NoError(t, err)
 
@@ -32,10 +34,10 @@ func TestFileStateStoreSavesAndLoadsConfigCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	store := NewFileStateStore(filepath.Join(tmpDir, "save-load-test"))
+	store := state.NewFileStateStore(filepath.Join(tmpDir, "save-load-test"), func() any { return hclconfig.NewConfig() })
 
 	// Create test config with a builtin resource (variable)
-	config := &Config{
+	config := &hclconfig.Config{
 		Resources: []types.Resource{
 			&types.ResourceBase{
 				Meta: types.Meta{
@@ -55,9 +57,13 @@ func TestFileStateStoreSavesAndLoadsConfigCorrectly(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load the state
-	loadedConfig, err := store.Load()
+	loadedState, err := store.Load()
 	require.NoError(t, err)
-	require.NotNil(t, loadedConfig)
+	require.NotNil(t, loadedState)
+	
+	// Type assert to *hclconfig.Config
+	loadedConfig, ok := loadedState.(*hclconfig.Config)
+	require.True(t, ok)
 	require.Len(t, loadedConfig.Resources, 1)
 
 	// Verify the content matches
@@ -72,11 +78,11 @@ func TestFileStateStoreReturnsNilWhenNoStateExists(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	store := NewFileStateStore(filepath.Join(tmpDir, "no-state-test"))
+	store := state.NewFileStateStore(filepath.Join(tmpDir, "no-state-test"), func() any { return hclconfig.NewConfig() })
 
-	config, err := store.Load()
+	loadedState, err := store.Load()
 	require.NoError(t, err)
-	require.Nil(t, config)
+	require.Nil(t, loadedState)
 }
 
 func TestFileStateStoreExistsReturnsCorrectStatus(t *testing.T) {
@@ -84,13 +90,13 @@ func TestFileStateStoreExistsReturnsCorrectStatus(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	store := NewFileStateStore(filepath.Join(tmpDir, "exists-test"))
+	store := state.NewFileStateStore(filepath.Join(tmpDir, "exists-test"), func() any { return hclconfig.NewConfig() })
 
 	// Should not exist initially
 	require.False(t, store.Exists())
 
 	// Save state
-	config := &Config{Resources: []types.Resource{}}
+	config := &hclconfig.Config{Resources: []types.Resource{}}
 	err = store.Save(config)
 	require.NoError(t, err)
 
@@ -103,10 +109,10 @@ func TestFileStateStoreClearRemovesStateFile(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	store := NewFileStateStore(filepath.Join(tmpDir, "clear-test"))
+	store := state.NewFileStateStore(filepath.Join(tmpDir, "clear-test"), func() any { return hclconfig.NewConfig() })
 
 	// Save state
-	config := &Config{Resources: []types.Resource{}}
+	config := &hclconfig.Config{Resources: []types.Resource{}}
 	err = store.Save(config)
 	require.NoError(t, err)
 	require.True(t, store.Exists())
@@ -126,13 +132,13 @@ func TestFileStateStoreHandlesConcurrentAccessSafely(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	store := NewFileStateStore(filepath.Join(tmpDir, "concurrent-test"))
+	store := state.NewFileStateStore(filepath.Join(tmpDir, "concurrent-test"), func() any { return hclconfig.NewConfig() })
 
 	// Run multiple goroutines saving and loading
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func(id int) {
-			config := &Config{
+			config := &hclconfig.Config{
 				Resources: []types.Resource{
 					&types.ResourceBase{
 						Meta: types.Meta{
@@ -147,9 +153,13 @@ func TestFileStateStoreHandlesConcurrentAccessSafely(t *testing.T) {
 			err := store.Save(config)
 			require.NoError(t, err)
 
-			loaded, err := store.Load()
+			loadedState, err := store.Load()
 			require.NoError(t, err)
-			require.NotNil(t, loaded)
+			require.NotNil(t, loadedState)
+			
+			// Type assert to *hclconfig.Config
+			_, ok := loadedState.(*hclconfig.Config)
+			require.True(t, ok)
 
 			done <- true
 		}(i)
@@ -171,10 +181,10 @@ func TestFileStateStoreUsesDefaultDirectoryWhenEmptyStringProvided(t *testing.T)
 	os.Chdir(tmpDir)
 	defer os.Chdir(originalWd)
 
-	store := NewFileStateStore("")
+	store := state.NewFileStateStore("", func() any { return hclconfig.NewConfig() })
 
 	// Save state
-	config := &Config{Resources: []types.Resource{}}
+	config := &hclconfig.Config{Resources: []types.Resource{}}
 	err = store.Save(config)
 	require.NoError(t, err)
 
