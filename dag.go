@@ -332,7 +332,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry) fu
 				pe.Column = r.Metadata().Column
 				pe.Message = fmt.Sprintf("provider lifecycle error: %s", err)
 				pe.Level = errors.ParserErrorLevelError
-				
+
 				return diags.Append(pe)
 			}
 		}
@@ -343,6 +343,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry) fu
 
 // callProviderLifecycle calls the appropriate provider lifecycle methods for a resource
 func callProviderLifecycle(resource types.Resource, previousState *Config, registry *PluginRegistry) error {
+
 	// Skip builtin resource types that don't have providers
 	if resource.Metadata().Type == resources.TypeVariable ||
 		resource.Metadata().Type == resources.TypeOutput ||
@@ -356,12 +357,12 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 	adapter := registry.GetProvider(resource)
 	if adapter == nil {
 		// No provider found - this might be a builtin type without a provider
-		return nil
+		return fmt.Errorf("no provider found for resource type %s", resource.Metadata().Type)
 	}
 
 	ctx := context.Background()
 	resourceID := resource.Metadata().ID
-	
+
 	// Serialize the current resource to JSON
 	currentJSON, err := json.Marshal(resource)
 	if err != nil {
@@ -376,29 +377,29 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		stateResource, err = previousState.FindResource(resourceID)
 		existsInState = (err == nil)
 	}
-	
+
 	if existsInState {
 		// Resource exists - follow the lifecycle: Refresh -> Changed -> Update/Skip
-		
+
 		// 1. Call Refresh to ensure state is up to date
 		if err := adapter.Refresh(ctx, currentJSON); err != nil {
 			resource.Metadata().Status = "failed"
 			return fmt.Errorf("refresh failed: %w", err)
 		}
-		
+
 		// 2. Serialize state resource for comparison
 		stateJSON, err := json.Marshal(stateResource)
 		if err != nil {
 			return fmt.Errorf("failed to serialize state resource: %w", err)
 		}
-		
+
 		// 3. Check if resource has changed
 		changed, err := adapter.Changed(ctx, stateJSON, currentJSON)
 		if err != nil {
 			resource.Metadata().Status = "failed"
 			return fmt.Errorf("changed check failed: %w", err)
 		}
-		
+
 		// 4. If changed, call Update
 		if changed {
 			if err := adapter.Update(ctx, currentJSON); err != nil {
@@ -420,7 +421,7 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		}
 		resource.Metadata().Status = "created"
 	}
-	
+
 	return nil
 }
 

@@ -3,6 +3,7 @@ package hclconfig
 import (
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/stretchr/testify/require"
@@ -48,7 +49,7 @@ type SimpleTestPlugin struct {
 }
 
 // Init initializes the test plugin
-func (p *SimpleTestPlugin) Init(logger plugins.Logger, state plugins.State) error {
+func (p *SimpleTestPlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Create test person resource and provider
 	personResource := &person.Person{}
 	personProvider := &person.ExampleProvider{}

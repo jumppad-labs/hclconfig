@@ -4,9 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
+
+	"github.com/jumppad-labs/hclconfig/logger"
 )
+
 
 func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	setup := newTestPluginSetup(t)
@@ -15,12 +17,12 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	
 	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-test")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -31,7 +33,6 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	if len(plugins) != 1 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 	
 	for _, plugin := range plugins {
@@ -52,12 +53,12 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-one")
 	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-two")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -68,7 +69,6 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	if len(plugins) != 2 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 	
 	for _, plugin := range plugins {
@@ -88,12 +88,12 @@ func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
 	
 	setup.copyPlugin(examplePlugin, invalidDir, "not-a-plugin")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -104,7 +104,6 @@ func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
 	if len(plugins) != 0 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 }
 
@@ -114,12 +113,12 @@ func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	
 	setup.createNonExecutable(invalidDir, "hclconfig-plugin-fake")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -130,7 +129,6 @@ func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	if len(plugins) != 0 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 }
 
@@ -144,12 +142,12 @@ func TestPluginDiscoveryMixedDirectory(t *testing.T) {
 	setup.createNonExecutable(mixedDir, "hclconfig-plugin-text.txt")
 	setup.copyPlugin(examplePlugin, mixedDir, "wrong-pattern")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{mixedDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{mixedDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -161,7 +159,6 @@ func TestPluginDiscoveryMixedDirectory(t *testing.T) {
 	if len(plugins) != 2 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 	
 	for _, plugin := range plugins {
@@ -178,12 +175,12 @@ func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
 	setup := newTestPluginSetup(t)
 	emptyDir := setup.createPluginDir("empty")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{emptyDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{emptyDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -194,7 +191,6 @@ func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
 	if len(plugins) != 0 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 }
 
@@ -202,12 +198,12 @@ func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
 	setup := newTestPluginSetup(t)
 	nonExistentDir := filepath.Join(setup.testDir, "non-existent")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{nonExistentDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{nonExistentDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -218,7 +214,6 @@ func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
 	if len(plugins) != 0 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 }
 
@@ -232,12 +227,12 @@ func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-dir1")
 	setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-dir2")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{validDir, mixedDir, emptyDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{validDir, mixedDir, emptyDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -248,7 +243,6 @@ func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
 	if len(plugins) != 2 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 	
 	for _, plugin := range plugins {
@@ -269,12 +263,12 @@ func TestPluginDiscoveryCustomPattern(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "my-custom-plugin-test")
 	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-ignored")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{validDir}, "my-custom-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{validDir}, "my-custom-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -285,7 +279,6 @@ func TestPluginDiscoveryCustomPattern(t *testing.T) {
 	if len(plugins) != 1 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 	
 	for _, plugin := range plugins {
@@ -305,12 +298,12 @@ func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
 	
 	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-unique")
 
-	var logs []string
-	logger := func(msg string) {
-		logs = append(logs, msg)
+	testLogger := logger.NewTestLogger(t)
+	loggerFunc := func(msg string) {
+		testLogger.Info(msg)
 	}
 	
-	pd := NewPluginDiscovery([]string{validDir, validDir, validDir}, "hclconfig-plugin-*", logger)
+	pd := NewPluginDiscovery([]string{validDir, validDir, validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
 	if err != nil {
@@ -322,7 +315,6 @@ func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
 	if len(plugins) != 1 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
-		t.Logf("Logs: %v", logs)
 	}
 	
 	for _, plugin := range plugins {
@@ -513,36 +505,16 @@ func TestParserIntegration_AutoDiscovery(t *testing.T) {
 	
 	// Test with auto-discovery enabled
 	t.Run("auto-discovery enabled", func(t *testing.T) {
-		var logs []string
 		opts := &ParserOptions{
 			PluginDirectories:   []string{pluginDir},
 			AutoDiscoverPlugins: true,
 			PluginNamePattern:   "hclconfig-plugin-*",
-			Logger: func(msg string) {
-				logs = append(logs, msg)
-			},
+			Logger: logger.NewTestLogger(t),
 		}
 		
 		p := NewParser(opts)
 		
-		// Check that plugin was discovered and loaded
-		foundDiscoveryLog := false
-		foundLoadLog := false
-		for _, log := range logs {
-			if strings.Contains(log, "Successfully loaded plugin") {
-				foundLoadLog = true
-			}
-			if strings.Contains(log, "Plugin discovery complete") {
-				foundDiscoveryLog = true
-			}
-		}
-		
-		if !foundDiscoveryLog {
-			t.Error("Expected to find plugin discovery log")
-		}
-		if !foundLoadLog {
-			t.Error("Expected to find plugin load log")
-		}
+		// Check that plugin was discovered and loaded by verifying plugin registry
 		
 		// Verify plugin is actually loaded by checking registered types
 		if len(p.pluginRegistry.GetPluginHosts()) == 0 {
@@ -552,24 +524,16 @@ func TestParserIntegration_AutoDiscovery(t *testing.T) {
 	
 	// Test with auto-discovery disabled
 	t.Run("auto-discovery disabled", func(t *testing.T) {
-		var logs []string
 		opts := &ParserOptions{
 			PluginDirectories:   []string{pluginDir},
 			AutoDiscoverPlugins: false,
 			PluginNamePattern:   "hclconfig-plugin-*",
-			Logger: func(msg string) {
-				logs = append(logs, msg)
-			},
+			Logger: logger.NewTestLogger(t),
 		}
 		
 		p := NewParser(opts)
 		
-		// Check that no discovery happened
-		for _, log := range logs {
-			if strings.Contains(log, "Plugin discovery") {
-				t.Error("Plugin discovery should not run when disabled")
-			}
-		}
+		// Check that no discovery happened by verifying plugin registry is empty
 		
 		// Verify no plugins loaded
 		if len(p.pluginRegistry.GetPluginHosts()) != 0 {
@@ -607,11 +571,8 @@ func TestParserIntegration_EnvironmentVariables(t *testing.T) {
 		os.Setenv("HCLCONFIG_PLUGIN_PATH", envDir1+separator+envDir2)
 		os.Setenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY", "")
 		
-		var logs []string
 		opts := DefaultOptions()
-		opts.Logger = func(msg string) {
-			logs = append(logs, msg)
-		}
+		opts.Logger = logger.NewTestLogger(t)
 		
 		// Verify directories were added
 		foundEnv1 := false
@@ -633,17 +594,9 @@ func TestParserIntegration_EnvironmentVariables(t *testing.T) {
 		// Create parser and verify plugins are discovered
 		p := NewParser(opts)
 		
-		// Should find 2 plugins
-		successCount := 0
-		for _, log := range logs {
-			if strings.Contains(log, "Successfully loaded plugin") {
-				successCount++
-			}
-		}
-		
-		if successCount < 2 {
-			t.Errorf("Expected to load 2 plugins, loaded %d", successCount)
-			t.Logf("Logs: %v", logs)
+		// Should find 2 plugins - verify by checking plugin registry
+		if len(p.pluginRegistry.GetPluginHosts()) < 2 {
+			t.Errorf("Expected to load 2 plugins, loaded %d", len(p.pluginRegistry.GetPluginHosts()))
 		}
 		
 		_ = p // Use p to avoid unused variable warning
@@ -660,10 +613,7 @@ func TestParserIntegration_EnvironmentVariables(t *testing.T) {
 			t.Error("Expected AutoDiscoverPlugins to be false when HCLCONFIG_DISABLE_PLUGIN_DISCOVERY=true")
 		}
 		
-		var logs []string
-		opts.Logger = func(msg string) {
-			logs = append(logs, msg)
-		}
+		opts.Logger = logger.NewTestLogger(t)
 		
 		p := NewParser(opts)
 		

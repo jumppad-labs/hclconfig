@@ -3,6 +3,7 @@ package person
 import (
 	"context"
 
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 )
 
@@ -11,13 +12,13 @@ import (
 type ExampleProvider struct {
 	state     plugins.State
 	functions plugins.ProviderFunctions
-	logger    plugins.Logger
+	logger    logger.Logger
 }
 
 // Compile-time check to ensure ExampleProvider implements ResourceProvider[*Person]
 var _ plugins.ResourceProvider[*Person] = (*ExampleProvider)(nil)
 
-func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger plugins.Logger) error {
+func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
 	p.state = state
 	p.functions = functions
 	p.logger = logger

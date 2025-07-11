@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jumppad-labs/hclconfig/internal/resources"
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
 )
@@ -14,11 +15,11 @@ import (
 type PluginRegistry struct {
 	builtinTypes types.RegisteredTypes
 	pluginHosts  []plugins.PluginHost
-	logger       plugins.Logger
+	logger       logger.Logger
 }
 
 // NewPluginRegistry creates a new plugin registry with builtin types
-func NewPluginRegistry(logger plugins.Logger) *PluginRegistry {
+func NewPluginRegistry(logger logger.Logger) *PluginRegistry {
 	return &PluginRegistry{
 		builtinTypes: resources.DefaultResources(),
 		pluginHosts:  []plugins.PluginHost{},
@@ -135,7 +136,13 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 	}
 
 	// Create plugin discovery instance
-	pd := NewPluginDiscovery(options.PluginDirectories, options.PluginNamePattern, options.Logger)
+	var loggerFunc func(string)
+	if options.Logger != nil {
+		loggerFunc = func(msg string) {
+			options.Logger.Info(msg)
+		}
+	}
+	pd := NewPluginDiscovery(options.PluginDirectories, options.PluginNamePattern, loggerFunc)
 
 	// Discover plugins
 	pluginPaths, err := pd.DiscoverPlugins()
@@ -152,12 +159,12 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 		if err := r.RegisterPluginWithPath(pluginPath); err != nil {
 			loadErrors = append(loadErrors, fmt.Sprintf("%s: %v", pluginPath, err))
 			if options.Logger != nil {
-				options.Logger(fmt.Sprintf("Failed to load plugin %s: %v", pluginPath, err))
+				options.Logger.Error(fmt.Sprintf("Failed to load plugin %s: %v", pluginPath, err))
 			}
 		} else {
 			successCount++
 			if options.Logger != nil {
-				options.Logger(fmt.Sprintf("Successfully loaded plugin: %s", pluginPath))
+				options.Logger.Info(fmt.Sprintf("Successfully loaded plugin: %s", pluginPath))
 			}
 		}
 	}
@@ -165,10 +172,10 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 	// Log summary
 	if options.Logger != nil {
 		if successCount > 0 {
-			options.Logger(fmt.Sprintf("Plugin discovery complete: %d plugins loaded successfully", successCount))
+			options.Logger.Info(fmt.Sprintf("Plugin discovery complete: %d plugins loaded successfully", successCount))
 		}
 		if len(loadErrors) > 0 {
-			options.Logger(fmt.Sprintf("Plugin discovery warnings: %d plugins failed to load", len(loadErrors)))
+			options.Logger.Warn(fmt.Sprintf("Plugin discovery warnings: %d plugins failed to load", len(loadErrors)))
 		}
 	}
 
@@ -183,4 +190,61 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 // GetPluginHosts returns the list of plugin hosts (for compatibility)
 func (r *PluginRegistry) GetPluginHosts() []plugins.PluginHost {
 	return r.pluginHosts
+}
+
+// CastResource attempts to cast a generic resource to its concrete type
+// This is useful when loading resources from state storage
+func (r *PluginRegistry) CastResource(resource types.Resource) (types.Resource, error) {
+	// If it's already a concrete type (not GenericResource), return as-is
+	if _, isGeneric := resource.(*GenericResource); !isGeneric {
+		return resource, nil
+	}
+	
+	genericResource := resource.(*GenericResource)
+	resourceType := genericResource.Metadata().Type
+	resourceName := genericResource.Metadata().Name
+	
+	// Create the concrete resource type
+	concreteResource, err := r.CreateResource(resourceType, resourceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create concrete resource: %w", err)
+	}
+	
+	// Copy the metadata
+	*concreteResource.Metadata() = genericResource.Meta
+	
+	// Copy the base fields
+	concreteResource.SetDisabled(genericResource.GetDisabled())
+	concreteResource.SetDependencies(genericResource.GetDependencies())
+	
+	// For now, return the concrete resource with copied metadata
+	// TODO: In a future enhancement, we could use reflection to copy the additional fields
+	// from genericResource.Data into the concrete resource's fields
+	
+	return concreteResource, nil
+}
+
+// CastResourceTo attempts to cast a resource to a specific concrete type
+// This is a type-safe way to get strongly-typed resources from the registry
+func CastResourceTo[T types.Resource](registry *PluginRegistry, resource types.Resource) (T, error) {
+	var zero T
+	
+	// First try direct type assertion
+	if concrete, ok := resource.(T); ok {
+		return concrete, nil
+	}
+	
+	// If it's a generic resource, try casting through the registry
+	if _, isGeneric := resource.(*GenericResource); isGeneric {
+		cast, err := registry.CastResource(resource)
+		if err != nil {
+			return zero, err
+		}
+		
+		if concrete, ok := cast.(T); ok {
+			return concrete, nil
+		}
+	}
+	
+	return zero, fmt.Errorf("resource cannot be cast to requested type")
 }

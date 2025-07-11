@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/plugins/mocks"
 	"github.com/jumppad-labs/hclconfig/internal/schema"
@@ -25,7 +26,7 @@ type TestPluginHost struct {
 
 // InProcessPluginSetup creates an in-process plugin host for testing
 func InProcessPluginSetup(t *testing.T, plugin plugins.Plugin) *TestPluginHost {
-	logger := &plugins.TestLogger{}
+	logger := logger.NewTestLogger(t)
 	state := mocks.NewMockState(t)
 
 	ph, err := plugins.NewDirectPluginHost(logger, state, plugin)
@@ -43,7 +44,7 @@ func InProcessPluginSetup(t *testing.T, plugin plugins.Plugin) *TestPluginHost {
 
 // ExternalPluginSetup creates an external process plugin host for testing
 func ExternalPluginSetup(t *testing.T, binaryPath string) *TestPluginHost {
-	logger := &plugins.TestLogger{}
+	logger := logger.NewTestLogger(t)
 	ph := plugins.NewGRPCPluginHost(logger, nil)
 
 	err := ph.Start(binaryPath)

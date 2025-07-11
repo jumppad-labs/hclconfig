@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/hashicorp/go-plugin"
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 )
@@ -17,7 +18,7 @@ var _ plugins.Plugin = (*PersonPlugin)(nil)
 
 // Init is called by the HCLConfig framework to initialize the plugin.
 // This is where you register all the resource types your plugin handles.
-func (p *PersonPlugin) Init(logger plugins.Logger, state plugins.State) error {
+func (p *PersonPlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Create instances of resources and providers
 	personResource := &person.Person{}
 	personProvider := &person.ExampleProvider{}

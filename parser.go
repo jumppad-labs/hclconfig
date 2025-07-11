@@ -17,6 +17,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/internal/registry"
 	"github.com/jumppad-labs/hclconfig/internal/resources"
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/zclconf/go-cty/cty"
@@ -62,7 +63,7 @@ type ParserOptions struct {
 	// PluginNamePattern is the pattern to match plugin binaries (default: "hclconfig-plugin-*")
 	PluginNamePattern string
 	// Logger function for plugin discovery logging (optional)
-	Logger func(string)
+	Logger logger.Logger
 
 	// StateStore is used to persist configuration state between runs.
 	// If nil, a default FileStateStore will be created.
@@ -112,6 +113,8 @@ func DefaultOptions() *ParserOptions {
 	// Check if auto-discovery is disabled
 	autoDiscover := os.Getenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY") != "true"
 
+	logger := logger.NewStdOutLogger()
+
 	return &ParserOptions{
 		ModuleCache:         cacheDir,
 		VariableEnvPrefix:   "HCL_VAR_",
@@ -119,6 +122,7 @@ func DefaultOptions() *ParserOptions {
 		PluginDirectories:   pluginDirs,
 		AutoDiscoverPlugins: autoDiscover,
 		PluginNamePattern:   "hclconfig-plugin-*",
+		Logger:              logger,
 	}
 }
 
@@ -138,10 +142,9 @@ func NewParser(options *ParserOptions) *Parser {
 		o = DefaultOptions()
 	}
 
-	// Create logger for plugin registry
-	var logger plugins.Logger
-	if o.Logger != nil {
-		logger = &plugins.TestLogger{}
+	// Create logger if there is not one set
+	if o.Logger == nil {
+		o.Logger = &logger.StdOutLogger{}
 	}
 
 	p := &Parser{
@@ -150,14 +153,14 @@ func NewParser(options *ParserOptions) *Parser {
 	}
 
 	// Create plugin registry
-	p.pluginRegistry = NewPluginRegistry(logger)
+	p.pluginRegistry = NewPluginRegistry(o.Logger)
 
 	// Initialize state store
 	if o.StateStore != nil {
 		p.stateStore = o.StateStore
 	} else {
 		// Create default file-based state store
-		p.stateStore = NewFileStateStore("", p.pluginRegistry)
+		p.stateStore = NewFileStateStore("")
 	}
 
 	// Auto-discover and load plugins if enabled
@@ -165,7 +168,7 @@ func NewParser(options *ParserOptions) *Parser {
 		if err := p.pluginRegistry.DiscoverAndLoadPlugins(o); err != nil {
 			// Log error but don't fail parser creation
 			if o.Logger != nil {
-				o.Logger(fmt.Sprintf("Plugin discovery warning: %s", err))
+				o.Logger.Warn(fmt.Sprintf("Plugin discovery warning: %s", err))
 			}
 		}
 	}
@@ -204,7 +207,6 @@ func (p *Parser) RegisterPluginWithPath(pluginPath string) error {
 	return p.pluginRegistry.RegisterPluginWithPath(pluginPath)
 }
 
-
 // createBuiltinResource creates built-in resource types (local, output, variable, module)
 func (p *Parser) createBuiltinResource(resourceType, resourceName string) (types.Resource, error) {
 	builtinTypes := resources.DefaultResources()
@@ -225,7 +227,6 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 			ce.AppendError(e)
 		}
 
-		fmt.Println("parse error, skipping call Parse")
 		return nil, ce
 	}
 

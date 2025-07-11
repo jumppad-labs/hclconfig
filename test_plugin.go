@@ -3,6 +3,7 @@ package hclconfig
 import (
 	"context"
 
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
@@ -18,7 +19,7 @@ type TestPlugin struct {
 var _ plugins.Plugin = (*TestPlugin)(nil)
 
 // Init initializes the test plugin with test resource types
-func (p *TestPlugin) Init(logger plugins.Logger, state plugins.State) error {
+func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Register Container resource
 	containerResource := &structs.Container{}
 	containerProvider := &TestResourceProvider[*structs.Container]{}
@@ -87,13 +88,13 @@ func (p *TestPlugin) Init(logger plugins.Logger, state plugins.State) error {
 
 // TestResourceProvider is a generic test provider for any resource type
 type TestResourceProvider[T types.Resource] struct {
-	logger    plugins.Logger
+	logger    logger.Logger
 	state     plugins.State
 	functions plugins.ProviderFunctions
 }
 
 // Init initializes the test provider
-func (p *TestResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger plugins.Logger) error {
+func (p *TestResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
 	p.state = state
 	p.functions = functions
 	p.logger = logger
@@ -153,7 +154,7 @@ type EmbeddedTestPlugin struct {
 var _ plugins.Plugin = (*EmbeddedTestPlugin)(nil)
 
 // Init initializes the embedded test plugin
-func (p *EmbeddedTestPlugin) Init(logger plugins.Logger, state plugins.State) error {
+func (p *EmbeddedTestPlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Register Container resource
 	containerResource := &embedded.Container{}
 	containerProvider := &TestResourceProvider[*embedded.Container]{}

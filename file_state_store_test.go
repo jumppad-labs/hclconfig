@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
@@ -16,8 +15,7 @@ func TestFileStateStoreCreatesStateDirectoryIfNotExists(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	stateDir := filepath.Join(tmpDir, "test-state")
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore(stateDir, registry)
+	store := NewFileStateStore(stateDir)
 
 	// Save should create the directory
 	config := &Config{Resources: []types.Resource{}}
@@ -34,8 +32,7 @@ func TestFileStateStoreSavesAndLoadsConfigCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore(filepath.Join(tmpDir, "save-load-test"), registry)
+	store := NewFileStateStore(filepath.Join(tmpDir, "save-load-test"))
 
 	// Create test config with a builtin resource (variable)
 	config := &Config{
@@ -75,8 +72,7 @@ func TestFileStateStoreReturnsNilWhenNoStateExists(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore(filepath.Join(tmpDir, "no-state-test"), registry)
+	store := NewFileStateStore(filepath.Join(tmpDir, "no-state-test"))
 
 	config, err := store.Load()
 	require.NoError(t, err)
@@ -88,8 +84,7 @@ func TestFileStateStoreExistsReturnsCorrectStatus(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore(filepath.Join(tmpDir, "exists-test"), registry)
+	store := NewFileStateStore(filepath.Join(tmpDir, "exists-test"))
 
 	// Should not exist initially
 	require.False(t, store.Exists())
@@ -108,8 +103,7 @@ func TestFileStateStoreClearRemovesStateFile(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore(filepath.Join(tmpDir, "clear-test"), registry)
+	store := NewFileStateStore(filepath.Join(tmpDir, "clear-test"))
 
 	// Save state
 	config := &Config{Resources: []types.Resource{}}
@@ -132,8 +126,7 @@ func TestFileStateStoreHandlesConcurrentAccessSafely(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore(filepath.Join(tmpDir, "concurrent-test"), registry)
+	store := NewFileStateStore(filepath.Join(tmpDir, "concurrent-test"))
 
 	// Run multiple goroutines saving and loading
 	done := make(chan bool, 10)
@@ -178,8 +171,7 @@ func TestFileStateStoreUsesDefaultDirectoryWhenEmptyStringProvided(t *testing.T)
 	os.Chdir(tmpDir)
 	defer os.Chdir(originalWd)
 
-	registry := NewPluginRegistry(&plugins.TestLogger{})
-	store := NewFileStateStore("", registry)
+	store := NewFileStateStore("")
 
 	// Save state
 	config := &Config{Resources: []types.Resource{}}

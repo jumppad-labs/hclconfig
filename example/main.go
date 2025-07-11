@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/jumppad-labs/hclconfig"
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
 )
@@ -46,6 +47,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	p := createParser()
+	registerPlugins(p)
+
+	// register a custom function
+	p.RegisterFunction("random_number", func() (int, error) {
+		return rand.Intn(100), nil
+	})
+
+	fmt.Println("## Parse the config")
+	c, err := p.ParseFile("./config.hcl")
+	if err != nil {
+		fmt.Printf("An error occurred processing the config: %s\n", err)
+		os.Exit(1)
+	}
+
+	printOutput(showAll, selectedFormat, c)
+	demonstrateState(c)
+	fmt.Println("")
+
+}
+
+func createParser() *hclconfig.Parser {
 	o := hclconfig.DefaultOptions()
 
 	// Configure plugin discovery
@@ -59,13 +82,12 @@ func main() {
 	// o.PluginDirectories = append(o.PluginDirectories, "/custom/plugin/path")
 	// o.PluginNamePattern = "my-plugin-*"  // Change pattern (default: "hclconfig-plugin-*")
 
-	// Add a logger to see plugin discovery in action
-	o.Logger = &plugins.TestLogger{}
-
 	// o.PrimativesOnly = true
 
-	p := hclconfig.NewParser(o)
+	return hclconfig.NewParser(o)
+}
 
+func registerPlugins(p *hclconfig.Parser) {
 	// You can still manually register plugins alongside auto-discovery
 	// This in-process plugin will be registered in addition to any discovered plugins
 	examplePlugin := &ExamplePlugin{}
@@ -81,23 +103,10 @@ func main() {
 	// if err != nil {
 	//     fmt.Printf("Failed to register external plugin: %s\n", err)
 	// }
+}
 
-	// register a custom function
-	p.RegisterFunction("random_number", func() (int, error) {
-		return rand.Intn(100), nil
-	})
-
-	fmt.Println("## Parse the config")
-	c, err := p.ParseFile("./config.hcl")
-	if err != nil {
-		fmt.Printf("An error occurred processing the config: %s\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("")
-
+func printOutput(showAll bool, selectedFormat hclconfig.PrintFormat, c *hclconfig.Config) {
 	// demonstrate the new pretty printer
-	fmt.Printf("## Pretty Printer Demo (%s format)\n", *format)
 	printer := hclconfig.NewResourcePrinter()
 
 	// Find a resource to demonstrate
@@ -139,9 +148,9 @@ func main() {
 			}
 		}
 	}
+}
 
-	fmt.Println("")
-
+func demonstrateState(c *hclconfig.Config) {
 	// demonstrate state store usage
 	// create a resource registry with the same plugin hosts as the parser
 	//registry := p.GetPluginRegistry()
@@ -173,7 +182,6 @@ func main() {
 	//	fmt.Println("  ", r.Metadata().ID)
 	//	return nil
 	//}, true)
-
 }
 
 // ExamplePlugin provides the Config and PostgreSQL resource types for the example
@@ -182,7 +190,7 @@ type ExamplePlugin struct {
 }
 
 // Init initializes the example plugin
-func (p *ExamplePlugin) Init(logger plugins.Logger, state plugins.State) error {
+func (p *ExamplePlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Register Config resource
 	configResource := &Config{}
 	configProvider := &ExampleResourceProvider[*Config]{}
@@ -215,17 +223,29 @@ func (p *ExamplePlugin) Init(logger plugins.Logger, state plugins.State) error {
 
 // ExampleResourceProvider is a generic provider for example resources
 type ExampleResourceProvider[T types.Resource] struct {
-	logger    plugins.Logger
+	logger    logger.Logger
 	state     plugins.State
 	functions plugins.ProviderFunctions
 }
 
 // Init initializes the provider
-func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger plugins.Logger) error {
+func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
 	p.state = state
 	p.functions = functions
 	p.logger = logger
 	return nil
+}
+
+// Refresh is a no-op for the example
+func (p *ExampleResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
+	p.logger.Info("Refreshing resource", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
+	return nil
+}
+
+// Changed always returns false for the example
+func (p *ExampleResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bool, error) {
+	p.logger.Info("Checking if resource changed", "type", old.Metadata().Type, "id", old.Metadata().ID)
+	return true, nil
 }
 
 // Create is a no-op for the example
@@ -234,24 +254,16 @@ func (p *ExampleResourceProvider[T]) Create(ctx context.Context, resource T) (T,
 	return resource, nil
 }
 
-// Destroy is a no-op for the example
-func (p *ExampleResourceProvider[T]) Destroy(ctx context.Context, resource T, force bool) error {
-	return nil
-}
-
-// Refresh is a no-op for the example
-func (p *ExampleResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
-	return nil
-}
-
 // Update is a no-op for the example
 func (p *ExampleResourceProvider[T]) Update(ctx context.Context, resource T) error {
+	p.logger.Info("Update resource changed", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
 	return nil
 }
 
-// Changed always returns false for the example
-func (p *ExampleResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bool, error) {
-	return false, nil
+// Destroy is a no-op for the example
+func (p *ExampleResourceProvider[T]) Destroy(ctx context.Context, resource T, force bool) error {
+	p.logger.Info("Destroy resource", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
+	return nil
 }
 
 // Functions returns no functions

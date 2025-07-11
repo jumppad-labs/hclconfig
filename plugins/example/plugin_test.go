@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	"github.com/jumppad-labs/hclconfig/plugins/mocks"
 	"github.com/stretchr/testify/require"
 )
 
-func testSetup(t *testing.T) (plugins.Logger, plugins.State) {
+func testSetup(t *testing.T) (logger.Logger, plugins.State) {
 	// Create a test logger and state
-	logger := &plugins.TestLogger{}
+	logger := logger.NewTestLogger(t)
 	state := mocks.NewMockState(t)
 	return logger, state
 }

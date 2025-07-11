@@ -11,6 +11,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -27,6 +28,9 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 	if len(options) > 0 {
 		o = options[0]
 	}
+
+	// Always use TestLogger for all parser tests (override default StdOutLogger)
+	o.Logger = logger.NewTestLogger(t)
 
 	p := NewParser(o)
 
@@ -45,6 +49,7 @@ func TestNewParserWithOptions(t *testing.T) {
 		Variables:      map[string]string{"foo": "bar"},
 		VariablesFiles: []string{"./myfile.txt"},
 		ModuleCache:    "./modules",
+		Logger:         logger.NewTestLogger(t),
 	}
 
 	p := NewParser(&options)
@@ -945,7 +950,6 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 	require.Len(t, ce.Errors, 1)
 }
 
-
 func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
 	f, pathErr := filepath.Abs("./internal/test_fixtures/config/process_error")
 	if pathErr != nil {
@@ -975,7 +979,6 @@ func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
 }
-
 
 func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
 	f, pathErr := filepath.Abs("./internal/test_fixtures/config/process_error/bad_format.hcl")

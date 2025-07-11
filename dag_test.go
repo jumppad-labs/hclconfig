@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,12 +14,27 @@ func setupGraphConfig(t *testing.T) *Config {
 		t.Fatal(err)
 	}
 
-	p := setupTestParser()
+	p := setupTestParserWithLogger(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
 	return c
+}
+
+func setupTestParserWithLogger(t *testing.T) *Parser {
+	opts := DefaultOptions()
+	opts.Logger = logger.NewTestLogger(t)
+	p := NewParser(opts)
+	
+	// Create and register the test plugin
+	testPlugin := &TestPlugin{}
+	err := p.RegisterPlugin(testPlugin)
+	if err != nil {
+		t.Fatal("Failed to register test plugin:", err)
+	}
+	
+	return p
 }
 
 func TestDoYaLikeDAGAddsDependencies(t *testing.T) {

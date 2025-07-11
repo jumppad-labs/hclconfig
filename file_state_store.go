@@ -7,20 +7,28 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/jumppad-labs/hclconfig/types"
 )
+
+// GenericResource represents a resource loaded from state with all JSON data preserved
+type GenericResource struct {
+	types.ResourceBase
+	// Data holds all the additional fields from the JSON that aren't part of ResourceBase
+	Data map[string]any `json:",inline"`
+}
 
 // FileStateStore implements StateStore using file-based persistence.
 // State is stored as JSON in a file within the state directory.
 type FileStateStore struct {
 	stateDir  string
 	stateFile string
-	registry  *PluginRegistry
 	mu        sync.Mutex
 }
 
 // NewFileStateStore creates a new file-based state store.
 // If stateDir is empty, it defaults to ".hclconfig/state" in the current directory.
-func NewFileStateStore(stateDir string, registry *PluginRegistry) *FileStateStore {
+func NewFileStateStore(stateDir string) *FileStateStore {
 	if stateDir == "" {
 		stateDir = filepath.Join(".", ".hclconfig", "state")
 	}
@@ -28,7 +36,6 @@ func NewFileStateStore(stateDir string, registry *PluginRegistry) *FileStateStor
 	return &FileStateStore{
 		stateDir:  stateDir,
 		stateFile: filepath.Join(stateDir, "state.json"),
-		registry:  registry,
 	}
 }
 
@@ -117,7 +124,7 @@ func (f *FileStateStore) marshalConfig(config *Config) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// unmarshalConfig deserializes JSON to a Config with proper resource types
+// unmarshalConfig deserializes JSON to a Config with generic resource types
 func (f *FileStateStore) unmarshalConfig(data []byte) (*Config, error) {
 	conf := NewConfig()
 
@@ -139,27 +146,13 @@ func (f *FileStateStore) unmarshalConfig(data []byte) (*Config, error) {
 	}
 
 	for _, m := range rawMessagesForResources {
-		mm := map[string]any{}
-		err := json.Unmarshal(*m, &mm)
-		if err != nil {
+		// Create a generic resource with all the JSON data
+		genericResource := &GenericResource{}
+		if err := json.Unmarshal(*m, genericResource); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal resource: %w", err)
 		}
 
-		meta := mm["meta"].(map[string]any)
-
-		// Create resource using the registry
-		r, err := f.registry.CreateResource(meta["type"].(string), meta["name"].(string))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create resource %s.%s: %w", meta["type"], meta["name"], err)
-		}
-
-		// Unmarshal the resource data into the concrete type
-		resData, _ := json.Marshal(mm)
-		if err := json.Unmarshal(resData, r); err != nil {
-			return nil, fmt.Errorf("failed to populate resource %s.%s: %w", meta["type"], meta["name"], err)
-		}
-
-		conf.addResource(r, nil, nil)
+		conf.addResource(genericResource, nil, nil)
 	}
 
 	return conf, nil
