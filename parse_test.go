@@ -789,62 +789,28 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
 }
 
-func TestParserStopsParseOnCallbackError(t *testing.T) {
+func TestParserStopsParseOnCreateError(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	p, _ := setupParser(t)
+	p, tp := setupParser(t)
+
+	// ensure an error is returned when creating a resource
+	tp.SetCreateError("resource.container.base", fmt.Errorf("test error"))
 
 	_, err = p.ParseFile(absoluteFolderPath)
-	// TODO: re-enable when lifecycle is implemented - this test expects a callback error
-	// require.Error(t, err)
+	require.Error(t, err)
 
-	// only 17 of the resources and variables should be created, none of the descendants of base
-	// TODO: re-enable when lifecycle is implemented
-	// require.Len(t, calls, 17)
-	// require.NotContains(t, "resource.module.consul_1", calls)
+	cr := tp.GetCreatedResources()
+
+	// Verify the error occurred and the resource was tracked
+	require.Len(t, cr, 4)
+	require.Contains(t, cr, "resource.container.base")
+	require.Contains(t, cr, "module.consul_2.resource.container.consul")
+	require.NotContains(t, cr, "module.consul_1.resource.container.consul")
 }
-
-// TestParserDeserializesJSONCorrectly - functionality moved to StateStore tests
-// func TestParserDeserializesJSONCorrectly(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	p, _ := setupParser(t)
-//
-//	c, err := p.ParseFile(absoluteFolderPath)
-//	require.NoError(t, err)
-//
-//	json, err := c.ToJSON()
-//	require.NoError(t, err)
-//
-//	conf, err := p.UnmarshalJSON(json)
-//	require.NoError(t, err)
-//	require.NotNil(t, conf)
-//
-//	orig, err := c.FindResource("resource.container.base")
-//	require.NoError(t, err)
-//
-//	parsed, err := conf.FindResource("resource.container.base")
-//	require.NoError(t, err)
-//
-//	require.Equal(t, orig.Metadata().File, parsed.Metadata().File)
-//	require.Equal(t, orig.(*structs.Container).Networks[0].Name, parsed.(*structs.Container).Networks[0].Name)
-//	require.Equal(t, orig.(*structs.Container).Command, parsed.(*structs.Container).Command)
-//	require.Equal(t, orig.(*structs.Container).Resources.CPUPin, parsed.(*structs.Container).Resources.CPUPin)
-//
-//	orig, err = c.FindResource("resource.container.consul")
-//	require.NoError(t, err)
-//
-//	parsed, err = conf.FindResource("resource.container.consul")
-//	require.NoError(t, err)
-//
-//	require.Equal(t, orig.(*structs.Container).Volumes[0].Destination, parsed.(*structs.Container).Volumes[0].Destination)
-//}
 
 func requireBefore(t *testing.T, first, second string, list []string) {
 	// get the positions
