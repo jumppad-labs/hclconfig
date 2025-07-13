@@ -18,7 +18,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
+func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin) {
 	home := os.Getenv("HOME")
 	os.Setenv("HOME", t.TempDir())
 
@@ -49,7 +49,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 		panic("Failed to register test plugin: " + err.Error())
 	}
 
-	return p
+	return p, testPlugin
 }
 
 func TestNewParserWithOptions(t *testing.T) {
@@ -74,7 +74,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestParseFileSetsLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestParseSetsDefaultValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	o.StateStore = ms
 	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
 
-	p := setupParser(t, o)
+	p, _ := setupParser(t, o)
 
 	c, err := p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"))
 	require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	os.Setenv("HCL_VAR_cpu_resources", "1000")
 
@@ -246,7 +246,7 @@ func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
@@ -263,7 +263,7 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -344,7 +344,7 @@ func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -361,7 +361,7 @@ func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -375,7 +375,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -410,7 +410,7 @@ func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -429,7 +429,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -495,7 +495,7 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -514,7 +514,7 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -550,7 +550,7 @@ func TestParseContainerWithNoNameReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
@@ -562,7 +562,7 @@ func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
@@ -574,7 +574,7 @@ func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
@@ -586,7 +586,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -611,7 +611,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -733,10 +733,12 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, tp := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
+
+	calls := tp.GetCreatedResources()
 
 	// check the order, should be ...
 	// resource.container.base
@@ -761,38 +763,30 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	// module1 depends on an attribute of resource.container.base, all resources in module1 should only
 	// be processed after container.base has been created
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "resource.container.base", "module.consul_1.resource.network.onprem", calls)
+	requireBefore(t, "resource.container.base", "module.consul_1.resource.network.onprem", calls)
 
 	// resource.network.onprem in module.consul_2 should be created after the top level module is created
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
+	requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
 
 	// resource.container.consul in module consul_2 depends on resource.network.onprem in module2 it should always
 	// be created after the network
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
+	requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
 
 	// the output module_1_container_resources_cpu depends on an output defined in module consul_1, it should always be created
 	// after all resources in module consul_1
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
+	requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
 
 	// the module should always be created before its resources
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1", "module.consul_1.resource.container.consul", calls)
+	requireBefore(t, "module.consul_1", "module.consul_1.resource.container.consul", calls)
 
 	// the output module_2_container_resources_cpu depends on an output defined in module consul_2, it should always be created
 	// after all resources in module consul_2
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
+	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
 
 	// the module consul_3 has a hard coded dependency on module_1, it should only be created after all
 	// resources in module_1 have been created
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1.resource.container.consul", "module.consul_3.resource.container.consul", calls)
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
+	requireBefore(t, "module.consul_1.resource.container.consul", "module.consul_3.resource.container.consul", calls)
+	requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
 }
 
 func TestParserStopsParseOnCallbackError(t *testing.T) {
@@ -801,7 +795,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	// TODO: re-enable when lifecycle is implemented - this test expects a callback error
@@ -820,7 +814,7 @@ func TestParserStopsParseOnCallbackError(t *testing.T) {
 //		t.Fatal(err)
 //	}
 //
-//	p := setupParser(t)
+//	p, _ := setupParser(t)
 //
 //	c, err := p.ParseFile(absoluteFolderPath)
 //	require.NoError(t, err)
@@ -912,7 +906,7 @@ func TestParserCyclicalReferenceReturnsError(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.Error(t, err)
@@ -926,7 +920,7 @@ func TestParserNoCyclicalReferenceReturns(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.NoError(t, err)
@@ -938,7 +932,7 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseDirectory(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -953,7 +947,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) 
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseDirectory(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -968,7 +962,7 @@ func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -983,7 +977,7 @@ func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1003,7 +997,7 @@ func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1023,7 +1017,7 @@ func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T)
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1043,7 +1037,7 @@ func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
