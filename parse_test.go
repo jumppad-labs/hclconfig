@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
@@ -26,15 +28,17 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin)
 		os.Setenv("HOME", home)
 	})
 
-	ms := &mocks.MockStateStore{}
-	ms.On("Load").Return(nil, nil)
-	ms.On("Save", mock.Anything).Return(nil)
-
-	o := DefaultOptions()
-	o.StateStore = ms
+	var o *ParserOptions
 
 	if len(options) > 0 {
 		o = options[0]
+	} else {
+		ms := &mocks.MockStateStore{}
+		ms.On("Load").Return(nil, nil)
+		ms.On("Save", mock.Anything).Return(nil)
+
+		o = DefaultOptions()
+		o.StateStore = ms
 	}
 
 	// Always use TestLogger for all parser tests (override default StdOutLogger)
@@ -733,12 +737,25 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, tp := setupParser(t)
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+
+	calls := []string{}
+
+	o.OnParserEvent = func(event ParserEvent) {
+		if event.Operation == "create" && event.Phase == "success" {
+			calls = append(calls, event.ResourceID)
+		}
+	}
+
+	p, _ := setupParser(t, o)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
-
-	calls := tp.GetCreatedResources()
 
 	// check the order, should be ...
 	// resource.container.base
@@ -1018,7 +1035,9 @@ func TestParseDoesNotOverwiteWithMeta(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := NewParser(nil)
+	o := DefaultOptions()
+	o.Logger = logger.NewTestLogger(t)
+	p := NewParser(o)
 
 	// Create and register an embedded test plugin
 	embeddedPlugin := &EmbeddedTestPlugin{}
@@ -1044,7 +1063,9 @@ func TestParseHandlesCommonTypes(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := NewParser(nil)
+	o := DefaultOptions()
+	o.Logger = logger.NewTestLogger(t)
+	p := NewParser(o)
 
 	// Create and register an embedded test plugin
 	embeddedPlugin := &EmbeddedTestPlugin{}
@@ -1147,4 +1168,216 @@ func TestParseParsesToResourceBase(t *testing.T) {
 
 	o1 := r.(*resources.Output)
 	require.Equal(t, "This is the name of the container", o1.Description)
+}
+
+func TestParserEventCallback(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Track all events
+	var events []ParserEvent
+
+	// Setup parser with event callback
+	options := DefaultOptions()
+	options.Logger = logger.NewTestLogger(t)
+	options.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	p := NewParser(options)
+
+	// Create and register the test plugin
+	testPlugin := &TestPlugin{}
+	err = p.RegisterPlugin(testPlugin)
+	require.NoError(t, err)
+
+	// Parse the file - this should trigger create events
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// Verify events were fired
+	require.NotEmpty(t, events, "Expected parser events to be fired")
+
+	// Check that we have start and success events for any operation
+	var startEvents []ParserEvent
+	var successEvents []ParserEvent
+
+	for _, event := range events {
+		if event.Phase == "start" {
+			startEvents = append(startEvents, event)
+		}
+		if event.Phase == "success" {
+			successEvents = append(successEvents, event)
+		}
+	}
+
+	require.NotEmpty(t, startEvents, "Expected operation start events")
+	require.NotEmpty(t, successEvents, "Expected operation success events")
+
+	// Verify event structure for success events
+	for _, event := range successEvents {
+		require.Contains(t, []string{"create", "refresh", "changed", "update"}, event.Operation, "Expected valid operation type")
+		require.Equal(t, "success", event.Phase)
+		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		
+		// Builtin types (variables, outputs, locals, modules, root) have 0 duration
+		if strings.Contains(event.ResourceType, "variable.") ||
+			strings.Contains(event.ResourceType, "output.") ||
+			strings.Contains(event.ResourceType, "local.") ||
+			strings.Contains(event.ResourceType, "module.") ||
+			strings.Contains(event.ResourceType, "root.") {
+			require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for builtin types")
+		} else {
+			require.Greater(t, event.Duration, time.Duration(0), "Expected duration to be greater than 0 for provider operations")
+		}
+		
+		require.NoError(t, event.Error, "Expected no error for success events")
+		
+		// Builtin types don't have data
+		if !strings.Contains(event.ResourceType, "variable.") &&
+			!strings.Contains(event.ResourceType, "output.") &&
+			!strings.Contains(event.ResourceType, "local.") &&
+			!strings.Contains(event.ResourceType, "module.") &&
+			!strings.Contains(event.ResourceType, "root.") {
+			require.NotEmpty(t, event.Data, "Expected data to be set for provider operations")
+		}
+	}
+}
+
+func TestParserEventErrorCallback(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Track all events
+	var events []ParserEvent
+
+	// Setup parser with event callback
+	options := DefaultOptions()
+	options.Logger = logger.NewTestLogger(t)
+	options.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	p := NewParser(options)
+
+	// Create and register the test plugin with error configured
+	testPlugin := &TestPlugin{}
+	err = p.RegisterPlugin(testPlugin)
+	require.NoError(t, err)
+
+	// Configure the plugin to return an error for refresh operations (since resources exist in state)
+	testPlugin.SetRefreshError("resource.container.base", fmt.Errorf("test refresh error"))
+
+	// Parse the file - this should trigger error events
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err, "Expected parsing to fail due to refresh error")
+
+	// Verify events were fired
+	require.NotEmpty(t, events, "Expected parser events to be fired")
+
+	// Check that we have start and error events for the operation
+	var startEvents []ParserEvent
+	var errorEvents []ParserEvent
+
+	for _, event := range events {
+		if event.Phase == "start" {
+			startEvents = append(startEvents, event)
+		}
+		if event.Phase == "error" {
+			errorEvents = append(errorEvents, event)
+		}
+	}
+
+	require.NotEmpty(t, startEvents, "Expected operation start events")
+	require.NotEmpty(t, errorEvents, "Expected operation error events")
+
+	// Verify error event structure
+	for _, event := range errorEvents {
+		require.Contains(t, []string{"create", "refresh", "changed", "update"}, event.Operation, "Expected valid operation type")
+		require.Equal(t, "error", event.Phase)
+		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		require.Greater(t, event.Duration, time.Duration(0), "Expected duration to be greater than 0")
+		require.Error(t, event.Error, "Expected error for error events")
+		require.Contains(t, event.Error.Error(), "test refresh error", "Expected error message to contain test error")
+		require.NotEmpty(t, event.Data, "Expected data to be set")
+	}
+}
+
+func TestParserEventForVariablesOutputsLocals(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Track all events
+	var events []ParserEvent
+
+	// Setup parser with event callback
+	options := DefaultOptions()
+	options.Logger = logger.NewTestLogger(t)
+	options.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	p := NewParser(options)
+
+	// Create and register the test plugin
+	testPlugin := &TestPlugin{}
+	err = p.RegisterPlugin(testPlugin)
+	require.NoError(t, err)
+
+	// Parse the file - this should trigger events for variables, outputs, and locals
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// Verify events were fired
+	require.NotEmpty(t, events, "Expected parser events to be fired")
+
+	// Check for variable, output, and module events
+	var variableEvents []ParserEvent
+	var outputEvents []ParserEvent
+	var moduleEvents []ParserEvent
+
+	for _, event := range events {
+		if event.Operation == "create" && event.Phase == "success" {
+			if strings.Contains(event.ResourceType, "variable.") {
+				variableEvents = append(variableEvents, event)
+			}
+			if strings.Contains(event.ResourceType, "output.") {
+				outputEvents = append(outputEvents, event)
+			}
+			if strings.Contains(event.ResourceType, "module.") {
+				moduleEvents = append(moduleEvents, event)
+			}
+		}
+	}
+
+	require.NotEmpty(t, variableEvents, "Expected variable events to be fired")
+	require.NotEmpty(t, outputEvents, "Expected output events to be fired")
+	require.NotEmpty(t, moduleEvents, "Expected module events to be fired")
+
+	// Verify event structure for variables and outputs
+	for _, event := range variableEvents {
+		require.Equal(t, "create", event.Operation)
+		require.Equal(t, "success", event.Phase)
+		require.Contains(t, event.ResourceType, "variable.", "Expected variable resource type")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for variables")
+		require.NoError(t, event.Error, "Expected no error for success events")
+	}
+
+	for _, event := range outputEvents {
+		require.Equal(t, "create", event.Operation)
+		require.Equal(t, "success", event.Phase)
+		require.Contains(t, event.ResourceType, "output.", "Expected output resource type")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for outputs")
+		require.NoError(t, event.Error, "Expected no error for success events")
+	}
 }

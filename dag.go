@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/creasty/defaults"
 	"github.com/hashicorp/hcl/v2"
@@ -140,10 +141,26 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	return graph, nil
 }
 
+// fireParserEvent fires a parser event if the callback is configured
+func fireParserEvent(options *ParserOptions, operation, resourceType, resourceID, phase string, duration time.Duration, err error, data []byte) {
+	if options != nil && options.OnParserEvent != nil {
+		event := ParserEvent{
+			Operation:    operation,
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			Phase:        phase,
+			Duration:     duration,
+			Error:        err,
+			Data:         data,
+		}
+		options.OnParserEvent(event)
+	}
+}
+
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values
-func walkCallback(c *Config, previousState *Config, registry *PluginRegistry) func(v dag.Vertex) (diags dag.Diagnostics) {
+func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
 
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
@@ -325,7 +342,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry) fu
 		// we need to handle an additional check
 		if !r.GetDisabled() {
 			// Call provider lifecycle methods
-			if err := callProviderLifecycle(r, previousState, registry); err != nil {
+			if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
 				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
@@ -342,14 +359,20 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry) fu
 }
 
 // callProviderLifecycle calls the appropriate provider lifecycle methods for a resource
-func callProviderLifecycle(resource types.Resource, previousState *Config, registry *PluginRegistry) error {
+func callProviderLifecycle(resource types.Resource, previousState *Config, registry *PluginRegistry, options *ParserOptions) error {
 
-	// Skip builtin resource types that don't have providers
+	// Skip builtin resource types that don't have providers, but fire events for them
 	if resource.Metadata().Type == resources.TypeVariable ||
 		resource.Metadata().Type == resources.TypeOutput ||
 		resource.Metadata().Type == resources.TypeLocal ||
 		resource.Metadata().Type == resources.TypeModule ||
 		resource.Metadata().Type == resources.TypeRoot {
+
+		// Fire events for all builtin types (always succeed with 0 time)
+		// Note: Variables are also handled in parseVariablesInFile, but this catches any that go through DAG
+		resourceType := fmt.Sprintf("%s.%s", resource.Metadata().Type, resource.Metadata().Name)
+		fireParserEvent(options, "create", resourceType, resource.Metadata().ID, "success", 0, nil, nil)
+
 		return nil
 	}
 
@@ -362,6 +385,7 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 
 	ctx := context.Background()
 	resourceID := resource.Metadata().ID
+	resourceType := fmt.Sprintf("%s.%s", resource.Metadata().Type, resource.Metadata().Name)
 
 	// Serialize the current resource to JSON
 	currentJSON, err := json.Marshal(resource)
@@ -382,10 +406,17 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		// Resource exists - follow the lifecycle: Refresh -> Changed -> Update/Skip
 
 		// 1. Call Refresh to ensure state is up to date
-		if err := adapter.Refresh(ctx, currentJSON); err != nil {
+		fireParserEvent(options, "refresh", resourceType, resourceID, "start", 0, nil, currentJSON)
+		start := time.Now()
+		err := adapter.Refresh(ctx, currentJSON)
+		duration := time.Since(start)
+		
+		if err != nil {
+			fireParserEvent(options, "refresh", resourceType, resourceID, "error", duration, err, currentJSON)
 			resource.Metadata().Status = "failed"
 			return fmt.Errorf("refresh failed: %w", err)
 		}
+		fireParserEvent(options, "refresh", resourceType, resourceID, "success", duration, nil, currentJSON)
 
 		// 2. Serialize state resource for comparison
 		stateJSON, err := json.Marshal(stateResource)
@@ -394,18 +425,31 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		}
 
 		// 3. Check if resource has changed
+		fireParserEvent(options, "changed", resourceType, resourceID, "start", 0, nil, currentJSON)
+		start = time.Now()
 		changed, err := adapter.Changed(ctx, stateJSON, currentJSON)
+		duration = time.Since(start)
+		
 		if err != nil {
+			fireParserEvent(options, "changed", resourceType, resourceID, "error", duration, err, currentJSON)
 			resource.Metadata().Status = "failed"
 			return fmt.Errorf("changed check failed: %w", err)
 		}
+		fireParserEvent(options, "changed", resourceType, resourceID, "success", duration, nil, currentJSON)
 
 		// 4. If changed, call Update
 		if changed {
-			if err := adapter.Update(ctx, currentJSON); err != nil {
+			fireParserEvent(options, "update", resourceType, resourceID, "start", 0, nil, currentJSON)
+			start = time.Now()
+			err := adapter.Update(ctx, currentJSON)
+			duration = time.Since(start)
+			
+			if err != nil {
+				fireParserEvent(options, "update", resourceType, resourceID, "error", duration, err, currentJSON)
 				resource.Metadata().Status = "failed"
 				return fmt.Errorf("update failed: %w", err)
 			}
+			fireParserEvent(options, "update", resourceType, resourceID, "success", duration, nil, currentJSON)
 			resource.Metadata().Status = "updated"
 		} else {
 			// No changes needed, preserve existing status
@@ -415,10 +459,17 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		}
 	} else {
 		// Resource doesn't exist in state - create it
-		if err := adapter.Create(ctx, currentJSON); err != nil {
+		fireParserEvent(options, "create", resourceType, resourceID, "start", 0, nil, currentJSON)
+		start := time.Now()
+		err := adapter.Create(ctx, currentJSON)
+		duration := time.Since(start)
+		
+		if err != nil {
+			fireParserEvent(options, "create", resourceType, resourceID, "error", duration, err, currentJSON)
 			resource.Metadata().Status = "failed"
 			return fmt.Errorf("create failed: %w", err)
 		}
+		fireParserEvent(options, "create", resourceType, resourceID, "success", duration, nil, currentJSON)
 		resource.Metadata().Status = "created"
 	}
 

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -26,6 +27,17 @@ import (
 )
 
 var rootContext *hcl.EvalContext
+
+// ParserEvent represents an event that occurs during parser operations
+type ParserEvent struct {
+	Operation    string        // "create", "destroy", "update", "refresh", "changed", "validate"
+	ResourceType string        // "resource.container"
+	ResourceID   string        // "resource.container.web"
+	Phase        string        // "start", "success", "error"
+	Duration     time.Duration // only for success/error phases
+	Error        error         // only for error phase
+	Data         []byte        // serialized resource data
+}
 
 type ResourceTypeNotExistError struct {
 	Type string
@@ -69,6 +81,10 @@ type ParserOptions struct {
 	// StateStore is used to persist configuration state between runs.
 	// If nil, a default FileStateStore will be created.
 	StateStore state.StateStore
+
+	// OnParserEvent is an optional callback function that is called when parser events occur.
+	// This can be used for metrics collection, logging, debugging, or other monitoring purposes.
+	OnParserEvent func(ParserEvent)
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -541,6 +557,10 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 			// add the variable to the context
 			c.AppendResource(v)
+
+			// Fire parser event for variable processing (always succeeds with 0 time)
+			resourceType := fmt.Sprintf("%s.%s", v.Metadata().Type, v.Metadata().Name)
+			fireParserEvent(&p.options, "create", resourceType, v.Metadata().ID, "success", 0, nil, nil)
 
 			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
 			setContextVariableIfMissing(ctx, v.Meta.Name, val)
@@ -1670,7 +1690,7 @@ func (p *Parser) process(c *Config, previousState *Config) error {
 	ce := errors.NewConfigError()
 
 	// walk the dag and process resources (only processes resources from c)
-	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry), false)
+	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry, &p.options), false)
 
 	for _, e := range errs {
 		ce.AppendError(e)
