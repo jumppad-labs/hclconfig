@@ -141,6 +141,184 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	return graph, nil
 }
 
+// buildDestroyDAG creates a DAG for destroying resources with reversed dependencies
+// Resources with dependencies must be destroyed before their dependencies
+func buildDestroyDAG(toDestroy []types.Resource) (*dag.AcyclicGraph, error) {
+	graph := &dag.AcyclicGraph{}
+	
+	if len(toDestroy) == 0 {
+		return graph, nil
+	}
+	
+	// Add a root node for the destroy graph
+	root, _ := resources.DefaultResources().CreateResource(resources.TypeRoot, "destroy_root")
+	graph.Add(root)
+	
+	// Add all resources to be destroyed to the graph
+	for _, resource := range toDestroy {
+		graph.Add(resource)
+	}
+	
+	// Create a map for quick lookup of resources in destroy list
+	destroyMap := make(map[string]types.Resource)
+	for _, resource := range toDestroy {
+		destroyMap[resource.Metadata().ID] = resource
+	}
+	
+	// Add REVERSED dependencies between resources to be destroyed
+	// If A depends on B, we want to destroy A before B, so we create edge A -> B
+	resourcesWithDeps := make(map[types.Resource]bool)
+	
+	for _, resource := range toDestroy {
+		// Collect all dependencies for this resource
+		var allDependencies []string
+		
+		// Add explicit dependencies from depends_on
+		allDependencies = append(allDependencies, resource.GetDependencies()...)
+		
+		// Add implicit dependencies from resource links (interpolations)
+		allDependencies = append(allDependencies, resource.Metadata().Links...)
+		
+		hasDepsInDestroyList := false
+		
+		// For each dependency, if it's also being destroyed, create a dependency edge
+		for _, dependency := range allDependencies {
+			if dependency == "" {
+				continue
+			}
+			
+			// Check if the dependency is also in the destroy list
+			if depResource, exists := destroyMap[dependency]; exists {
+				// Create edge: resource -> depResource (destroy resource before depResource)
+				graph.Connect(dag.BasicEdge(resource, depResource))
+				resourcesWithDeps[resource] = true
+				resourcesWithDeps[depResource] = true
+				hasDepsInDestroyList = true
+			}
+		}
+		
+		// If this resource has no dependencies in the destroy list, connect it to root
+		if !hasDepsInDestroyList {
+			graph.Connect(dag.BasicEdge(root, resource))
+		}
+	}
+	
+	// Connect all resources without dependencies to root
+	for _, resource := range toDestroy {
+		hasIncomingEdges := false
+		
+		// Check if this resource has any incoming edges from other destroy resources
+		for _, otherResource := range toDestroy {
+			if otherResource == resource {
+				continue
+			}
+			
+			// Check if otherResource depends on this resource
+			otherDeps := append(otherResource.GetDependencies(), otherResource.Metadata().Links...)
+			for _, dep := range otherDeps {
+				if dep == resource.Metadata().ID {
+					hasIncomingEdges = true
+					break
+				}
+			}
+			if hasIncomingEdges {
+				break
+			}
+		}
+		
+		// If no incoming edges from destroy resources, connect to root
+		if !hasIncomingEdges {
+			graph.Connect(dag.BasicEdge(root, resource))
+		}
+	}
+	
+	return graph, nil
+}
+
+// destroyWalkCallback creates a simplified callback for destroying resources
+// Skips complex processing since resources are already fully processed
+func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
+	return func(v dag.Vertex) (diags dag.Diagnostics) {
+		r, ok := v.(types.Resource)
+		// not a resource skip, this should never happen
+		if !ok {
+			panic("an item has been added to the destroy graph that is not a resource")
+		}
+		
+		// Skip the destroy root node
+		if r.Metadata().Type == resources.TypeRoot {
+			return nil
+		}
+		
+		// Skip builtin resource types that don't have providers
+		if r.Metadata().Type == resources.TypeVariable ||
+			r.Metadata().Type == resources.TypeOutput ||
+			r.Metadata().Type == resources.TypeLocal ||
+			r.Metadata().Type == resources.TypeModule ||
+			r.Metadata().Type == resources.TypeRoot {
+			
+			// Fire destroy events for builtin types (always succeed with 0 time)
+			resourceType := fmt.Sprintf("%s.%s", r.Metadata().Type, r.Metadata().Name)
+			fireParserEvent(options, "destroy", resourceType, r.Metadata().ID, "success", 0, nil, nil)
+			r.Metadata().Status = "destroyed"
+			return nil
+		}
+		
+		// Get the provider for this resource
+		adapter := registry.GetProvider(r)
+		if adapter == nil {
+			r.Metadata().Status = "destroy_failed"
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf("no provider found for resource type %s", r.Metadata().Type)
+			pe.Level = errors.ParserErrorLevelError
+			return diags.Append(pe)
+		}
+		
+		ctx := context.Background()
+		resourceID := r.Metadata().ID
+		resourceType := fmt.Sprintf("%s.%s", r.Metadata().Type, r.Metadata().Name)
+		
+		// Serialize the resource to JSON for provider call
+		resourceJSON, err := json.Marshal(r)
+		if err != nil {
+			r.Metadata().Status = "destroy_failed"
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf("failed to serialize resource for destroy: %s", err)
+			pe.Level = errors.ParserErrorLevelError
+			return diags.Append(pe)
+		}
+		
+		// Call destroy on the provider
+		fireParserEvent(options, "destroy", resourceType, resourceID, "start", 0, nil, resourceJSON)
+		start := time.Now()
+		err = adapter.Destroy(ctx, resourceJSON, false)
+		duration := time.Since(start)
+		
+		if err != nil {
+			fireParserEvent(options, "destroy", resourceType, resourceID, "error", duration, err, resourceJSON)
+			r.Metadata().Status = "destroy_failed"
+			pe := &errors.ParserError{}
+			pe.Filename = r.Metadata().File
+			pe.Line = r.Metadata().Line
+			pe.Column = r.Metadata().Column
+			pe.Message = fmt.Sprintf("destroy failed: %s", err)
+			pe.Level = errors.ParserErrorLevelError
+			return diags.Append(pe)
+		}
+		
+		fireParserEvent(options, "destroy", resourceType, resourceID, "success", duration, nil, resourceJSON)
+		r.Metadata().Status = "destroyed"
+		
+		return nil
+	}
+}
+
 // fireParserEvent fires a parser event if the callback is configured
 func fireParserEvent(options *ParserOptions, operation, resourceType, resourceID, phase string, duration time.Duration, err error, data []byte) {
 	if options != nil && options.OnParserEvent != nil {

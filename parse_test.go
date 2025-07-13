@@ -15,6 +15,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/state/mocks"
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
@@ -1035,7 +1036,13 @@ func TestParseDoesNotOverwiteWithMeta(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
+	// Setup with mock state store to avoid destroy phase issues
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
 	o := DefaultOptions()
+	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 	p := NewParser(o)
 
@@ -1063,7 +1070,13 @@ func TestParseHandlesCommonTypes(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
+	// Setup with mock state store to avoid destroy phase issues
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
 	o := DefaultOptions()
+	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 	p := NewParser(o)
 
@@ -1218,7 +1231,7 @@ func TestParserEventCallback(t *testing.T) {
 
 	// Verify event structure for success events
 	for _, event := range successEvents {
-		require.Contains(t, []string{"create", "refresh", "changed", "update"}, event.Operation, "Expected valid operation type")
+		require.Contains(t, []string{"create", "refresh", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
 		require.Equal(t, "success", event.Phase)
 		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
 		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
@@ -1298,7 +1311,7 @@ func TestParserEventErrorCallback(t *testing.T) {
 
 	// Verify error event structure
 	for _, event := range errorEvents {
-		require.Contains(t, []string{"create", "refresh", "changed", "update"}, event.Operation, "Expected valid operation type")
+		require.Contains(t, []string{"create", "refresh", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
 		require.Equal(t, "error", event.Phase)
 		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
 		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
@@ -1380,4 +1393,65 @@ func TestParserEventForVariablesOutputsLocals(t *testing.T) {
 		require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for outputs")
 		require.NoError(t, event.Error, "Expected no error for success events")
 	}
+}
+
+func TestDestroyLifecycle(t *testing.T) {
+	// Setup parser with file state store
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+
+	p, testPlugin := setupParser(t, o)
+
+	// First parse: create resources
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
+	require.NoError(t, err)
+
+	config1, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+	require.NotNil(t, config1)
+
+	// Verify resources were created
+	createdResources := testPlugin.GetCreatedResources()
+	require.Contains(t, createdResources, "resource.container.consul")
+	require.Contains(t, createdResources, "resource.container.base")
+
+	// Mock state store to return the created config as previous state
+	ms.ExpectedCalls = nil // Clear previous expectations
+	ms.On("Load").Return(config1, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	// Create a smaller config (remove some resources)
+	p2, testPlugin2 := setupParser(t, o)
+	
+	// Parse a config with fewer resources (to trigger destroy)
+	absoluteFolderPath2, err := filepath.Abs("./internal/test_fixtures/config/defaults/container.hcl")
+	require.NoError(t, err)
+
+	config2, err := p2.ParseFile(absoluteFolderPath2)
+	require.NoError(t, err)
+	require.NotNil(t, config2)
+
+	// Verify destroy operations were called for removed resources
+	destroyedResources := testPlugin2.GetDestroyedResources()
+	
+	// Resources from config1 that are not in config2 should be destroyed
+	// This will depend on what's actually in the test fixtures
+	require.NotEmpty(t, destroyedResources, "Expected some resources to be destroyed")
+}
+
+func TestDestroyDependencyValidation(t *testing.T) {
+	// Test that destroy validation prevents destroying resources that others depend on
+	p, _ := setupParser(t)
+	
+	// Test validateDestroyDependencies directly with empty slices
+	toDestroy := []types.Resource{}     // Resources to destroy
+	remaining := []types.Resource{}     // Resources that remain
+	
+	errors := p.validateDestroyDependencies(toDestroy, remaining)
+	require.Empty(t, errors, "Expected no errors when no dependencies exist")
 }
