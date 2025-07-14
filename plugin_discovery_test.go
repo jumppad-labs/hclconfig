@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/logger"
+	"github.com/stretchr/testify/require"
 )
 
 
@@ -28,33 +29,15 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 1 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-		return
-	}
+	require.NoError(t, err)
+	require.Len(t, plugins, 1)
 	
 	plugin := plugins[0]
-	if !filepath.IsAbs(plugin.Path) {
-		t.Errorf("Plugin path is not absolute: %s", plugin.Path)
-	}
-	if _, err := os.Stat(plugin.Path); err != nil {
-		t.Errorf("Plugin file does not exist: %s", plugin.Path)
-	}
-	if plugin.Namespace != "test" {
-		t.Errorf("Expected namespace 'test', got '%s'", plugin.Namespace)
-	}
-	if plugin.Type != "example" {
-		t.Errorf("Expected type 'example', got '%s'", plugin.Type)
-	}
-	if plugin.Platform != currentPlatform {
-		t.Errorf("Expected platform '%s', got '%s'", currentPlatform, plugin.Platform)
-	}
+	require.True(t, filepath.IsAbs(plugin.Path))
+	require.FileExists(t, plugin.Path)
+	require.Equal(t, "test", plugin.Namespace)
+	require.Equal(t, "example", plugin.Type)
+	require.Equal(t, currentPlatform, plugin.Platform)
 }
 
 func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
@@ -74,42 +57,26 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 2 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-		return
-	}
+	require.NoError(t, err)
+	require.Len(t, plugins, 2)
 	
 	// Verify both plugins have correct structure
 	foundNamespaces := make(map[string]bool)
 	foundTypes := make(map[string]bool)
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin.Path) {
-			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
-		}
-		if _, err := os.Stat(plugin.Path); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin.Path)
-		}
-		if plugin.Platform != currentPlatform {
-			t.Errorf("Expected platform '%s', got '%s'", currentPlatform, plugin.Platform)
-		}
+		require.True(t, filepath.IsAbs(plugin.Path))
+		require.FileExists(t, plugin.Path)
+		require.Equal(t, currentPlatform, plugin.Platform)
 		
 		foundNamespaces[plugin.Namespace] = true
 		foundTypes[plugin.Type] = true
 	}
 	
-	if !foundNamespaces["jumppad"] || !foundNamespaces["community"] {
-		t.Errorf("Expected to find both 'jumppad' and 'community' namespaces")
-	}
-	if !foundTypes["container"] || !foundTypes["kubernetes"] {
-		t.Errorf("Expected to find both 'container' and 'kubernetes' types")
-	}
+	require.True(t, foundNamespaces["jumppad"], "Expected to find 'jumppad' namespace")
+	require.True(t, foundNamespaces["community"], "Expected to find 'community' namespace")
+	require.True(t, foundTypes["container"], "Expected to find 'container' type")
+	require.True(t, foundTypes["kubernetes"], "Expected to find 'kubernetes' type")
 }
 
 func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
@@ -129,15 +96,8 @@ func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
 	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
@@ -147,9 +107,7 @@ func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	// Create namespaced structure but with non-executable file
 	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
 	pluginDir := filepath.Join(invalidDir, "test", "example", currentPlatform)
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
-		t.Fatalf("Failed to create plugin directory: %v", err)
-	}
+	require.NoError(t, os.MkdirAll(pluginDir, 0755))
 	setup.createNonExecutable(pluginDir, "hclconfig-plugin-fake")
 
 	testLogger := logger.NewTestLogger(t)
@@ -160,15 +118,8 @@ func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
@@ -183,15 +134,8 @@ func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
 	pd := NewPluginDiscovery([]string{emptyDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
@@ -206,15 +150,8 @@ func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
 	pd := NewPluginDiscovery([]string{nonExistentDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
