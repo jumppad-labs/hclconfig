@@ -11,8 +11,10 @@ import (
 
 // TestPluginRegistration tests that we can register and use plugins
 func TestPluginRegistration(t *testing.T) {
-	// Create a new parser
-	parser := NewParser(nil)
+	// Create a new parser with TestLogger
+	o := DefaultOptions()
+	o.Logger = logger.NewTestLogger(t)
+	parser := NewParser(o)
 
 	// Create a simple test plugin
 	plugin := &SimpleTestPlugin{}
@@ -34,7 +36,9 @@ func TestPluginRegistration(t *testing.T) {
 
 // TestPluginResourceCreationWithFallback tests plugin creation with fallback to registered types
 func TestPluginResourceCreationWithFallback(t *testing.T) {
-	parser := NewParser(nil)
+	o := DefaultOptions()
+	o.Logger = logger.NewTestLogger(t)
+	parser := NewParser(o)
 
 	// Try to create a resource that doesn't exist in plugins (should fall back to registered types)
 	// This should fail since we don't have any registered types for "nonexistent"

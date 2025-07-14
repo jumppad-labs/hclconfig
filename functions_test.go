@@ -189,7 +189,7 @@ func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
 		os.Unsetenv("MYENV")
 	})
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
 		os.Unsetenv("MYENV")
 	})
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
 
 	c, err := p.ParseDirectory(absoluteFolderPath)
@@ -261,7 +261,7 @@ func TestParseProcessesCustomFunctions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
 
 	c, err := p.ParseFile(absoluteFolderPath)

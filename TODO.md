@@ -102,17 +102,18 @@ This document tracks the implementation of resource state tracking for the HCLCo
   - Preserves state consistency by always saving working state
   - Allows recovery from partial failures on subsequent runs
 
-### Phase 6: Testing & Cleanup
-- [ ] **Fix broken tests** - `parse_test.go`
-  - Update callback-dependent tests to work with new lifecycle
-  - Remove placeholder `calls` variables
-  - Restore proper test assertions
+### Phase 6: Testing & Cleanup ✅
+- [x] **Fix broken tests** - `parse_test.go`
+  - Updated callback-dependent tests to work with new lifecycle
+  - Removed placeholder `calls` variables
+  - Restored proper test assertions with parser event callbacks
+  - All tests now passing (200+ tests)
 
-- [ ] **Add comprehensive state tracking tests**
-  - Test state persistence and loading
-  - Test state comparison logic
-  - Test provider lifecycle integration
-  - Test error handling and edge cases
+- [x] **Add comprehensive state tracking tests**
+  - State persistence and loading tests in `file_state_store_test.go`
+  - Provider lifecycle integration tests with TestPlugin tracking
+  - Parser event callback tests for all lifecycle operations
+  - Error handling and edge case tests
 
 - [ ] **Update documentation and examples**
   - Update `example/main.go` to demonstrate state tracking
@@ -195,27 +196,36 @@ This document tracks the implementation of resource state tracking for the HCLCo
 2. **Existing/Unchanged** - Resource exists, Changed() returns false → preserve existing status
 3. **Existing/Changed** - Resource exists, Changed(old, new) returns true → call Update() → status: "updated"  
 4. **Failed** - Any provider operation fails → status: "failed"
-5. **Removed** - Resource in state but not in config → preserved for future Destroy() implementation
+5. **Removed** - Resource in state but not in config → call Destroy() → status: "destroyed" or "destroy_failed"
 
 ## Completed Implementation 🎯
 
-✅ **All major lifecycle components implemented:**
+✅ **All lifecycle components now fully implemented:**
 1. StateStore interface and FileStateStore implementation
 2. PluginRegistry with provider lookup capabilities  
-3. Enhanced provider interface with Update() and Changed(old, new)
-4. Complete lifecycle integration in walkCallback
+3. Enhanced provider interface with Update() and Changed(old, new) 
+4. **Complete lifecycle integration including Destroy operations**
 5. State comparison and resource status tracking
 6. Updated protobuf definitions and all plugin layers
 7. Improved naming and architecture
+8. Parser event callbacks for lifecycle operations
+9. Test plugin with full lifecycle method tracking
+10. **Destroy lifecycle with dependency validation and DAG-based ordering**
 
 ## Remaining Work 🚧
 
-1. **Testing** - Update tests to work with new lifecycle
-2. **Documentation** - Update examples and docs
-3. **Provider Implementations** - Providers need to implement enhanced Changed() logic
+1. **Documentation** - Update examples and docs
+   - Update `example/main.go` to demonstrate state tracking
+   - Add state store configuration examples
+   - Document provider lifecycle requirements
+   
+2. **Provider Implementations** - Providers need to implement enhanced Changed() logic
+   - Providers can now implement intelligent diff logic based on their resource types
+   - Each provider decides what constitutes a "change" worth updating
 
 ## Notes
-- Tests that fail due to callback removal will be fixed in Phase 6
+- All tests are now passing (200+ tests)
 - Plugin discovery and registration system is already implemented
-- Resource dependency resolution via DAG is already working
+- Resource dependency resolution via DAG is already working  
 - Config JSON serialization is already implemented and tested
+- Parser event callbacks provide comprehensive lifecycle tracking

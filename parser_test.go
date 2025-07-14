@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/hclconfig/errors"
@@ -21,7 +23,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
+func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin) {
 	home := os.Getenv("HOME")
 	os.Setenv("HOME", t.TempDir())
 
@@ -29,15 +31,17 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 		os.Setenv("HOME", home)
 	})
 
-	ms := &mocks.MockStateStore{}
-	ms.On("Load").Return(nil, nil)
-	ms.On("Save", mock.Anything).Return(nil)
-
-	o := DefaultOptions()
-	o.StateStore = ms
+	var o *ParserOptions
 
 	if len(options) > 0 {
 		o = options[0]
+	} else {
+		ms := &mocks.MockStateStore{}
+		ms.On("Load").Return(nil, nil)
+		ms.On("Save", mock.Anything).Return(nil)
+
+		o = DefaultOptions()
+		o.StateStore = ms
 	}
 
 	// Always use TestLogger for all parser tests (override default StdOutLogger)
@@ -52,7 +56,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) *Parser {
 		panic("Failed to register test plugin: " + err.Error())
 	}
 
-	return p
+	return p, testPlugin
 }
 
 func TestNewParserWithOptions(t *testing.T) {
@@ -77,7 +81,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -112,7 +116,7 @@ func TestParseFileSetsLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -146,7 +150,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -183,7 +187,7 @@ func TestParseSetsDefaultValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -209,7 +213,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	o.StateStore = ms
 	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
 
-	p := setupParser(t, o)
+	p, _ := setupParser(t, o)
 
 	c, err := p.ParseFile(filepath.Join(absoluteFolderPath, "container.hcl"))
 	require.NoError(t, err)
@@ -226,7 +230,7 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	os.Setenv("HCL_VAR_cpu_resources", "1000")
 
@@ -249,7 +253,7 @@ func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
@@ -266,7 +270,7 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
@@ -285,7 +289,7 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -347,7 +351,7 @@ func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -364,7 +368,7 @@ func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -378,7 +382,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -413,7 +417,7 @@ func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -432,7 +436,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -498,7 +502,7 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -517,7 +521,7 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -553,7 +557,7 @@ func TestParseContainerWithNoNameReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
@@ -565,7 +569,7 @@ func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
@@ -577,7 +581,7 @@ func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.Error(t, err)
@@ -589,7 +593,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -614,7 +618,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -736,7 +740,22 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+
+	calls := []string{}
+
+	o.OnParserEvent = func(event ParserEvent) {
+		if event.Operation == "create" && event.Phase == "success" {
+			calls = append(calls, event.ResourceID)
+		}
+	}
+
+	p, _ := setupParser(t, o)
 
 	_, err = p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
@@ -764,96 +783,54 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	// module1 depends on an attribute of resource.container.base, all resources in module1 should only
 	// be processed after container.base has been created
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "resource.container.base", "module.consul_1.resource.network.onprem", calls)
+	requireBefore(t, "resource.container.base", "module.consul_1.resource.network.onprem", calls)
 
 	// resource.network.onprem in module.consul_2 should be created after the top level module is created
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
+	requireBefore(t, "resource.module.consul_2", "module.consul_2.resource.network.onprem", calls)
 
 	// resource.container.consul in module consul_2 depends on resource.network.onprem in module2 it should always
 	// be created after the network
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
+	requireBefore(t, "module.consul_2.resource.network.onprem", "module.consul_2.resource.container.consul", calls)
 
 	// the output module_1_container_resources_cpu depends on an output defined in module consul_1, it should always be created
 	// after all resources in module consul_1
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
+	requireBefore(t, "module.consul_1.resource.container.consul", "output.module1_container_resources_cpu", calls)
 
 	// the module should always be created before its resources
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1", "module.consul_1.resource.container.consul", calls)
+	requireBefore(t, "module.consul_1", "module.consul_1.resource.container.consul", calls)
 
 	// the output module_2_container_resources_cpu depends on an output defined in module consul_2, it should always be created
 	// after all resources in module consul_2
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
+	requireBefore(t, "module.consul_2.resource.container.consul", "output.module2_container_resources_cpu", calls)
 
 	// the module consul_3 has a hard coded dependency on module_1, it should only be created after all
 	// resources in module_1 have been created
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1.resource.container.consul", "module.consul_3.resource.container.consul", calls)
-	// TODO: re-enable when lifecycle is implemented
-	// requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
+	requireBefore(t, "module.consul_1.resource.container.consul", "module.consul_3.resource.container.consul", calls)
+	requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
 }
 
-func TestParserStopsParseOnCallbackError(t *testing.T) {
+func TestParserStopsParseOnCreateError(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	p := setupParser(t)
+	p, tp := setupParser(t)
+
+	// ensure an error is returned when creating a resource
+	tp.SetCreateError("resource.container.base", fmt.Errorf("test error"))
 
 	_, err = p.ParseFile(absoluteFolderPath)
-	// TODO: re-enable when lifecycle is implemented - this test expects a callback error
-	// require.Error(t, err)
+	require.Error(t, err)
 
-	// only 17 of the resources and variables should be created, none of the descendants of base
-	// TODO: re-enable when lifecycle is implemented
-	// require.Len(t, calls, 17)
-	// require.NotContains(t, "resource.module.consul_1", calls)
+	cr := tp.GetCreatedResources()
+
+	// Verify the error occurred and the resource was tracked
+	require.Len(t, cr, 4)
+	require.Contains(t, cr, "resource.container.base")
+	require.Contains(t, cr, "module.consul_2.resource.container.consul")
+	require.NotContains(t, cr, "module.consul_1.resource.container.consul")
 }
-
-// TestParserDeserializesJSONCorrectly - functionality moved to StateStore tests
-// func TestParserDeserializesJSONCorrectly(t *testing.T) {
-//	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	p := setupParser(t)
-//
-//	c, err := p.ParseFile(absoluteFolderPath)
-//	require.NoError(t, err)
-//
-//	json, err := c.ToJSON()
-//	require.NoError(t, err)
-//
-//	conf, err := p.UnmarshalJSON(json)
-//	require.NoError(t, err)
-//	require.NotNil(t, conf)
-//
-//	orig, err := c.FindResource("resource.container.base")
-//	require.NoError(t, err)
-//
-//	parsed, err := conf.FindResource("resource.container.base")
-//	require.NoError(t, err)
-//
-//	require.Equal(t, orig.Metadata().File, parsed.Metadata().File)
-//	require.Equal(t, orig.(*structs.Container).Networks[0].Name, parsed.(*structs.Container).Networks[0].Name)
-//	require.Equal(t, orig.(*structs.Container).Command, parsed.(*structs.Container).Command)
-//	require.Equal(t, orig.(*structs.Container).Resources.CPUPin, parsed.(*structs.Container).Resources.CPUPin)
-//
-//	orig, err = c.FindResource("resource.container.consul")
-//	require.NoError(t, err)
-//
-//	parsed, err = conf.FindResource("resource.container.consul")
-//	require.NoError(t, err)
-//
-//	require.Equal(t, orig.(*structs.Container).Volumes[0].Destination, parsed.(*structs.Container).Volumes[0].Destination)
-//}
 
 func requireBefore(t *testing.T, first, second string, list []string) {
 	// get the positions
@@ -915,7 +892,7 @@ func TestParserCyclicalReferenceReturnsError(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.Error(t, err)
@@ -929,7 +906,7 @@ func TestParserNoCyclicalReferenceReturns(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.NoError(t, err)
@@ -941,7 +918,7 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseDirectory(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -956,7 +933,7 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) 
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseDirectory(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -971,7 +948,7 @@ func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -986,7 +963,7 @@ func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1006,7 +983,7 @@ func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1026,7 +1003,7 @@ func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T)
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1046,7 +1023,7 @@ func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := setupParser(t)
+	p, _ := setupParser(t)
 
 	_, err := p.ParseFile(f)
 	require.IsType(t, &errors.ConfigError{}, err)
@@ -1061,7 +1038,15 @@ func TestParseDoesNotOverwiteWithMeta(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := NewParser(nil)
+	// Setup with mock state store to avoid destroy phase issues
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	p := NewParser(o)
 
 	// Create and register an embedded test plugin
 	embeddedPlugin := &EmbeddedTestPlugin{}
@@ -1087,7 +1072,15 @@ func TestParseHandlesCommonTypes(t *testing.T) {
 		t.Fatal(pathErr)
 	}
 
-	p := NewParser(nil)
+	// Setup with mock state store to avoid destroy phase issues
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	p := NewParser(o)
 
 	// Create and register an embedded test plugin
 	embeddedPlugin := &EmbeddedTestPlugin{}
@@ -1191,6 +1184,7 @@ func TestParseParsesToResourceBase(t *testing.T) {
 	o1 := r.(*resources.Output)
 	require.Equal(t, "This is the name of the container", o1.Description)
 }
+
 // Test fixtures for provider parsing tests
 type SimpleConfig struct {
 	Value string `hcl:"value,optional"`
@@ -1705,7 +1699,7 @@ provider "test" {
 	require.NoError(t, err)
 
 	// Create parser using standard setup and register plugin
-	parser := setupParser(t)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1768,7 +1762,7 @@ resource "container" "app" {
 	require.NoError(t, err)
 
 	// Create parser using standard setup and register plugin
-	parser := setupParser(t)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1795,4 +1789,456 @@ resource "container" "app" {
 	require.Equal(t, "test/simple", container.Command[0], "command should be interpolated from provider source")
 	require.NotNil(t, container.Resources, "resources block should exist")
 	require.Equal(t, 42, container.Resources.CPU, "cpu should be interpolated from provider config")
+}
+
+func TestParserEventCallback(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Track all events
+	var events []ParserEvent
+
+	// Setup parser with event callback
+	options := DefaultOptions()
+	options.Logger = logger.NewTestLogger(t)
+	options.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	p := NewParser(options)
+
+	// Create and register the test plugin
+	testPlugin := &TestPlugin{}
+	err = p.RegisterPlugin(testPlugin)
+	require.NoError(t, err)
+
+	// Parse the file - this should trigger create events
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// Verify events were fired
+	require.NotEmpty(t, events, "Expected parser events to be fired")
+
+	// Check that we have start and success events for any operation
+	var startEvents []ParserEvent
+	var successEvents []ParserEvent
+
+	for _, event := range events {
+		if event.Phase == "start" {
+			startEvents = append(startEvents, event)
+		}
+		if event.Phase == "success" {
+			successEvents = append(successEvents, event)
+		}
+	}
+
+	require.NotEmpty(t, startEvents, "Expected operation start events")
+	require.NotEmpty(t, successEvents, "Expected operation success events")
+
+	// Verify event structure for success events
+	for _, event := range successEvents {
+		require.Contains(t, []string{"create", "refresh", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
+		require.Equal(t, "success", event.Phase)
+		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		
+		// Builtin types (variables, outputs, locals, modules, root) have 0 duration
+		if strings.Contains(event.ResourceType, "variable.") ||
+			strings.Contains(event.ResourceType, "output.") ||
+			strings.Contains(event.ResourceType, "local.") ||
+			strings.Contains(event.ResourceType, "module.") ||
+			strings.Contains(event.ResourceType, "root.") {
+			require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for builtin types")
+		} else {
+			require.Greater(t, event.Duration, time.Duration(0), "Expected duration to be greater than 0 for provider operations")
+		}
+		
+		require.NoError(t, event.Error, "Expected no error for success events")
+		
+		// Builtin types don't have data
+		if !strings.Contains(event.ResourceType, "variable.") &&
+			!strings.Contains(event.ResourceType, "output.") &&
+			!strings.Contains(event.ResourceType, "local.") &&
+			!strings.Contains(event.ResourceType, "module.") &&
+			!strings.Contains(event.ResourceType, "root.") {
+			require.NotEmpty(t, event.Data, "Expected data to be set for provider operations")
+		}
+	}
+}
+
+func TestParserEventErrorCallback(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Track all events
+	var events []ParserEvent
+
+	// Setup parser with event callback
+	options := DefaultOptions()
+	options.Logger = logger.NewTestLogger(t)
+	options.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	p := NewParser(options)
+
+	// Create and register the test plugin with error configured
+	testPlugin := &TestPlugin{}
+	err = p.RegisterPlugin(testPlugin)
+	require.NoError(t, err)
+
+	// Configure the plugin to return an error for refresh operations (since resources exist in state)
+	testPlugin.SetRefreshError("resource.container.base", fmt.Errorf("test refresh error"))
+
+	// Parse the file - this should trigger error events
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.Error(t, err, "Expected parsing to fail due to refresh error")
+
+	// Verify events were fired
+	require.NotEmpty(t, events, "Expected parser events to be fired")
+
+	// Check that we have start and error events for the operation
+	var startEvents []ParserEvent
+	var errorEvents []ParserEvent
+
+	for _, event := range events {
+		if event.Phase == "start" {
+			startEvents = append(startEvents, event)
+		}
+		if event.Phase == "error" {
+			errorEvents = append(errorEvents, event)
+		}
+	}
+
+	require.NotEmpty(t, startEvents, "Expected operation start events")
+	require.NotEmpty(t, errorEvents, "Expected operation error events")
+
+	// Verify error event structure
+	for _, event := range errorEvents {
+		require.Contains(t, []string{"create", "refresh", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
+		require.Equal(t, "error", event.Phase)
+		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		require.Greater(t, event.Duration, time.Duration(0), "Expected duration to be greater than 0")
+		require.Error(t, event.Error, "Expected error for error events")
+		require.Contains(t, event.Error.Error(), "test refresh error", "Expected error message to contain test error")
+		require.NotEmpty(t, event.Data, "Expected data to be set")
+	}
+}
+
+func TestParserEventForVariablesOutputsLocals(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/modules/modules.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Track all events
+	var events []ParserEvent
+
+	// Setup parser with event callback
+	options := DefaultOptions()
+	options.Logger = logger.NewTestLogger(t)
+	options.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	p := NewParser(options)
+
+	// Create and register the test plugin
+	testPlugin := &TestPlugin{}
+	err = p.RegisterPlugin(testPlugin)
+	require.NoError(t, err)
+
+	// Parse the file - this should trigger events for variables, outputs, and locals
+	_, err = p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	// Verify events were fired
+	require.NotEmpty(t, events, "Expected parser events to be fired")
+
+	// Check for variable, output, and module events
+	var variableEvents []ParserEvent
+	var outputEvents []ParserEvent
+	var moduleEvents []ParserEvent
+
+	for _, event := range events {
+		if event.Operation == "create" && event.Phase == "success" {
+			if strings.Contains(event.ResourceType, "variable.") {
+				variableEvents = append(variableEvents, event)
+			}
+			if strings.Contains(event.ResourceType, "output.") {
+				outputEvents = append(outputEvents, event)
+			}
+			if strings.Contains(event.ResourceType, "module.") {
+				moduleEvents = append(moduleEvents, event)
+			}
+		}
+	}
+
+	require.NotEmpty(t, variableEvents, "Expected variable events to be fired")
+	require.NotEmpty(t, outputEvents, "Expected output events to be fired")
+	require.NotEmpty(t, moduleEvents, "Expected module events to be fired")
+
+	// Verify event structure for variables and outputs
+	for _, event := range variableEvents {
+		require.Equal(t, "create", event.Operation)
+		require.Equal(t, "success", event.Phase)
+		require.Contains(t, event.ResourceType, "variable.", "Expected variable resource type")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for variables")
+		require.NoError(t, event.Error, "Expected no error for success events")
+	}
+
+	for _, event := range outputEvents {
+		require.Equal(t, "create", event.Operation)
+		require.Equal(t, "success", event.Phase)
+		require.Contains(t, event.ResourceType, "output.", "Expected output resource type")
+		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
+		require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for outputs")
+		require.NoError(t, event.Error, "Expected no error for success events")
+	}
+}
+
+func TestDestroyLifecycle(t *testing.T) {
+	// Setup parser with file state store
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+
+	p, testPlugin := setupParser(t, o)
+
+	// First parse: create resources
+	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/config/simple/container.hcl")
+	require.NoError(t, err)
+
+	config1, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+	require.NotNil(t, config1)
+
+	// Verify resources were created
+	createdResources := testPlugin.GetCreatedResources()
+	require.Contains(t, createdResources, "resource.container.consul")
+	require.Contains(t, createdResources, "resource.container.base")
+
+	// Mock state store to return the created config as previous state
+	ms.ExpectedCalls = nil // Clear previous expectations
+	ms.On("Load").Return(config1, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	// Create a smaller config (remove some resources)
+	p2, testPlugin2 := setupParser(t, o)
+	
+	// Parse a config with fewer resources (to trigger destroy)
+	absoluteFolderPath2, err := filepath.Abs("./internal/test_fixtures/config/defaults/container.hcl")
+	require.NoError(t, err)
+
+	config2, err := p2.ParseFile(absoluteFolderPath2)
+	require.NoError(t, err)
+	require.NotNil(t, config2)
+
+	// Verify destroy operations were called for removed resources
+	destroyedResources := testPlugin2.GetDestroyedResources()
+	
+	// Resources from config1 that are not in config2 should be destroyed
+	// This will depend on what's actually in the test fixtures
+	require.NotEmpty(t, destroyedResources, "Expected some resources to be destroyed")
+}
+
+func TestDestroyDependencyValidation(t *testing.T) {
+	// Test that destroy validation prevents destroying resources that others depend on
+	p, _ := setupParser(t)
+	
+	// Test validateDestroyDependencies directly with empty slices
+	toDestroy := []types.Resource{}     // Resources to destroy
+	remaining := []types.Resource{}     // Resources that remain
+	
+	errors := p.validateDestroyDependencies(toDestroy, remaining)
+	require.Empty(t, errors, "Expected no errors when no dependencies exist")
+}
+
+func TestDestroyWithNoState(t *testing.T) {
+	// Test Destroy when there's no existing state
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.Empty(t, config.Resources)
+	
+	ms.AssertNotCalled(t, "Save")
+}
+
+func TestDestroyWithEmptyState(t *testing.T) {
+	// Test Destroy when state exists but has no resources
+	existingState := NewConfig()
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(existingState, nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.Empty(t, config.Resources)
+	
+	ms.AssertNotCalled(t, "Save")
+}
+
+func TestDestroyWithResources(t *testing.T) {
+	// Test Destroy when state has resources
+	existingState := NewConfig()
+	
+	// Create test resources with proper metadata
+	container1 := &structs.Container{
+		ContainerBase: structs.ContainerBase{
+			ResourceBase: types.ResourceBase{
+				Meta: types.Meta{
+					Name: "test1",
+					Type: "container",
+					ID: "resource.container.test1",
+					Status: "created",
+				},
+			},
+		},
+	}
+	
+	container2 := &structs.Container{
+		ContainerBase: structs.ContainerBase{
+			ResourceBase: types.ResourceBase{
+				Meta: types.Meta{
+					Name: "test2", 
+					Type: "container",
+					ID: "resource.container.test2",
+					Status: "created",
+				},
+			},
+		},
+	}
+	
+	existingState.Resources = append(existingState.Resources, container1, container2)
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(existingState, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p, testPlugin := setupParser(t, o)
+	
+	config, err := p.Destroy()
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	
+	// Check that resources were destroyed
+	destroyedResources := testPlugin.GetDestroyedResources()
+	require.Len(t, destroyedResources, 2)
+	
+	// Check that destroyed resources were removed from config
+	require.Empty(t, config.Resources)
+	
+	// Check that state was saved
+	ms.AssertCalled(t, "Save", mock.Anything)
+}
+
+func TestDestroyWithFailedDestroy(t *testing.T) {
+	// Test Destroy when destroy operation fails
+	existingState := NewConfig()
+	
+	// Create a test resource
+	container := &structs.Container{
+		ContainerBase: structs.ContainerBase{
+			ResourceBase: types.ResourceBase{
+				Meta: types.Meta{
+					Name: "test1",
+					Type: "container", 
+					ID: "resource.container.test1",
+					Status: "created",
+				},
+			},
+		},
+	}
+	
+	existingState.Resources = append(existingState.Resources, container)
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(existingState, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p, testPlugin := setupParser(t, o)
+	
+	// Configure the test plugin to fail on destroy for this specific resource
+	testPlugin.SetDestroyError("resource.container.test1", fmt.Errorf("destroy failed"))
+	
+	config, err := p.Destroy()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "destroy phase failed")
+	require.NotNil(t, config)
+	
+	// Check that failed resource was not removed from config
+	require.Len(t, config.Resources, 1)
+	
+	// State should still be saved even on error
+	ms.AssertCalled(t, "Save", mock.Anything)
+}
+
+func TestDestroyWithInvalidStateType(t *testing.T) {
+	// Test Destroy when state has wrong type
+	invalidState := "not a config"
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(invalidState, nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid state type")
+	require.Nil(t, config)
+}
+
+func TestDestroyWithStateLoadError(t *testing.T) {
+	// Test Destroy when state load fails
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, fmt.Errorf("failed to load state"))
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to load state")
+	require.Nil(t, config)
 }

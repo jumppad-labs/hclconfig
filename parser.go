@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -22,11 +23,23 @@ import (
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/state"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
 
 var rootContext *hcl.EvalContext
+
+// ParserEvent represents an event that occurs during parser operations
+type ParserEvent struct {
+	Operation    string        // "create", "destroy", "update", "refresh", "changed", "validate"
+	ResourceType string        // "resource.container"
+	ResourceID   string        // "resource.container.web"
+	Phase        string        // "start", "success", "error"
+	Duration     time.Duration // only for success/error phases
+	Error        error         // only for error phase
+	Data         []byte        // serialized resource data
+}
 
 type ResourceTypeNotExistError struct {
 	Type string
@@ -70,6 +83,10 @@ type ParserOptions struct {
 	// StateStore is used to persist configuration state between runs.
 	// If nil, a default FileStateStore will be created.
 	StateStore state.StateStore
+
+	// OnParserEvent is an optional callback function that is called when parser events occur.
+	// This can be used for metrics collection, logging, debugging, or other monitoring purposes.
+	OnParserEvent func(ParserEvent)
 }
 
 // DefaultOptions returns a ParserOptions object with the
@@ -281,6 +298,36 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		}
 	}()
 
+	// DESTROY PHASE: Handle resources that exist in state but not in new config
+	toDestroy := p.identifyResourcesToDestroy(previousState, c)
+	
+	// Validate that no remaining resources depend on resources to be destroyed
+	destroyDepErrors := p.validateDestroyDependencies(toDestroy, c.Resources)
+	for _, e := range destroyDepErrors {
+		ce.AppendError(e)
+	}
+	
+	if len(ce.Errors) > 0 {
+		return workingConfig, ce
+	}
+	
+	// Execute destroy operations
+	destroyErr := p.processDestroyPhase(toDestroy)
+	if destroyErr != nil {
+		ce.AppendError(&errors.ParserError{
+			Message: fmt.Sprintf("destroy phase failed: %s", destroyErr),
+			Level:   errors.ParserErrorLevelError,
+		})
+		return workingConfig, ce
+	}
+	
+	// Remove successfully destroyed resources from working config
+	for _, destroyedResource := range toDestroy {
+		if destroyedResource.Metadata().Status == "destroyed" {
+			workingConfig.RemoveResource(destroyedResource)
+		}
+	}
+
 	// Validate resource dependencies before processing
 	depErrors := validateResourceDependencies(c, previousState)
 	for _, e := range depErrors {
@@ -334,6 +381,65 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		}
 	}
 
+	// do not walk the dag when we are only dealing with primatives
+	if p.options.PrimativesOnly {
+		return c, nil
+	}
+
+	// Create working config - start with previous state or empty config
+	var workingConfig *Config
+	if previousState != nil {
+		workingConfig = previousState
+		// Merge new resources into working config
+		p.mergeNewResources(workingConfig, c)
+	} else {
+		workingConfig = c
+		// Set status for new resources when no previous state
+		for _, r := range workingConfig.Resources {
+			if r.Metadata().Status == "" {
+				r.Metadata().Status = "pending"
+			}
+		}
+	}
+
+	// Defer saving working state to ensure it's saved even on errors
+	defer func() {
+		if saveErr := p.stateStore.Save(workingConfig); saveErr != nil {
+			// TODO: Add proper logging when logger is available
+			// Log error but don't override the original error
+		}
+	}()
+
+	// DESTROY PHASE: Handle resources that exist in state but not in new config
+	toDestroy := p.identifyResourcesToDestroy(previousState, c)
+	
+	// Validate that no remaining resources depend on resources to be destroyed
+	destroyDepErrors := p.validateDestroyDependencies(toDestroy, c.Resources)
+	for _, e := range destroyDepErrors {
+		ce.AppendError(e)
+	}
+	
+	if len(ce.Errors) > 0 {
+		return workingConfig, ce
+	}
+	
+	// Execute destroy operations
+	destroyErr := p.processDestroyPhase(toDestroy)
+	if destroyErr != nil {
+		ce.AppendError(&errors.ParserError{
+			Message: fmt.Sprintf("destroy phase failed: %s", destroyErr),
+			Level:   errors.ParserErrorLevelError,
+		})
+		return workingConfig, ce
+	}
+	
+	// Remove successfully destroyed resources from working config
+	for _, destroyedResource := range toDestroy {
+		if destroyedResource.Metadata().Status == "destroyed" {
+			workingConfig.RemoveResource(destroyedResource)
+		}
+	}
+
 	// Validate resource dependencies with previous state context
 	depErrors := validateResourceDependencies(c, previousState)
 	for _, e := range depErrors {
@@ -341,24 +447,12 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	}
 
 	if len(ce.Errors) > 0 {
-		return nil, ce
+		return workingConfig, ce
 	}
-
-	// do not walk the dag when we are only dealing with primatives
-	if p.options.PrimativesOnly {
-		return c, nil
-	}
-
-	// Defer saving state to ensure it's saved even on errors
-	defer func() {
-		if saveErr := p.stateStore.Save(c); saveErr != nil {
-			// TODO: Add proper logging when logger is available
-			// Log error but don't override the original error
-		}
-	}()
 
 	// process the files and resolve dependency
-	return c, p.process(c, previousState)
+	processErr := p.process(c, previousState)
+	return workingConfig, processErr
 }
 
 // internal method
@@ -549,6 +643,10 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 			// add the variable to the context
 			c.AppendResource(v)
+
+			// Fire parser event for variable processing (always succeeds with 0 time)
+			resourceType := fmt.Sprintf("%s.%s", v.Metadata().Type, v.Metadata().Name)
+			fireParserEvent(&p.options, "create", resourceType, v.Metadata().ID, "success", 0, nil, nil)
 
 			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
 			setContextVariableIfMissing(ctx, v.Meta.Name, val)
@@ -1901,11 +1999,124 @@ func (p *Parser) mergeNewResources(workingConfig *Config, newConfig *Config) {
 	}
 }
 
+// identifyResourcesToDestroy returns resources that exist in previousState but not in newConfig
+func (p *Parser) identifyResourcesToDestroy(previousState *Config, newConfig *Config) []types.Resource {
+	if previousState == nil {
+		return nil
+	}
+	
+	// Create a map of new config resources for quick lookup
+	newConfigMap := make(map[string]bool)
+	for _, r := range newConfig.Resources {
+		newConfigMap[r.Metadata().ID] = true
+	}
+	
+	// Find resources in previous state that are not in new config
+	var toDestroy []types.Resource
+	for _, r := range previousState.Resources {
+		if !newConfigMap[r.Metadata().ID] {
+			toDestroy = append(toDestroy, r)
+		}
+	}
+	
+	return toDestroy
+}
+
+// validateDestroyDependencies checks that no remaining resources depend on resources to be destroyed
+func (p *Parser) validateDestroyDependencies(toDestroy []types.Resource, remainingResources []types.Resource) []*errors.ParserError {
+	var parserErrors []*errors.ParserError
+	
+	// Create a map of resources to be destroyed for quick lookup
+	destroyMap := make(map[string]bool)
+	for _, r := range toDestroy {
+		destroyMap[r.Metadata().ID] = true
+	}
+	
+	// Check each remaining resource for dependencies on resources to be destroyed
+	for _, resource := range remainingResources {
+		// Skip validation for certain resource types that don't have dependencies
+		if resource.Metadata().Type == resources.TypeVariable ||
+			resource.Metadata().Type == resources.TypeRoot {
+			continue
+		}
+		
+		// Collect all dependencies for this resource
+		var allDependencies []string
+		
+		// Add explicit dependencies from depends_on
+		allDependencies = append(allDependencies, resource.GetDependencies()...)
+		
+		// Add implicit dependencies from resource links (interpolations)
+		allDependencies = append(allDependencies, resource.Metadata().Links...)
+		
+		// Check each dependency
+		for _, dependency := range allDependencies {
+			if dependency == "" {
+				continue // Skip empty dependencies
+			}
+			
+			// Check if this dependency is on a resource to be destroyed
+			if destroyMap[dependency] {
+				// Found a dependency on a resource to be destroyed - this is an error
+				pe := &errors.ParserError{}
+				pe.Filename = resource.Metadata().File
+				pe.Line = resource.Metadata().Line
+				pe.Column = resource.Metadata().Column
+				pe.Level = errors.ParserErrorLevelError
+				pe.Message = fmt.Sprintf(
+					"Cannot destroy resource '%s' because resource '%s' depends on it. Remove or update the dependency first.",
+					dependency,
+					resource.Metadata().ID,
+				)
+				
+				parserErrors = append(parserErrors, pe)
+			}
+		}
+	}
+	
+	return parserErrors
+}
+
+// processDestroyPhase handles the destruction of resources that exist in state but not in new config
+func (p *Parser) processDestroyPhase(toDestroy []types.Resource) error {
+	if len(toDestroy) == 0 {
+		return nil
+	}
+	
+	// Build destroy DAG with reversed dependencies
+	destroyGraph, err := buildDestroyDAG(toDestroy)
+	if err != nil {
+		return fmt.Errorf("failed to build destroy DAG: %w", err)
+	}
+	
+	// Reduce the graph nodes to unique instances
+	destroyGraph.TransitiveReduction()
+	
+	// Validate the dependency graph is ok
+	err = destroyGraph.Validate()
+	if err != nil {
+		return fmt.Errorf("unable to validate destroy dependency graph: %w", err)
+	}
+	
+	// Walk the destroy DAG to execute destroy operations
+	w := dag.Walker{}
+	w.Callback = destroyWalkCallback(p.pluginRegistry, &p.options)
+	w.Reverse = false // We've already reversed the dependencies in buildDestroyDAG
+	
+	w.Update(destroyGraph)
+	diags := w.Wait()
+	if diags.HasErrors() {
+		return fmt.Errorf("destroy operations failed: %w", diags.Err())
+	}
+	
+	return nil
+}
+
 func (p *Parser) process(c *Config, previousState *Config) error {
 	ce := errors.NewConfigError()
 
 	// walk the dag and process resources (only processes resources from c)
-	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry), false)
+	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry, &p.options), false)
 
 	for _, e := range errs {
 		ce.AppendError(e)
@@ -2042,4 +2253,54 @@ func validateResourceDependencies(c *Config, previousState *Config) []*errors.Pa
 	}
 
 	return parserErrors
+}
+
+// Destroy loads the saved state and destroys all existing resources.
+// It returns the final state after destruction and any errors that occurred.
+// This method is useful for cleaning up all resources tracked in the state.
+func (p *Parser) Destroy() (*Config, error) {
+	// Load the current state
+	savedState, err := p.stateStore.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load state: %w", err)
+	}
+	
+	// If there's no state, nothing to destroy
+	if savedState == nil {
+		return NewConfig(), nil
+	}
+	
+	// Type assert the loaded state to *Config
+	previousState, ok := savedState.(*Config)
+	if !ok {
+		return nil, fmt.Errorf("invalid state type: expected *Config, got %T", savedState)
+	}
+	
+	// If there are no resources in the state, nothing to destroy
+	if len(previousState.Resources) == 0 {
+		return previousState, nil
+	}
+	
+	// Defer saving the final state
+	defer func() {
+		if saveErr := p.stateStore.Save(previousState); saveErr != nil {
+			// Log error but don't override the original error
+			// TODO: Add proper logging when logger is available
+		}
+	}()
+	
+	// Execute destroy operations on all resources
+	destroyErr := p.processDestroyPhase(previousState.Resources)
+	if destroyErr != nil {
+		return previousState, fmt.Errorf("destroy phase failed: %w", destroyErr)
+	}
+	
+	// Remove successfully destroyed resources from state
+	for _, destroyedResource := range previousState.Resources {
+		if destroyedResource.Metadata().Status == "destroyed" {
+			previousState.RemoveResource(destroyedResource)
+		}
+	}
+	
+	return previousState, nil
 }
