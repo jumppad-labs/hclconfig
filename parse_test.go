@@ -1455,3 +1455,182 @@ func TestDestroyDependencyValidation(t *testing.T) {
 	errors := p.validateDestroyDependencies(toDestroy, remaining)
 	require.Empty(t, errors, "Expected no errors when no dependencies exist")
 }
+
+func TestDestroyWithNoState(t *testing.T) {
+	// Test Destroy when there's no existing state
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.Empty(t, config.Resources)
+	
+	ms.AssertNotCalled(t, "Save")
+}
+
+func TestDestroyWithEmptyState(t *testing.T) {
+	// Test Destroy when state exists but has no resources
+	existingState := NewConfig()
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(existingState, nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.Empty(t, config.Resources)
+	
+	ms.AssertNotCalled(t, "Save")
+}
+
+func TestDestroyWithResources(t *testing.T) {
+	// Test Destroy when state has resources
+	existingState := NewConfig()
+	
+	// Create test resources with proper metadata
+	container1 := &structs.Container{
+		ContainerBase: structs.ContainerBase{
+			ResourceBase: types.ResourceBase{
+				Meta: types.Meta{
+					Name: "test1",
+					Type: "container",
+					ID: "resource.container.test1",
+					Status: "created",
+				},
+			},
+		},
+	}
+	
+	container2 := &structs.Container{
+		ContainerBase: structs.ContainerBase{
+			ResourceBase: types.ResourceBase{
+				Meta: types.Meta{
+					Name: "test2", 
+					Type: "container",
+					ID: "resource.container.test2",
+					Status: "created",
+				},
+			},
+		},
+	}
+	
+	existingState.Resources = append(existingState.Resources, container1, container2)
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(existingState, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p, testPlugin := setupParser(t, o)
+	
+	config, err := p.Destroy()
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	
+	// Check that resources were destroyed
+	destroyedResources := testPlugin.GetDestroyedResources()
+	require.Len(t, destroyedResources, 2)
+	
+	// Check that destroyed resources were removed from config
+	require.Empty(t, config.Resources)
+	
+	// Check that state was saved
+	ms.AssertCalled(t, "Save", mock.Anything)
+}
+
+func TestDestroyWithFailedDestroy(t *testing.T) {
+	// Test Destroy when destroy operation fails
+	existingState := NewConfig()
+	
+	// Create a test resource
+	container := &structs.Container{
+		ContainerBase: structs.ContainerBase{
+			ResourceBase: types.ResourceBase{
+				Meta: types.Meta{
+					Name: "test1",
+					Type: "container", 
+					ID: "resource.container.test1",
+					Status: "created",
+				},
+			},
+		},
+	}
+	
+	existingState.Resources = append(existingState.Resources, container)
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(existingState, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p, testPlugin := setupParser(t, o)
+	
+	// Configure the test plugin to fail on destroy for this specific resource
+	testPlugin.SetDestroyError("resource.container.test1", fmt.Errorf("destroy failed"))
+	
+	config, err := p.Destroy()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "destroy phase failed")
+	require.NotNil(t, config)
+	
+	// Check that failed resource was not removed from config
+	require.Len(t, config.Resources, 1)
+	
+	// State should still be saved even on error
+	ms.AssertCalled(t, "Save", mock.Anything)
+}
+
+func TestDestroyWithInvalidStateType(t *testing.T) {
+	// Test Destroy when state has wrong type
+	invalidState := "not a config"
+	
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(invalidState, nil)
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid state type")
+	require.Nil(t, config)
+}
+
+func TestDestroyWithStateLoadError(t *testing.T) {
+	// Test Destroy when state load fails
+	ms := &mocks.MockStateStore{}
+	ms.On("Load").Return(nil, fmt.Errorf("failed to load state"))
+	
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.Logger = logger.NewTestLogger(t)
+	
+	p := NewParser(o)
+	
+	config, err := p.Destroy()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to load state")
+	require.Nil(t, config)
+}

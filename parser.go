@@ -2019,3 +2019,53 @@ func validateResourceDependencies(c *Config, previousState *Config) []*errors.Pa
 
 	return parserErrors
 }
+
+// Destroy loads the saved state and destroys all existing resources.
+// It returns the final state after destruction and any errors that occurred.
+// This method is useful for cleaning up all resources tracked in the state.
+func (p *Parser) Destroy() (*Config, error) {
+	// Load the current state
+	savedState, err := p.stateStore.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load state: %w", err)
+	}
+	
+	// If there's no state, nothing to destroy
+	if savedState == nil {
+		return NewConfig(), nil
+	}
+	
+	// Type assert the loaded state to *Config
+	previousState, ok := savedState.(*Config)
+	if !ok {
+		return nil, fmt.Errorf("invalid state type: expected *Config, got %T", savedState)
+	}
+	
+	// If there are no resources in the state, nothing to destroy
+	if len(previousState.Resources) == 0 {
+		return previousState, nil
+	}
+	
+	// Defer saving the final state
+	defer func() {
+		if saveErr := p.stateStore.Save(previousState); saveErr != nil {
+			// Log error but don't override the original error
+			// TODO: Add proper logging when logger is available
+		}
+	}()
+	
+	// Execute destroy operations on all resources
+	destroyErr := p.processDestroyPhase(previousState.Resources)
+	if destroyErr != nil {
+		return previousState, fmt.Errorf("destroy phase failed: %w", destroyErr)
+	}
+	
+	// Remove successfully destroyed resources from state
+	for _, destroyedResource := range previousState.Resources {
+		if destroyedResource.Metadata().Status == "destroyed" {
+			previousState.RemoveResource(destroyedResource)
+		}
+	}
+	
+	return previousState, nil
+}
