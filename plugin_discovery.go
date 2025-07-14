@@ -40,24 +40,8 @@ func NewPluginDiscovery(directories []string, pattern string, logger func(string
 	}
 }
 
-// DiscoverPlugins searches for plugin binaries in all configured directories
-func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
-	pluginInfos, err := pd.discoverPluginsWithInfo()
-	if err != nil {
-		return nil, err
-	}
-	
-	// Extract paths for backward compatibility
-	paths := make([]string, len(pluginInfos))
-	for i, info := range pluginInfos {
-		paths[i] = info.Path
-	}
-	
-	return paths, nil
-}
-
-// discoverPluginsWithInfo searches for plugin binaries and returns detailed info
-func (pd *PluginDiscovery) discoverPluginsWithInfo() ([]PluginInfo, error) {
+// DiscoverPlugins searches for plugin binaries and returns detailed info
+func (pd *PluginDiscovery) DiscoverPlugins() ([]PluginInfo, error) {
 	var plugins []PluginInfo
 	var errors []error
 	

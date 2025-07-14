@@ -36,11 +36,11 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
 		}
 	}
 }
@@ -72,11 +72,11 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
 		}
 	}
 }
@@ -162,11 +162,11 @@ func TestPluginDiscoveryMixedDirectory(t *testing.T) {
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
 		}
 	}
 }
@@ -246,11 +246,11 @@ func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
 		}
 	}
 }
@@ -282,11 +282,11 @@ func TestPluginDiscoveryCustomPattern(t *testing.T) {
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
 		}
 	}
 }
@@ -318,11 +318,11 @@ func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
 		}
 	}
 }
@@ -358,8 +358,8 @@ func TestPluginDiscovery_WindowsExecutables(t *testing.T) {
 		t.Fatalf("Expected 1 plugin, found %d", len(plugins))
 	}
 	
-	if plugins[0] != exePath {
-		t.Errorf("Expected plugin path %s, got %s", exePath, plugins[0])
+	if plugins[0].Path != exePath {
+		t.Errorf("Expected plugin path %s, got %s", exePath, plugins[0].Path)
 	}
 }
 
