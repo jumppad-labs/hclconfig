@@ -40,8 +40,24 @@ func NewPluginDiscovery(directories []string, pattern string, logger func(string
 	}
 }
 
-// DiscoverPlugins searches for plugin binaries in all configured directories using namespace/type/platform structure
-func (pd *PluginDiscovery) DiscoverPlugins() ([]PluginInfo, error) {
+// DiscoverPlugins searches for plugin binaries in all configured directories
+func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
+	pluginInfos, err := pd.discoverPluginsWithInfo()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Extract paths for backward compatibility
+	paths := make([]string, len(pluginInfos))
+	for i, info := range pluginInfos {
+		paths[i] = info.Path
+	}
+	
+	return paths, nil
+}
+
+// discoverPluginsWithInfo searches for plugin binaries and returns detailed info
+func (pd *PluginDiscovery) discoverPluginsWithInfo() ([]PluginInfo, error) {
 	var plugins []PluginInfo
 	var errors []error
 	
@@ -103,7 +119,8 @@ func (pd *PluginDiscovery) DiscoverPlugin(namespace, pluginType string) (*Plugin
 	return nil, fmt.Errorf("plugin %s/%s not found for platform %s", namespace, pluginType, currentPlatform)
 }
 
-// discoverInDirectory searches for plugins in a single directory using namespace/type/platform structure
+// discoverInDirectory searches for plugins in a single directory
+// Supports both namespaced (namespace/type/platform/binary) and flat (binary) structures
 func (pd *PluginDiscovery) discoverInDirectory(dir string, platform string) ([]PluginInfo, error) {
 	var plugins []PluginInfo
 	
@@ -121,13 +138,36 @@ func (pd *PluginDiscovery) discoverInDirectory(dir string, platform string) ([]P
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
 	
+	pd.logger(fmt.Sprintf("Searching for plugins in %s for platform %s", dir, platform))
+	
+	// First try namespaced discovery
+	namespacedPlugins, err := pd.discoverNamespacedPlugins(dir, platform)
+	if err != nil {
+		pd.logger(fmt.Sprintf("Failed namespaced discovery in %s: %v", dir, err))
+	} else {
+		plugins = append(plugins, namespacedPlugins...)
+	}
+	
+	// Also try flat discovery for backward compatibility
+	flatPlugins, err := pd.discoverFlatPlugins(dir)
+	if err != nil {
+		pd.logger(fmt.Sprintf("Failed flat discovery in %s: %v", dir, err))
+	} else {
+		plugins = append(plugins, flatPlugins...)
+	}
+	
+	return plugins, nil
+}
+
+// discoverNamespacedPlugins searches for plugins using namespace/type/platform structure
+func (pd *PluginDiscovery) discoverNamespacedPlugins(dir string, platform string) ([]PluginInfo, error) {
+	var plugins []PluginInfo
+	
 	// Read namespace directories
 	namespaces, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
 	}
-	
-	pd.logger(fmt.Sprintf("Searching for plugins in %s for platform %s", dir, platform))
 	
 	for _, namespaceEntry := range namespaces {
 		if !namespaceEntry.IsDir() {
@@ -160,6 +200,37 @@ func (pd *PluginDiscovery) discoverInDirectory(dir string, platform string) ([]P
 					plugins = append(plugins, *plugin)
 				}
 			}
+		}
+	}
+	
+	return plugins, nil
+}
+
+// discoverFlatPlugins searches for plugins in flat directory structure (backward compatibility)
+func (pd *PluginDiscovery) discoverFlatPlugins(dir string) ([]PluginInfo, error) {
+	var plugins []PluginInfo
+	
+	// Read directory contents
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
+	}
+	
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		
+		fullPath := filepath.Join(dir, entry.Name())
+		
+		if pd.isPluginBinary(fullPath) {
+			pd.logger(fmt.Sprintf("Found flat plugin: %s", fullPath))
+			plugins = append(plugins, PluginInfo{
+				Path:      fullPath,
+				Namespace: "legacy", // Default namespace for flat plugins
+				Type:      entry.Name(), // Use filename as type
+				Platform:  "any", // Flat plugins are platform-agnostic
+			})
 		}
 	}
 	

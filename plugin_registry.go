@@ -161,8 +161,8 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 	}
 	pd := NewPluginDiscovery(options.PluginDirectories, options.PluginNamePattern, loggerFunc)
 
-	// Discover plugins
-	plugins, err := pd.DiscoverPlugins()
+	// Discover plugins with detailed info
+	plugins, err := pd.discoverPluginsWithInfo()
 	if err != nil {
 		return fmt.Errorf("plugin discovery failed: %w", err)
 	}
