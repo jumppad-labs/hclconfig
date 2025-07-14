@@ -265,7 +265,7 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 		}
 		
 		// Get the provider for this resource
-		adapter := registry.GetProvider(r)
+		adapter := registry.GetProviderAdapter(r)
 		if adapter == nil {
 			r.Metadata().Status = "destroy_failed"
 			pe := &errors.ParserError{}
