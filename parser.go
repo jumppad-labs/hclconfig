@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -738,18 +739,20 @@ func (p *Parser) parseProviderResource(ctx *hcl.EvalContext, c *Config, file str
 		provider.Config = configBlock.Body
 	}
 
-	// Register the provider with the plugin registry first (checks for duplicates with expected error message)
-	// This also converts the config from hcl.Body to the concrete config type
-	err = p.pluginRegistry.RegisterProvider(provider, ctx)
-	if err != nil {
+	// Check for duplicate provider names (without full registration)
+	if _, exists := p.pluginRegistry.providers[provider.Metadata().Name]; exists {
 		return &errors.ParserError{
 			Line:     b.DefRange().Start.Line,
 			Column:   b.DefRange().Start.Column,
 			Filename: file,
 			Level:    errors.ParserErrorLevelError,
-			Message:  fmt.Sprintf("failed to register provider '%s': %s", provider.Metadata().Name, err.Error()),
+			Message:  fmt.Sprintf("provider '%s' is already defined", provider.Metadata().Name),
 		}
 	}
+
+	// Store provider for later registration during DAG execution
+	// Don't initialize plugin or convert config yet - keep as hcl.Body for interpolation
+	p.pluginRegistry.providers[provider.Metadata().Name] = provider
 
 	// Add the provider to the config resources after successful registration
 	err = c.AppendResource(provider)
@@ -763,8 +766,29 @@ func (p *Parser) parseProviderResource(ctx *hcl.EvalContext, c *Config, file str
 		}
 	}
 
+	// Try to resolve simple provider configs during parsing for better referenceability
+	// This handles configs with variables/literals but not resource references
+	if provider.Config != nil {
+		if configBody, ok := provider.Config.(hcl.Body); ok {
+			// Find plugin to get config type
+			plugin, pluginErr := p.pluginRegistry.findPluginBySource(provider.Source)
+			if pluginErr == nil && plugin != nil {
+				configType := plugin.GetConfigType()
+				if configType != nil {
+					// Try to decode config with current context (variables should be available)
+					configPtr := reflect.New(configType).Interface()
+					diags := gohcl.DecodeBody(configBody, ctx, configPtr)
+					if !diags.HasErrors() {
+						// Successfully decoded, use the concrete config
+						provider.Config = configPtr
+					}
+					// If decoding fails, leave as hcl.Body for later resolution
+				}
+			}
+		}
+	}
+
 	// Add the provider to the HCL evaluation context for referenceability
-	// This must happen AFTER RegisterProvider so the config is in its final concrete form
 	providerValue, err := convert.GoToCtyValue(provider)
 	if err != nil {
 		return &errors.ParserError{
@@ -776,36 +800,27 @@ func (p *Parser) parseProviderResource(ctx *hcl.EvalContext, c *Config, file str
 		}
 	}
 
-	// Manually add the config field to the provider cty value since convert.GoToCtyValue
-	// doesn't include interface{} fields properly
+	// Manually add the config field to the provider cty value if available
 	if provider.Config != nil {
-		configValue, err := convert.GoToCtyValue(provider.Config)
-		if err != nil {
-			return &errors.ParserError{
-				Line:     b.DefRange().Start.Line,
-				Column:   b.DefRange().Start.Column,
-				Filename: file,
-				Level:    errors.ParserErrorLevelError,
-				Message:  fmt.Sprintf("failed to convert provider config to context value: %s", err.Error()),
+		configValue, configErr := convert.GoToCtyValue(provider.Config)
+		if configErr == nil {
+			// Create a new object type that includes the config field
+			originalAttrs := providerValue.Type().AttributeTypes()
+			newAttrs := make(map[string]cty.Type)
+			for k, v := range originalAttrs {
+				newAttrs[k] = v
 			}
-		}
+			newAttrs["config"] = configValue.Type()
 
-		// Create a new object type that includes the config field
-		originalAttrs := providerValue.Type().AttributeTypes()
-		newAttrs := make(map[string]cty.Type)
-		for k, v := range originalAttrs {
-			newAttrs[k] = v
-		}
-		newAttrs["config"] = configValue.Type()
+			// Create new object value with config included
+			newValues := make(map[string]cty.Value)
+			for k, _ := range originalAttrs {
+				newValues[k] = providerValue.GetAttr(k)
+			}
+			newValues["config"] = configValue
 
-		// Create new object value with config included
-		newValues := make(map[string]cty.Value)
-		for k, _ := range originalAttrs {
-			newValues[k] = providerValue.GetAttr(k)
+			providerValue = cty.ObjectVal(newValues)
 		}
-		newValues["config"] = configValue
-
-		providerValue = cty.ObjectVal(newValues)
 	}
 
 	err = setContextVariableFromPath(ctx, fmt.Sprintf("provider.%s", provider.Metadata().Name), providerValue)

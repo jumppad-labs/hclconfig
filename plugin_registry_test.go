@@ -516,8 +516,8 @@ provider "error_test" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -549,8 +549,8 @@ provider "error_test" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin with different source
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -582,8 +582,8 @@ provider "error_test" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -624,8 +624,8 @@ provider "duplicate" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -652,8 +652,8 @@ resource "unregistered_type" "test" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser without registering the required plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 
 	// Parse should fail due to unregistered resource type
 	_, err = parser.ParseFile(testFile)
@@ -680,8 +680,8 @@ provider "error_test" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -708,8 +708,8 @@ provider "empty" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 
 	// Parse should fail due to missing required fields
 	_, err = parser.ParseFile(testFile)
@@ -743,8 +743,8 @@ provider "error_test" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -776,8 +776,8 @@ provider "simple" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -811,8 +811,8 @@ provider "simple" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser and register plugin
-	parser := NewParser(nil)
+	// Create parser with proper test isolation
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)

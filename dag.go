@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/creasty/defaults"
@@ -31,8 +32,9 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 	// Loop over all resources and add to graph
 	for _, resource := range c.Resources {
-		// ignore variables and providers (both are referenceable but don't need DAG processing)
-		if resource.Metadata().Type != resources.TypeVariable && resource.Metadata().Type != resources.TypeProvider {
+		// ignore variables (referenceable but don't need DAG processing)
+		// providers are now included in DAG to support resource dependencies
+		if resource.Metadata().Type != resources.TypeVariable {
 			graph.Add(resource)
 		}
 	}
@@ -41,8 +43,8 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	for _, resource := range c.Resources {
 		hasDeps := false
 
-		// do nothing with variables and providers (both are referenceable but don't need DAG processing)
-		if resource.Metadata().Type == resources.TypeVariable || resource.Metadata().Type == resources.TypeProvider {
+		// do nothing with variables (referenceable but don't need DAG processing)
+		if resource.Metadata().Type == resources.TypeVariable {
 			continue
 		}
 
@@ -123,6 +125,24 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 			hasDeps = true
 			dependencies[d] = true
+		}
+
+		// add provider dependency for non-provider resources
+		if resource.Metadata().Type != resources.TypeProvider {
+			providerName := getResourceProviderName(resource)
+			if providerName != "" {
+				providerFQDN := fmt.Sprintf("provider.%s", providerName)
+				if resource.Metadata().Module != "" {
+					providerFQDN = fmt.Sprintf("module.%s.provider.%s", resource.Metadata().Module, providerName)
+				}
+
+				provider, err := c.FindResource(providerFQDN)
+				if err == nil {
+					hasDeps = true
+					dependencies[provider] = true
+				}
+				// Note: We don't error if provider not found, as it might be a default/builtin provider
+			}
 		}
 
 		for d := range dependencies {
@@ -354,6 +374,22 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			return nil
 		}
 
+		// Handle providers specially - they have different processing requirements
+		if r.Metadata().Type == resources.TypeProvider {
+			// Providers need the global context with all variable resolutions
+			// For providers, we only need to call the lifecycle method, no further processing
+			if err := callProviderLifecycle(r, rootContext, previousState, registry, options); err != nil {
+				pe := &errors.ParserError{}
+				pe.Filename = r.Metadata().File
+				pe.Line = r.Metadata().Line
+				pe.Column = r.Metadata().Column
+				pe.Message = fmt.Sprintf("provider lifecycle error: %s", err)
+				pe.Level = errors.ParserErrorLevelError
+				return diags.Append(pe)
+			}
+			return nil
+		}
+
 		bdy, err := c.getBody(r)
 		if err != nil {
 			panic(fmt.Sprintf(`no body found for resource "%s"`, r.Metadata().ID))
@@ -521,7 +557,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		// we need to handle an additional check
 		if !r.GetDisabled() {
 			// Call provider lifecycle methods
-			if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
+			if err := callProviderLifecycle(r, ctx, previousState, registry, options); err != nil {
 				pe := &errors.ParserError{}
 				pe.Filename = r.Metadata().File
 				pe.Line = r.Metadata().Line
@@ -538,11 +574,15 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 }
 
 // callProviderLifecycle calls the appropriate provider lifecycle methods for a resource
-func callProviderLifecycle(resource types.Resource, previousState *Config, registry *PluginRegistry, options *ParserOptions) error {
+func callProviderLifecycle(resource types.Resource, evalCtx *hcl.EvalContext, previousState *Config, registry *PluginRegistry, options *ParserOptions) error {
 
-	// Skip builtin resource types that don't have providers, but fire events for them
+	// Handle provider initialization 
+	if resource.Metadata().Type == resources.TypeProvider {
+		return initializeProvider(resource.(*resources.Provider), evalCtx, registry, options)
+	}
+
+	// Skip other builtin resource types that don't have providers, but fire events for them
 	if resource.Metadata().Type == resources.TypeVariable ||
-		resource.Metadata().Type == resources.TypeProvider ||
 		resource.Metadata().Type == resources.TypeOutput ||
 		resource.Metadata().Type == resources.TypeLocal ||
 		resource.Metadata().Type == resources.TypeModule ||
@@ -734,4 +774,177 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 	}
 
 	return nil
+}
+
+// getResourceProviderName extracts the provider name for a resource
+// Returns the explicit provider name if set, otherwise defaults to resource type
+func getResourceProviderName(resource types.Resource) string {
+	// First check if resource has explicit provider field using reflection
+	val := reflect.ValueOf(resource)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() == reflect.Struct {
+		providerField := val.FieldByName("Provider")
+		if providerField.IsValid() && providerField.Kind() == reflect.String {
+			explicitProvider := providerField.String()
+			if explicitProvider != "" {
+				return explicitProvider
+			}
+		}
+	}
+
+	// Fall back to resource type as default provider name
+	// Skip builtin types that don't have providers
+	resourceType := resource.Metadata().Type
+	if resourceType == resources.TypeVariable ||
+		resourceType == resources.TypeProvider ||
+		resourceType == resources.TypeOutput ||
+		resourceType == resources.TypeLocal ||
+		resourceType == resources.TypeModule ||
+		resourceType == resources.TypeRoot {
+		return ""
+	}
+
+	return resourceType
+}
+
+
+// initializeProvider initializes a provider during DAG execution
+// This resolves provider config interpolations and registers the provider with the plugin registry
+func initializeProvider(provider *resources.Provider, evalCtx *hcl.EvalContext, registry *PluginRegistry, options *ParserOptions) error {
+	resourceType := fmt.Sprintf("%s.%s", provider.Metadata().Type, provider.Metadata().Name)
+	resourceID := provider.Metadata().ID
+	
+	// Serialize provider data for events
+	providerJSON, jsonErr := json.Marshal(provider)
+	var data []byte
+	if jsonErr == nil {
+		data = providerJSON
+	}
+	
+	// Fire start event
+	fireParserEvent(options, "create", resourceType, resourceID, "start", 0, nil, data)
+	start := time.Now()
+	
+	// Skip if already initialized
+	if provider.Initialized {
+		duration := time.Since(start)
+		fireParserEvent(options, "create", resourceType, resourceID, "success", duration, nil, data)
+		return nil
+	}
+	
+	// Validate required fields
+	if provider.Metadata().Name == "" {
+		err := fmt.Errorf("provider name cannot be empty")
+		fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+		return err
+	}
+	if provider.Source == "" {
+		err := fmt.Errorf("provider source cannot be empty")
+		fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+		return err
+	}
+
+	// Find plugin by source
+	plugin, err := registry.findPluginBySource(provider.Source)
+	if err != nil {
+		err = fmt.Errorf("failed to find plugin for source '%s': %w", provider.Source, err)
+		fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+		return err
+	}
+	if plugin == nil {
+		err := fmt.Errorf("plugin for source '%s' not found", provider.Source)
+		fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+		return err
+	}
+
+	// Get config type from plugin
+	configType := plugin.GetConfigType()
+	if configType == nil {
+		err := fmt.Errorf("plugin for source '%s' does not define a configuration type", provider.Source)
+		fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+		return err
+	}
+
+	// Convert hcl.Body config to concrete type if config is provided
+	if provider.Config != nil {
+		if configBody, ok := provider.Config.(hcl.Body); ok {
+			// Create an instance of the concrete config type
+			configPtr := reflect.New(configType).Interface()
+			
+			// Decode the config body to the concrete type using the evaluation context
+			if evalCtx != nil {
+				diags := gohcl.DecodeBody(configBody, evalCtx, configPtr)
+				if diags.HasErrors() {
+					err := fmt.Errorf("failed to decode provider config: %s", diags.Error())
+					fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+					return err
+				}
+				
+				// Store the concrete config
+				provider.Config = configPtr
+			} else {
+				// If no context available, leave config as hcl.Body for now
+				// This can happen during early initialization or missing dependencies
+			}
+		}
+	}
+
+	// Set up plugin-specific fields
+	provider.Plugin = plugin
+	provider.ConfigType = configType
+	provider.Initialized = true
+
+	// Update provider context variable with resolved config (only if context available)
+	if evalCtx != nil {
+		err = updateProviderContextVariable(provider, evalCtx)
+		if err != nil {
+			err = fmt.Errorf("failed to update provider context variable: %w", err)
+			fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+			return err
+		}
+	}
+
+	duration := time.Since(start)
+	fireParserEvent(options, "create", resourceType, resourceID, "success", duration, nil, data)
+	return nil
+}
+
+// updateProviderContextVariable updates the provider's context variable with resolved config
+func updateProviderContextVariable(provider *resources.Provider, evalCtx *hcl.EvalContext) error {
+	// Convert provider to cty value
+	providerValue, err := convert.GoToCtyValue(provider)
+	if err != nil {
+		return fmt.Errorf("failed to convert provider '%s' to context value: %w", provider.Metadata().Name, err)
+	}
+
+	// If provider has resolved config, add it to the context value
+	if provider.Config != nil {
+		configValue, err := convert.GoToCtyValue(provider.Config)
+		if err != nil {
+			return fmt.Errorf("failed to convert provider config to context value: %w", err)
+		}
+
+		// Create a new object type that includes the config field
+		originalAttrs := providerValue.Type().AttributeTypes()
+		newAttrs := make(map[string]cty.Type)
+		for k, v := range originalAttrs {
+			newAttrs[k] = v
+		}
+		newAttrs["config"] = configValue.Type()
+
+		// Create new object value with config included
+		newValues := make(map[string]cty.Value)
+		for k, _ := range originalAttrs {
+			newValues[k] = providerValue.GetAttr(k)
+		}
+		newValues["config"] = configValue
+
+		providerValue = cty.ObjectVal(newValues)
+	}
+
+	// Update the context variable
+	return setContextVariableFromPath(evalCtx, fmt.Sprintf("provider.%s", provider.Metadata().Name), providerValue)
 }
