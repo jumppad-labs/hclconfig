@@ -1280,7 +1280,7 @@ resource "simple" "test" {
 	require.NoError(t, err)
 
 	// Create parser and register plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1343,7 +1343,7 @@ provider "unknown" {
 	require.NoError(t, err)
 
 	// Create parser without registering the required plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 
 	// Parse should fail due to missing plugin
 	_, err = parser.ParseFile(testFile)
@@ -1371,7 +1371,7 @@ provider "simple" {
 	require.NoError(t, err)
 
 	// Create parser and register plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1416,7 +1416,7 @@ provider "simple2" {
 	require.NoError(t, err)
 
 	// Create parser and register plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1479,7 +1479,7 @@ provider "simple" {
 	require.NoError(t, err)
 
 	// Create parser and register plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1532,7 +1532,7 @@ variable "config_value" {
 	require.NoError(t, err)
 
 	// Create parser with our simple plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1589,7 +1589,7 @@ resource "simple" "test" {
 	require.NoError(t, err)
 
 	// Create parser with our simple plugin
-	parser := NewParser(nil)
+	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
@@ -1654,13 +1654,13 @@ variable "late_defined_var" {
 	err := os.WriteFile(testFile, []byte(hclContent), 0644)
 	require.NoError(t, err)
 
-	// Create parser with variable override
+	// Create parser with variable override using setupParser
 	options := DefaultOptions()
 	options.Variables = map[string]string{
 		"late_defined_var": "overridden_value",
 	}
 	
-	parser := NewParser(options)
+	parser, _ := setupParser(t, options)
 	plugin := &SimplePlugin{}
 	err = parser.RegisterPlugin(plugin)
 	require.NoError(t, err)

@@ -252,6 +252,7 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 		
 		// Skip builtin resource types that don't have providers
 		if r.Metadata().Type == resources.TypeVariable ||
+			r.Metadata().Type == resources.TypeProvider ||
 			r.Metadata().Type == resources.TypeOutput ||
 			r.Metadata().Type == resources.TypeLocal ||
 			r.Metadata().Type == resources.TypeModule ||
