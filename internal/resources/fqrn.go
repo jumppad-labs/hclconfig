@@ -57,7 +57,7 @@ func ParseFQRN(fqrn string) (*FQRN, error) {
 	attribute := ""
 
 	// first split on the resource, module, or output
-	r := regexp.MustCompile(`^(module.(?P<modules>.*)\.)?(?:(?P<resource>(resource|output|local|variable))\.(?P<attributes>(.*)))|(?P<onlymodules>.*)`)
+	r := regexp.MustCompile(`^(module.(?P<modules>.*)\.)?(?:(?P<resource>(resource|output|local|variable|provider))\.(?P<attributes>(.*)))|(?P<onlymodules>.*)`)
 	match := r.FindStringSubmatch(fqrn)
 	results := map[string]string{}
 	for i, name := range match {
@@ -105,7 +105,7 @@ func ParseFQRN(fqrn string) (*FQRN, error) {
 			resourceName = indexResults["name"]
 		}
 
-	case "variable":
+	case TypeVariable:
 		varParts := strings.Split(results["attributes"], ".")
 		if len(varParts) != 1 {
 			return nil, errors.New(formatErrorString(fqrn))
@@ -114,6 +114,17 @@ func ParseFQRN(fqrn string) (*FQRN, error) {
 		typeName = TypeVariable
 		resourceName = varParts[0]
 		moduleName = results["modules"]
+
+	case TypeProvider:
+		providerParts := strings.Split(results["attributes"], ".")
+		if len(providerParts) < 1 {
+			return nil, errors.New(formatErrorString(fqrn))
+		}
+
+		typeName = TypeProvider
+		resourceName = providerParts[0]
+		moduleName = results["modules"]
+		attribute = strings.Join(providerParts[1:], ".")
 
 	default:
 		if results["onlymodules"] == "" || !strings.HasPrefix(results["onlymodules"], "module.") {
@@ -183,7 +194,7 @@ func (f FQRN) String() string {
 		attrPart = fmt.Sprintf(".%s", f.Attribute)
 	}
 
-	if f.Type == TypeOutput || f.Type == TypeLocal || f.Type == TypeVariable {
+	if f.Type == TypeOutput || f.Type == TypeLocal || f.Type == TypeVariable || f.Type == TypeProvider {
 		return fmt.Sprintf("%s%s.%s%s", modulePart, f.Type, f.Resource, attrPart)
 	}
 

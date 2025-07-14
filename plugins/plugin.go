@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"errors"
+	"reflect"
 
 	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/jumppad-labs/hclconfig/types"
@@ -35,9 +36,14 @@ type PluginEntityProvider interface {
 
 // RegisterResourceProvider registers a typed resource provider with the plugin.
 // This creates a typed adapter and registers it with the plugin.
-func RegisterResourceProvider[T types.Resource](p *PluginBase, logger Logger, state State, typeName, subTypeName string, resourceInstance T, provider ResourceProvider[T]) error {
+func RegisterResourceProvider[T types.Resource, C any](p *PluginBase, logger Logger, state State, typeName, subTypeName string, resourceInstance T, provider ResourceProvider[T, C], config C) error {
+	// Store the config type on first registration (all resources in a plugin share the same config type)
+	if p.configType == nil {
+		p.configType = reflect.TypeOf(config)
+	}
+	
 	// Create a typed adapter for the provider
-	adapter := NewTypedProviderAdapter(provider, resourceInstance)
+	adapter := NewTypedProviderAdapter(provider, resourceInstance, config)
 	
 	// Initialize the adapter with state, functions (can be nil), and logger
 	err := adapter.Init(state, nil, logger)
@@ -48,19 +54,22 @@ func RegisterResourceProvider[T types.Resource](p *PluginBase, logger Logger, st
 	return p.RegisterType(typeName, subTypeName, resourceInstance, adapter)
 }
 
+
 // Plugin is a private interface that defines the contract between HCLConfig
 // and the providers
 type Plugin interface {
 	Init(Logger, State) error
 	SetLogger(logger Logger)
 	SetState(state State)
+	GetConfigType() reflect.Type
 	PluginEntityProvider
 }
 
 type PluginBase struct {
-	logger          Logger // external logger passed to the plugin via Init
-	state           State  // state functions passed to the plugin via Init
+	logger          Logger       // external logger passed to the plugin via Init
+	state           State        // state functions passed to the plugin via Init
 	registeredTypes []RegisteredType
+	configType      reflect.Type // stored config type from first RegisterResourceProvider call
 }
 
 // SetLogger sets the logger for the plugin base
@@ -71,6 +80,11 @@ func (p *PluginBase) SetLogger(logger Logger) {
 // SetState sets the state for the plugin base
 func (p *PluginBase) SetState(state State) {
 	p.state = state
+}
+
+// GetConfigType returns the stored config type from RegisterResourceProvider calls
+func (p *PluginBase) GetConfigType() reflect.Type {
+	return p.configType
 }
 
 // RegisterType registers a type with the plugin using type-safe parameters.

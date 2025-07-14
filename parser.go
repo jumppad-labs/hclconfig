@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
+	"github.com/jumppad-labs/hclconfig/internal/convert"
 	"github.com/jumppad-labs/hclconfig/internal/registry"
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/logger"
@@ -434,7 +435,14 @@ func (p *Parser) parseFile(
 	// override default values for variables from environment or variables map
 	p.setVariables(ctx, variables)
 
-	errs := p.parseResourcesInFile(ctx, file, c, "", []string{})
+	// Parse provider blocks (after variables, before resources)
+	// Providers are now parsed as regular resources in parseResourcesInFile
+	errs := p.parseProvidersInFile(ctx, file, c)
+	if len(errs) > 0 {
+		return errs
+	}
+
+	errs = p.parseResourcesInFile(ctx, file, c, "", []string{})
 	if errs != nil {
 		return errs
 	}
@@ -550,6 +558,179 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
+// parseSpecificResourceType parses only resources of a specific type from a file
+func (p *Parser) parseSpecificResourceType(ctx *hcl.EvalContext, file string, c *Config, resourceType string, moduleName string, dependsOn []string) []error {
+	parser := hclparse.NewParser()
+
+	f, diag := parser.ParseHCLFile(file)
+	if diag.HasErrors() {
+		de := &errors.ParserError{}
+		de.Line = diag[0].Subject.Start.Line
+		de.Column = diag[0].Subject.Start.Line
+		de.Filename = file
+		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
+		de.Level = errors.ParserErrorLevelError
+		return []error{de}
+	}
+
+	body, ok := f.Body.(*hclsyntax.Body)
+	if !ok {
+		panic("Error getting body")
+	}
+
+	for _, b := range body.Blocks {
+		// Only process blocks of the specified type
+		if b.Type != resourceType {
+			continue
+		}
+
+		// check the resource has a name
+		if len(b.Labels) == 0 {
+			de := &errors.ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Message = fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type)
+			return []error{de}
+		}
+
+		// For provider blocks, create and parse the provider resource
+		if resourceType == resources.TypeProvider {
+			err := p.parseProviderResource(ctx, c, file, b, moduleName, dependsOn)
+			if err != nil {
+				return []error{err}
+			}
+		} else {
+			// For other resource types, use the standard resource parsing
+			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn)
+			if err != nil {
+				return []error{err}
+			}
+		}
+	}
+
+	return nil
+}
+
+// parseProviderResource parses a provider block into a Provider resource (follows standard resource pattern)
+func (p *Parser) parseProviderResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
+	// Create the Provider resource using the same pattern as Variable/Local/Output
+	r, _ := p.createBuiltinResource(resources.TypeProvider, b.Labels[0])
+	provider := r.(*resources.Provider)
+
+	// Set module if specified
+	provider.Metadata().Module = moduleName
+
+	// Use decodeBody like other resources do - this handles source/version and stores body/context
+	err := decodeBody(ctx, c, b, provider, false)
+	if err != nil {
+		return err
+	}
+
+	// Handle config block manually after basic fields are processed
+	content, _, _ := b.Body.PartialContent(&hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "config", LabelNames: []string{}},
+		},
+	})
+
+	// Get config block if present (will be processed later during plugin registration)
+	if len(content.Blocks) > 0 {
+		configBlock := content.Blocks[0] // Take the first config block
+		provider.Config = configBlock.Body
+	}
+
+	// Register the provider with the plugin registry first (checks for duplicates with expected error message)
+	// This also converts the config from hcl.Body to the concrete config type
+	err = p.pluginRegistry.RegisterProvider(provider, ctx)
+	if err != nil {
+		return &errors.ParserError{
+			Line:     b.DefRange().Start.Line,
+			Column:   b.DefRange().Start.Column,
+			Filename: file,
+			Level:    errors.ParserErrorLevelError,
+			Message:  fmt.Sprintf("failed to register provider '%s': %s", provider.Metadata().Name, err.Error()),
+		}
+	}
+
+	// Add the provider to the config resources after successful registration
+	err = c.AppendResource(provider)
+	if err != nil {
+		return &errors.ParserError{
+			Line:     b.DefRange().Start.Line,
+			Column:   b.DefRange().Start.Column,
+			Filename: file,
+			Level:    errors.ParserErrorLevelError,
+			Message:  fmt.Sprintf("failed to add provider '%s' to config: %s", provider.Metadata().Name, err.Error()),
+		}
+	}
+
+	// Add the provider to the HCL evaluation context for referenceability
+	// This must happen AFTER RegisterProvider so the config is in its final concrete form
+	providerValue, err := convert.GoToCtyValue(provider)
+	if err != nil {
+		return &errors.ParserError{
+			Line:     b.DefRange().Start.Line,
+			Column:   b.DefRange().Start.Column,
+			Filename: file,
+			Level:    errors.ParserErrorLevelError,
+			Message:  fmt.Sprintf("failed to convert provider '%s' to context value: %s", provider.Metadata().Name, err.Error()),
+		}
+	}
+
+	// Manually add the config field to the provider cty value since convert.GoToCtyValue
+	// doesn't include interface{} fields properly
+	if provider.Config != nil {
+		configValue, err := convert.GoToCtyValue(provider.Config)
+		if err != nil {
+			return &errors.ParserError{
+				Line:     b.DefRange().Start.Line,
+				Column:   b.DefRange().Start.Column,
+				Filename: file,
+				Level:    errors.ParserErrorLevelError,
+				Message:  fmt.Sprintf("failed to convert provider config to context value: %s", err.Error()),
+			}
+		}
+
+		// Create a new object type that includes the config field
+		originalAttrs := providerValue.Type().AttributeTypes()
+		newAttrs := make(map[string]cty.Type)
+		for k, v := range originalAttrs {
+			newAttrs[k] = v
+		}
+		newAttrs["config"] = configValue.Type()
+
+		// Create new object value with config included
+		newValues := make(map[string]cty.Value)
+		for k, _ := range originalAttrs {
+			newValues[k] = providerValue.GetAttr(k)
+		}
+		newValues["config"] = configValue
+
+		providerValue = cty.ObjectVal(newValues)
+	}
+
+	err = setContextVariableFromPath(ctx, fmt.Sprintf("provider.%s", provider.Metadata().Name), providerValue)
+	if err != nil {
+		return &errors.ParserError{
+			Line:     b.DefRange().Start.Line,
+			Column:   b.DefRange().Start.Column,
+			Filename: file,
+			Level:    errors.ParserErrorLevelError,
+			Message:  fmt.Sprintf("failed to set provider context variable '%s': %s", provider.Metadata().Name, err.Error()),
+		}
+	}
+
+	return nil
+}
+
+// parseProvidersInFile parses provider blocks as regular resources
+func (p *Parser) parseProvidersInFile(ctx *hcl.EvalContext, file string, c *Config) []error {
+	// Parse only provider blocks from this file using standard resource parsing
+	errs := p.parseSpecificResourceType(ctx, file, c, resources.TypeProvider, "", []string{})
+	return errs
+}
+
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
 func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, dependsOn []string) []error {
 	parser := hclparse.NewParser()
@@ -599,11 +780,13 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			return []error{de}
 		}
 
-		// create the registered type if not a variable or output
-		// variables and outputs are processed in a separate run
+		// create the registered type if not a variable, provider, or output
+		// variables, providers, and outputs are processed in separate runs
 		switch b.Type {
 		case resources.TypeVariable:
 			continue
+		case resources.TypeProvider:
+			continue // Skip provider blocks - already processed in parseProvidersInFile
 		case resources.TypeModule:
 			err := p.parseModule(ctx, c, file, b, moduleName, dependsOn)
 			if err != nil {
@@ -1347,16 +1530,68 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, b *hclsyntax.Block, p any,
 		}
 	}
 
-	// if variable process the body, everything else
+	// if variable or provider process the body, everything else
 	// lazy process on dag walk
-	if b.Type == string(resources.TypeVariable) {
-		diag := gohcl.DecodeBody(b.Body, ctx, p)
+	if b.Type == string(resources.TypeVariable) || b.Type == string(resources.TypeProvider) {
+		var diag hcl.Diagnostics
+
+		if b.Type == string(resources.TypeProvider) {
+			// For providers, use PartialContent to extract only basic fields (source, version)
+			// and skip the config block which is handled separately
+			schema := &hcl.BodySchema{
+				Attributes: []hcl.AttributeSchema{
+					{Name: "source", Required: true},
+					{Name: "version", Required: false},
+				},
+				Blocks: []hcl.BlockHeaderSchema{
+					{Type: "config", LabelNames: []string{}}, // Allow config blocks but don't process them here
+				},
+			}
+			content, _, diagPartial := b.Body.PartialContent(schema)
+			if diagPartial.HasErrors() {
+				pe := &errors.ParserError{}
+				pe.Column = b.Body.SrcRange.Start.Column
+				pe.Line = b.Body.SrcRange.Start.Line
+				pe.Filename = b.Body.SrcRange.Filename
+				pe.Message = fmt.Sprintf("unable to extract provider content, %s", diagPartial.Error())
+				pe.Level = errors.ParserErrorLevelError
+
+				if !ignoreErrors {
+					return pe
+				}
+			} else {
+				// Decode only the basic attributes (source, version) manually
+				provider := p.(*resources.Provider)
+
+				if sourceAttr, ok := content.Attributes["source"]; ok {
+					val, diagAttr := sourceAttr.Expr.Value(ctx)
+					if diagAttr.HasErrors() {
+						diag = diagAttr
+					} else {
+						provider.Source = val.AsString()
+					}
+				}
+
+				if versionAttr, ok := content.Attributes["version"]; ok {
+					val, diagAttr := versionAttr.Expr.Value(ctx)
+					if diagAttr.HasErrors() {
+						diag = diagAttr
+					} else {
+						provider.Version = val.AsString()
+					}
+				}
+			}
+		} else {
+			// For variables, decode the entire body as before
+			diag = gohcl.DecodeBody(b.Body, ctx, p)
+		}
+
 		if diag.HasErrors() {
 			pe := &errors.ParserError{}
 			pe.Column = b.Body.SrcRange.Start.Column
 			pe.Line = b.Body.SrcRange.Start.Line
 			pe.Filename = b.Body.SrcRange.Filename
-			pe.Message = fmt.Sprintf("unable to decode body, %s", err)
+			pe.Message = fmt.Sprintf("unable to decode body, %s", diag.Error())
 			pe.Level = errors.ParserErrorLevelError
 
 			// if ignore errors is false return the parsing error, otherwise
@@ -1712,7 +1947,7 @@ func ensureAbsolute(path, file string) string {
 }
 
 func validateResourceName(name string) error {
-	if name == "resource" || name == "module" || name == "output" || name == "variable" {
+	if name == types.TypeResource || name == resources.TypeModule || name == resources.TypeOutput || name == resources.TypeVariable {
 		return fmt.Errorf("invalid resource name %s, resources can not use the reserved names [resource, module, output, variable]", name)
 	}
 

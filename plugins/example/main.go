@@ -1,6 +1,8 @@
 package main
 
 import (
+	"reflect"
+
 	"github.com/hashicorp/go-plugin"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
@@ -13,6 +15,11 @@ type PersonPlugin struct {
 	plugins.PluginBase
 }
 
+// GetConfigType returns the configuration type for this plugin
+func (p *PersonPlugin) GetConfigType() reflect.Type {
+	return reflect.TypeOf(person.ExampleProviderConfig{})
+}
+
 // Ensure PersonPlugin implements the Plugin interface
 var _ plugins.Plugin = (*PersonPlugin)(nil)
 
@@ -22,6 +29,7 @@ func (p *PersonPlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Create instances of resources and providers
 	personResource := &person.Person{}
 	personProvider := &person.ExampleProvider{}
+	personConfig := person.ExampleProviderConfig{}
 
 	// Register the Person resource type
 	err := plugins.RegisterResourceProvider(
@@ -32,6 +40,7 @@ func (p *PersonPlugin) Init(logger logger.Logger, state plugins.State) error {
 		"person",       // Sub-type (your specific resource type)
 		personResource, // Instance of the resource struct
 		personProvider, // Instance of the provider
+		personConfig,   // Provider config instance
 	)
 
 	if err != nil {

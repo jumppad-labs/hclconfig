@@ -68,10 +68,19 @@ func HashString(in string) string {
 // Rock the cast var
 func castVar(v cty.Value) any {
 	if v.Type() == cty.String {
+		if v.IsNull() {
+			return nil
+		}
 		return v.AsString()
 	} else if v.Type() == cty.Bool {
+		if v.IsNull() {
+			return nil
+		}
 		return v.True()
 	} else if v.Type() == cty.Number {
+		if v.IsNull() {
+			return nil
+		}
 		// If something blows up here, remember that conversation we had when
 		// we said that nobody will ever use a number bigger than float64 ... yeah
 		// Handlebars does not understand BigFloat.

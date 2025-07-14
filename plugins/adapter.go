@@ -58,30 +58,32 @@ type ProviderAdapter interface {
 //	Plugin receives: ("resource", "container", []byte{...})
 //	Adapter unmarshals: []byte -> *ContainerResource
 //	Provider receives: ResourceProvider[*ContainerResource].Create(ctx, *ContainerResource)
-type TypedProviderAdapter[T types.Resource] struct {
-	provider     ResourceProvider[T]
+type TypedProviderAdapter[T types.Resource, C any] struct {
+	provider     ResourceProvider[T, C]
 	concreteType T
+	config       C
 	state        State
 	functions    ProviderFunctions
 	logger       Logger
 }
 
 // NewTypedProviderAdapter creates a new adapter for a typed provider
-func NewTypedProviderAdapter[T types.Resource](provider ResourceProvider[T], concreteType T) *TypedProviderAdapter[T] {
-	return &TypedProviderAdapter[T]{
+func NewTypedProviderAdapter[T types.Resource, C any](provider ResourceProvider[T, C], concreteType T, config C) *TypedProviderAdapter[T, C] {
+	return &TypedProviderAdapter[T, C]{
 		provider:     provider,
 		concreteType: concreteType,
+		config:       config,
 	}
 }
 
-func (a *TypedProviderAdapter[T]) Init(state State, functions ProviderFunctions, logger Logger) error {
+func (a *TypedProviderAdapter[T, C]) Init(state State, functions ProviderFunctions, logger Logger) error {
 	a.state = state
 	a.functions = functions
 	a.logger = logger
-	return a.provider.Init(state, functions, logger)
+	return a.provider.Init(state, functions, logger, a.config)
 }
 
-func (a *TypedProviderAdapter[T]) Validate(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T, C]) Validate(ctx context.Context, entityData []byte) error {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
@@ -97,7 +99,7 @@ func (a *TypedProviderAdapter[T]) Validate(ctx context.Context, entityData []byt
 	return nil
 }
 
-func (a *TypedProviderAdapter[T]) Create(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T, C]) Create(ctx context.Context, entityData []byte) error {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
@@ -112,7 +114,7 @@ func (a *TypedProviderAdapter[T]) Create(ctx context.Context, entityData []byte)
 	return err
 }
 
-func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte, force bool) error {
+func (a *TypedProviderAdapter[T, C]) Destroy(ctx context.Context, entityData []byte, force bool) error {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
@@ -126,7 +128,7 @@ func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte
 	return a.provider.Destroy(ctx, resource, force)
 }
 
-func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T, C]) Refresh(ctx context.Context, entityData []byte) error {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
@@ -143,7 +145,7 @@ func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte
 	return a.provider.Refresh(ctx, resource)
 }
 
-func (a *TypedProviderAdapter[T]) Update(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T, C]) Update(ctx context.Context, entityData []byte) error {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
@@ -156,7 +158,7 @@ func (a *TypedProviderAdapter[T]) Update(ctx context.Context, entityData []byte)
 	return a.provider.Update(ctx, resource)
 }
 
-func (a *TypedProviderAdapter[T]) Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error) {
+func (a *TypedProviderAdapter[T, C]) Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error) {
 	// Create instances for old and new resources
 	var oldResource, newResource T
 

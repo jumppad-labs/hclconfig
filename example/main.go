@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"reflect"
 
 	"github.com/jumppad-labs/hclconfig"
 	"github.com/jumppad-labs/hclconfig/logger"
@@ -184,9 +185,19 @@ func demonstrateState(c *hclconfig.Config) {
 	//}, true)
 }
 
+// ExamplePluginConfig represents the configuration for the example plugin
+type ExamplePluginConfig struct {
+	// Empty config for example
+}
+
 // ExamplePlugin provides the Config and PostgreSQL resource types for the example
 type ExamplePlugin struct {
 	plugins.PluginBase
+}
+
+// GetConfigType returns the configuration type for this plugin
+func (p *ExamplePlugin) GetConfigType() reflect.Type {
+	return reflect.TypeOf(ExamplePluginConfig{})
 }
 
 // Init initializes the example plugin
@@ -202,6 +213,7 @@ func (p *ExamplePlugin) Init(logger logger.Logger, state plugins.State) error {
 		"config",
 		configResource,
 		configProvider,
+		ExamplePluginConfig{},
 	)
 	if err != nil {
 		return err
@@ -218,6 +230,7 @@ func (p *ExamplePlugin) Init(logger logger.Logger, state plugins.State) error {
 		"postgres",
 		postgresResource,
 		postgresProvider,
+		ExamplePluginConfig{},
 	)
 }
 
@@ -229,7 +242,7 @@ type ExampleResourceProvider[T types.Resource] struct {
 }
 
 // Init initializes the provider
-func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
+func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger, config ExamplePluginConfig) error {
 	p.state = state
 	p.functions = functions
 	p.logger = logger

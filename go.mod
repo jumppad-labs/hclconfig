@@ -5,7 +5,9 @@ go 1.23.0
 toolchain go1.24.4
 
 require (
+	github.com/charmbracelet/log v0.4.2
 	github.com/creasty/defaults v1.8.0
+	github.com/fatih/color v1.7.0
 	github.com/flytam/filenamify v1.2.0
 	github.com/hashicorp/errwrap v1.1.0
 	github.com/hashicorp/go-getter v1.7.5
@@ -36,12 +38,10 @@ require (
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
-	github.com/charmbracelet/log v0.4.2 // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fatih/color v1.7.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect

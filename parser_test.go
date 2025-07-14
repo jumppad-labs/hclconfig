@@ -1,6 +1,7 @@
 package hclconfig
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +13,9 @@ import (
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/logger"
+	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/state/mocks"
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
@@ -1187,4 +1190,609 @@ func TestParseParsesToResourceBase(t *testing.T) {
 
 	o1 := r.(*resources.Output)
 	require.Equal(t, "This is the name of the container", o1.Description)
+}
+// Test fixtures for provider parsing tests
+type SimpleConfig struct {
+	Value string `hcl:"value,optional"`
+	Count int    `hcl:"count,optional"`
+}
+
+type SimpleResource struct {
+	types.ResourceBase `hcl:",remain"`
+	Data               string `hcl:"data"`
+}
+
+type SimpleProvider struct {
+	config SimpleConfig
+}
+
+func (p *SimpleProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger plugins.Logger, config SimpleConfig) error {
+	p.config = config
+	return nil
+}
+
+func (p *SimpleProvider) Create(ctx context.Context, resource *SimpleResource) (*SimpleResource, error) {
+	return resource, nil
+}
+
+func (p *SimpleProvider) Destroy(ctx context.Context, resource *SimpleResource, force bool) error {
+	return nil
+}
+
+func (p *SimpleProvider) Refresh(ctx context.Context, resource *SimpleResource) error {
+	return nil
+}
+
+func (p *SimpleProvider) Changed(ctx context.Context, current *SimpleResource, desired *SimpleResource) (bool, error) {
+	return false, nil
+}
+
+func (p *SimpleProvider) Update(ctx context.Context, resource *SimpleResource) error {
+	return nil
+}
+
+func (p *SimpleProvider) Functions() plugins.ProviderFunctions {
+	return nil
+}
+
+type SimplePlugin struct {
+	plugins.PluginBase
+}
+
+
+func (p *SimplePlugin) Init(logger plugins.Logger, state plugins.State) error {
+	resource := &SimpleResource{}
+	provider := &SimpleProvider{}
+	config := SimpleConfig{Value: "default", Count: 1}
+
+	return plugins.RegisterResourceProvider(
+		&p.PluginBase,
+		logger,
+		state,
+		"resource",
+		"simple",
+		resource,
+		provider,
+		config,
+	)
+}
+
+func TestParseProviderBlocks(t *testing.T) {
+	// Create temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+variable "test_value" {
+  default = "test"
+}
+
+provider "simple" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = variable.test_value
+    count = 42
+  }
+}
+
+resource "simple" "test" {
+  data = "hello world"
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser and register plugin
+	parser := NewParser(nil)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	// Register plugin source mapping
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse the file
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify provider was registered
+	providers := parser.GetPluginRegistry().ListProviders()
+	require.Contains(t, providers, "simple")
+
+	// Verify provider config
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+	require.Equal(t, "simple", providerConfig.Metadata().Name)
+	require.Equal(t, "test/simple", providerConfig.Source)
+	require.Equal(t, "1.0.0", providerConfig.Version)
+
+	// Verify config values were parsed and interpolated
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok, "Config should be of type SimpleConfig")
+	require.Equal(t, "test", configValue.Value, "Value should be interpolated from variable")
+	require.Equal(t, 42, configValue.Count, "Count should be set")
+
+	// Verify resource was parsed - filter to only our resource type
+	var simpleResources []types.Resource
+	for _, r := range config.Resources {
+		if r.Metadata().Type == "simple" {
+			simpleResources = append(simpleResources, r)
+		}
+	}
+	require.Len(t, simpleResources, 1)
+	resource := simpleResources[0]
+	require.Equal(t, "simple", resource.Metadata().Type)
+	require.Equal(t, "test", resource.Metadata().Name)
+}
+
+func TestParseProviderBlocks_MissingPlugin(t *testing.T) {
+	// Create temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+provider "unknown" {
+  source = "test/unknown"
+  version = "1.0.0"
+  
+  config {
+    value = "test"
+  }
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser without registering the required plugin
+	parser := NewParser(nil)
+
+	// Parse should fail due to missing plugin
+	_, err = parser.ParseFile(testFile)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestParseProviderBlocks_ConfigValidation(t *testing.T) {
+	// Create temporary test file with invalid config
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+provider "simple" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    invalid_field = "should cause error"
+  }
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser and register plugin
+	parser := NewParser(nil)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	// Register plugin source mapping
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse should fail with invalid field
+	_, err = parser.ParseFile(testFile)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not expected") // Should mention unexpected field
+}
+
+func TestParseMultipleProviders(t *testing.T) {
+	// Create temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+provider "simple1" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = "provider1"
+    count = 1
+  }
+}
+
+provider "simple2" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = "provider2"
+    count = 2
+  }
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser and register plugin
+	parser := NewParser(nil)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	// Register plugin source mapping
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse the file
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify both providers were registered
+	providers := parser.GetPluginRegistry().ListProviders()
+	require.Contains(t, providers, "simple1")
+	require.Contains(t, providers, "simple2")
+
+	// Verify individual provider configs
+	provider1, err := parser.GetPluginRegistry().GetProvider("simple1")
+	require.NoError(t, err)
+	config1, ok := provider1.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "provider1", config1.Value)
+	require.Equal(t, 1, config1.Count)
+
+	provider2, err := parser.GetPluginRegistry().GetProvider("simple2")
+	require.NoError(t, err)
+	config2, ok := provider2.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "provider2", config2.Value)
+	require.Equal(t, 2, config2.Count)
+}
+
+func TestProviderBlocksWithVariableInterpolation(t *testing.T) {
+	// Create temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+variable "provider_value" {
+  default = "from_variable"
+}
+
+variable "provider_count" {
+  default = 100
+}
+
+provider "simple" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = variable.provider_value
+    count = variable.provider_count
+  }
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser and register plugin
+	parser := NewParser(nil)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	// Register plugin source mapping
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse the file
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify provider config with interpolated values
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "from_variable", configValue.Value, "Value should be interpolated from variable")
+	require.Equal(t, 100, configValue.Count, "Count should be interpolated from variable")
+}
+
+func TestParsingOrderProvidersDependOnVariables(t *testing.T) {
+	// This test demonstrates that provider blocks can reference variables
+	// because variables are parsed first in the three-phase parsing
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+# Variable defined after provider - but should still work due to three-phase parsing
+provider "simple" {
+  source = "test/simple"
+  version = variable.provider_version
+  
+  config {
+    value = variable.config_value
+  }
+}
+
+variable "provider_version" {
+  default = "2.0.0"
+}
+
+variable "config_value" {
+  default = "from_variable"
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser with our simple plugin
+	parser := NewParser(nil)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse should succeed because three-phase parsing processes variables first
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify the provider was registered with values from variables
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+	require.Equal(t, "2.0.0", providerConfig.Version)
+
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "from_variable", configValue.Value)
+
+	t.Logf("Three-phase parsing worked: provider version=%s, config value=%s", 
+		providerConfig.Version, configValue.Value)
+}
+
+func TestParsingOrderProvidersBeforeResources(t *testing.T) {
+	// This test demonstrates that provider blocks are parsed before resources
+	// which allows resources to reference configured providers
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+variable "provider_config" {
+  default = "configured_value"
+}
+
+# Provider defined before resource
+provider "simple" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = variable.provider_config
+  }
+}
+
+# Resource references the provider
+resource "simple" "test" {
+  provider = "simple"
+  data = "test_data"
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser with our simple plugin
+	parser := NewParser(nil)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse should succeed
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify provider was configured before resource processing
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+	
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "configured_value", configValue.Value)
+
+	// Verify resource was parsed and references the provider
+	var simpleResources []types.Resource
+	for _, r := range config.Resources {
+		if r.Metadata().Type == "simple" {
+			simpleResources = append(simpleResources, r)
+		}
+	}
+	require.Len(t, simpleResources, 1)
+	
+	// Check that the resource has the provider field set
+	resource := simpleResources[0]
+	if simpleRes, ok := resource.(*SimpleResource); ok {
+		require.Equal(t, "simple", simpleRes.Provider) // Access Provider field directly
+	} else {
+		t.Errorf("Resource is not of type SimpleResource: %T", resource)
+	}
+
+	t.Logf("Provider-before-resource parsing worked: provider configured with value=%s", configValue.Value)
+}
+
+func TestParsingOrderVariableOverrideOrder(t *testing.T) {
+	// This test demonstrates that variables are processed before everything else
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+# Provider tries to use variable before it's defined
+provider "simple" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = variable.late_defined_var
+  }
+}
+
+# Variable defined after provider
+variable "late_defined_var" {
+  default = "late_value"
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser with variable override
+	options := DefaultOptions()
+	options.Variables = map[string]string{
+		"late_defined_var": "overridden_value",
+	}
+	
+	parser := NewParser(options)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse should succeed and use the overridden value
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify the provider got the overridden variable value
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+	
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "overridden_value", configValue.Value)
+
+	t.Logf("Variable override worked: config value=%s", configValue.Value)
+}
+
+func TestProviderBasicParsing(t *testing.T) {
+	// Create temporary test file with a simple provider (no resources to avoid DAG walking)
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+provider "test" {
+  source = "test/provider"
+  version = "1.0.0"
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser using standard setup and register plugin
+	parser := setupParser(t)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+	parser.GetPluginRegistry().RegisterPluginSource("test/provider", plugin)
+
+	// Parse the configuration using the normal flow but with no resources to avoid DAG issues
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err, "Parsing should succeed")
+
+	// Verify provider is stored in Config.Resources
+	var providerResources []types.Resource
+	for _, r := range config.Resources {
+		if r.Metadata().Type == resources.TypeProvider {
+			providerResources = append(providerResources, r)
+		}
+	}
+
+	require.Len(t, providerResources, 1, "Should have exactly one provider resource")
+	
+	provider := providerResources[0]
+	require.Equal(t, "test", provider.Metadata().Name, "Provider name should match")
+	require.Equal(t, resources.TypeProvider, provider.Metadata().Type, "Provider type should match")
+
+	// Verify it's actually a Provider struct
+	providerStruct, ok := provider.(*resources.Provider)
+	require.True(t, ok, "Resource should be a Provider struct")
+	require.Equal(t, "test/provider", providerStruct.Source, "Provider source should match")
+	require.Equal(t, "1.0.0", providerStruct.Version, "Provider version should match")
+}
+
+func TestProviderReferenceability(t *testing.T) {
+	// Test that providers can be referenced using provider.name.config.property syntax
+	// just like variables can be referenced using variable.name
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.hcl")
+
+	hclContent := `
+provider "database" {
+  source = "test/simple"
+  version = "1.0.0"
+  
+  config {
+    value = "connection_string"
+    count = 42
+  }
+}
+
+resource "container" "app" {
+  # Reference provider properties including config
+  default = provider.database.config.value
+  command = [provider.database.source]
+  
+  resources {
+    cpu = provider.database.config.count
+  }
+}
+`
+
+	err := os.WriteFile(testFile, []byte(hclContent), 0644)
+	require.NoError(t, err)
+
+	// Create parser using standard setup and register plugin
+	parser := setupParser(t)
+	plugin := &SimplePlugin{}
+	err = parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse the configuration 
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err, "Parsing should succeed")
+
+	// Verify provider was parsed correctly
+	providerResource, err := config.FindResource("provider.database")
+	require.NoError(t, err, "Should find provider by FQRN")
+	require.Equal(t, "database", providerResource.Metadata().Name)
+	require.Equal(t, resources.TypeProvider, providerResource.Metadata().Type)
+	
+	// Verify container resource can reference provider properties
+	containerResource, err := config.FindResource("resource.container.app")
+	require.NoError(t, err, "Should find container resource")
+	
+	container := containerResource.(*structs.Container)
+	
+	// Check that provider references were interpolated correctly
+	require.Equal(t, "connection_string", container.Default, "default should be interpolated from provider config")
+	require.Equal(t, "test/simple", container.Command[0], "command should be interpolated from provider source")
+	require.NotNil(t, container.Resources, "resources block should exist")
+	require.Equal(t, 42, container.Resources.CPU, "cpu should be interpolated from provider config")
 }

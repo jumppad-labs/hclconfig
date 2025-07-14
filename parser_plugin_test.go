@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/logger"
-	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,6 +53,7 @@ func (p *SimpleTestPlugin) Init(logger logger.Logger, state plugins.State) error
 	// Create test person resource and provider
 	personResource := &person.Person{}
 	personProvider := &person.ExampleProvider{}
+	personConfig := person.ExampleProviderConfig{}
 
 	// Register the Person resource type with the plugin
 	return plugins.RegisterResourceProvider(
@@ -63,5 +64,6 @@ func (p *SimpleTestPlugin) Init(logger logger.Logger, state plugins.State) error
 		"person",       // Sub-type
 		personResource, // Resource instance
 		personProvider, // Provider instance
+		personConfig,   // Provider config instance
 	)
 }

@@ -30,8 +30,8 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 	// Loop over all resources and add to graph
 	for _, resource := range c.Resources {
-		// ignore variables
-		if resource.Metadata().Type != resources.TypeVariable {
+		// ignore variables and providers (both are referenceable but don't need DAG processing)
+		if resource.Metadata().Type != resources.TypeVariable && resource.Metadata().Type != resources.TypeProvider {
 			graph.Add(resource)
 		}
 	}
@@ -40,8 +40,8 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	for _, resource := range c.Resources {
 		hasDeps := false
 
-		// do nothing with variables
-		if resource.Metadata().Type == resources.TypeVariable {
+		// do nothing with variables and providers (both are referenceable but don't need DAG processing)
+		if resource.Metadata().Type == resources.TypeVariable || resource.Metadata().Type == resources.TypeProvider {
 			continue
 		}
 
@@ -346,6 +346,7 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 
 	// Skip builtin resource types that don't have providers
 	if resource.Metadata().Type == resources.TypeVariable ||
+		resource.Metadata().Type == resources.TypeProvider ||
 		resource.Metadata().Type == resources.TypeOutput ||
 		resource.Metadata().Type == resources.TypeLocal ||
 		resource.Metadata().Type == resources.TypeModule ||
@@ -354,7 +355,7 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 	}
 
 	// Get the provider for this resource
-	adapter := registry.GetProvider(resource)
+	adapter := registry.GetProviderAdapter(resource)
 	if adapter == nil {
 		// No provider found - this might be a builtin type without a provider
 		return fmt.Errorf("no provider found for resource type %s", resource.Metadata().Type)

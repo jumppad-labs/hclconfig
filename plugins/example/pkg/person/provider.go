@@ -7,6 +7,11 @@ import (
 	"github.com/jumppad-labs/hclconfig/plugins"
 )
 
+// ExampleProviderConfig represents the configuration for the example provider
+type ExampleProviderConfig struct {
+	// Empty config for this example
+}
+
 // ExampleProvider is a basic implementation of Provider[*Person]
 // that demonstrates the structure and lifecycle methods for Person resources.
 type ExampleProvider struct {
@@ -15,10 +20,10 @@ type ExampleProvider struct {
 	logger    logger.Logger
 }
 
-// Compile-time check to ensure ExampleProvider implements ResourceProvider[*Person]
-var _ plugins.ResourceProvider[*Person] = (*ExampleProvider)(nil)
+// Compile-time check to ensure ExampleProvider implements ResourceProvider[*Person, ExampleProviderConfig]
+var _ plugins.ResourceProvider[*Person, ExampleProviderConfig] = (*ExampleProvider)(nil)
 
-func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
+func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger, config ExampleProviderConfig) error {
 	p.state = state
 	p.functions = functions
 	p.logger = logger
