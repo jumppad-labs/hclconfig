@@ -62,6 +62,7 @@ type Plugin interface {
 	SetLogger(logger Logger)
 	SetState(state State)
 	GetConfigType() reflect.Type
+	Metadata() Metadata
 	PluginEntityProvider
 }
 
@@ -70,6 +71,7 @@ type PluginBase struct {
 	state           State        // state functions passed to the plugin via Init
 	registeredTypes []RegisteredType
 	configType      reflect.Type // stored config type from first RegisterResourceProvider call
+	metadata        Metadata     // plugin metadata
 }
 
 // SetLogger sets the logger for the plugin base
@@ -85,6 +87,16 @@ func (p *PluginBase) SetState(state State) {
 // GetConfigType returns the stored config type from RegisterResourceProvider calls
 func (p *PluginBase) GetConfigType() reflect.Type {
 	return p.configType
+}
+
+// Metadata returns the plugin metadata
+func (p *PluginBase) Metadata() Metadata {
+	return p.metadata
+}
+
+// SetMetadata sets the plugin metadata
+func (p *PluginBase) SetMetadata(metadata Metadata) {
+	p.metadata = metadata
 }
 
 // RegisterType registers a type with the plugin using type-safe parameters.
