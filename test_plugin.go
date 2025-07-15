@@ -11,6 +11,11 @@ import (
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
+// TestPluginConfig represents the configuration for the test plugin
+type TestPluginConfig struct {
+	// Empty config for testing
+}
+
 // TestPlugin provides test resource types for testing the parser
 type TestPlugin struct {
 	plugins.PluginBase
@@ -27,6 +32,8 @@ type TestPlugin struct {
 	RefreshErrors map[string]error // Maps resource ID to error for Refresh operations
 	ChangedErrors map[string]error // Maps resource ID to error for Changed operations
 }
+
+// GetConfigType is now automatically provided by PluginBase
 
 // Ensure TestPlugin implements Plugin interface
 var _ plugins.Plugin = (*TestPlugin)(nil)
@@ -124,6 +131,7 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 	// Register Container resource
 	containerResource := &structs.Container{}
 	containerProvider := &TestResourceProvider[*structs.Container]{plugin: p}
+	var config TestPluginConfig
 	err := plugins.RegisterResourceProvider(
 		&p.PluginBase,
 		logger,
@@ -132,6 +140,7 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 		"container",
 		containerResource,
 		containerProvider,
+		config,
 	)
 	if err != nil {
 		return err
@@ -147,6 +156,7 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 		"sidecar",
 		sidecarResource,
 		sidecarProvider,
+		config,
 	)
 	if err != nil {
 		return err
@@ -163,6 +173,7 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 		"network",
 		networkResource,
 		networkProvider,
+		config,
 	)
 	if err != nil {
 		return err
@@ -179,6 +190,7 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 		"template",
 		templateResource,
 		templateProvider,
+		config,
 	)
 	if err != nil {
 		return err
@@ -196,7 +208,7 @@ type TestResourceProvider[T types.Resource] struct {
 }
 
 // Init initializes the test provider
-func (p *TestResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
+func (p *TestResourceProvider[T]) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger, config TestPluginConfig) error {
 	p.state = state
 	p.functions = functions
 	p.logger = logger
@@ -327,6 +339,8 @@ type EmbeddedTestPlugin struct {
 	plugins.PluginBase
 }
 
+// GetConfigType is now automatically provided by PluginBase
+
 // Ensure EmbeddedTestPlugin implements Plugin interface
 var _ plugins.Plugin = (*EmbeddedTestPlugin)(nil)
 
@@ -335,6 +349,7 @@ func (p *EmbeddedTestPlugin) Init(logger logger.Logger, state plugins.State) err
 	// Register Container resource
 	containerResource := &embedded.Container{}
 	containerProvider := &TestResourceProvider[*embedded.Container]{}
+	var config TestPluginConfig
 	err := plugins.RegisterResourceProvider(
 		&p.PluginBase,
 		logger,
@@ -343,6 +358,7 @@ func (p *EmbeddedTestPlugin) Init(logger logger.Logger, state plugins.State) err
 		"container",
 		containerResource,
 		containerProvider,
+		config,
 	)
 	if err != nil {
 		return err
@@ -359,6 +375,7 @@ func (p *EmbeddedTestPlugin) Init(logger logger.Logger, state plugins.State) err
 		"sidecar",
 		sidecarResource,
 		sidecarProvider,
+		config,
 	)
 	if err != nil {
 		return err

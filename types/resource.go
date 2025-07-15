@@ -88,6 +88,9 @@ type ResourceBase struct {
 	// Enabled determines if a resource is enabled and should be processed
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
 
+	// Provider specifies which provider instance should handle this resource
+	Provider string `hcl:"provider,optional" json:"provider,omitempty"`
+
 	Meta Meta `hcl:"meta,optional" json:"meta,omitempty"`
 }
 

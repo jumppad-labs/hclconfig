@@ -15,15 +15,17 @@ import (
 // It provides lifecycle management for resources including creation, destruction,
 // refresh, and state checking operations.
 // T must be a type that implements types.Resource.
-type ResourceProvider[T types.Resource] interface {
-	// Init initializes the provider with state access, provider functions, and a logger.
+// C represents the configuration type for the provider.
+type ResourceProvider[T types.Resource, C any] interface {
+	// Init initializes the provider with state access, provider functions, logger, and configuration.
 	// This method is called once when the provider is created and should be used
 	// to set up any required clients or dependencies.
 	//
 	// The state parameter provides access to the current state of resources.
 	// The functions parameter provides access to provider-defined functions.
 	// The logger parameter is the logger instance for all logging operations.
-	Init(state State, functions ProviderFunctions, logger Logger) error
+	// The config parameter contains the typed configuration for this provider instance.
+	Init(state State, functions ProviderFunctions, logger Logger, config C) error
 
 	// Create creates a new resource or recreates a failed resource.
 	// This method is called when a resource does not exist or when creation

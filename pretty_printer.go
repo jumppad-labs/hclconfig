@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/mitchellh/go-wordwrap"
 )
@@ -729,11 +730,11 @@ func (p *ResourcePrinter) getResourceEmoji(resourceType string) string {
 		return "🌐"
 	case "volume":
 		return "💾"
-	case "variable":
+	case resources.TypeVariable:
 		return "🔧"
-	case "output":
+	case resources.TypeOutput:
 		return "📤"
-	case "module":
+	case resources.TypeModule:
 		return "📦"
 	case "template":
 		return "📄"

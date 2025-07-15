@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/jumppad-labs/hclconfig/internal/resources"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
@@ -12,11 +14,22 @@ import (
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
-// PluginRegistry manages all resource types (builtin and plugin-based) and can create resource instances
+
+// PluginRegistry manages all resource types (builtin and plugin-based), can create resource instances,
+// and manages provider configurations
 type PluginRegistry struct {
 	builtinTypes types.RegisteredTypes
 	pluginHosts  []plugins.PluginHost
 	logger       logger.Logger
+	
+	// Plugin and provider management
+	// plugins: maps source identifiers (e.g., "jumppad/containerd") to plugin implementations
+	// This allows finding which plugin handles a given source when registering providers
+	plugins      map[string]plugins.Plugin  // source -> plugin mapping
+	
+	// providers: maps provider instance names (e.g., "docker", "podman") to configured provider instances
+	// Each provider instance has a name, references a source plugin, and contains typed configuration
+	providers    map[string]*resources.Provider // name -> configured provider instance
 }
 
 // NewPluginRegistry creates a new plugin registry with builtin types
@@ -25,6 +38,8 @@ func NewPluginRegistry(logger logger.Logger) *PluginRegistry {
 		builtinTypes: resources.DefaultResources(),
 		pluginHosts:  []plugins.PluginHost{},
 		logger:       logger,
+		plugins:      make(map[string]plugins.Plugin),
+		providers:    make(map[string]*resources.Provider),
 	}
 }
 
@@ -72,9 +87,9 @@ func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName st
 	return nil, fmt.Errorf("resource type %s not found in any registered plugin", resourceType)
 }
 
-// GetProvider finds the provider adapter for a given resource
+// GetProviderAdapter finds the provider adapter for a given resource
 // Returns nil if the resource type is a builtin type (not handled by plugins)
-func (r *PluginRegistry) GetProvider(resource types.Resource) plugins.ProviderAdapter {
+func (r *PluginRegistry) GetProviderAdapter(resource types.Resource) plugins.ProviderAdapter {
 	resourceType := resource.Metadata().Type
 	
 	// Check if it's a builtin type
@@ -98,6 +113,7 @@ func (r *PluginRegistry) GetProvider(resource types.Resource) plugins.ProviderAd
 	// No plugin found for this resource type
 	return nil
 }
+
 
 // RegisterPlugin registers an in-process plugin with the registry
 func (r *PluginRegistry) RegisterPlugin(plugin plugins.Plugin) error {
@@ -248,4 +264,151 @@ func CastResourceTo[T types.Resource](registry *PluginRegistry, resource types.R
 	}
 	
 	return zero, fmt.Errorf("resource cannot be cast to requested type")
+}
+
+// Provider Configuration Methods
+
+// RegisterProvider registers a provider instance with its configuration
+// This is called after the provider resource has been parsed to set up plugin-specific fields
+func (r *PluginRegistry) RegisterProvider(provider *resources.Provider, ctx *hcl.EvalContext) error {
+	// Validate required fields
+	if provider.Metadata().Name == "" {
+		return fmt.Errorf("provider name cannot be empty")
+	}
+	if provider.Source == "" {
+		return fmt.Errorf("provider source cannot be empty")
+	}
+
+	// Check if provider name already exists
+	if _, exists := r.providers[provider.Metadata().Name]; exists {
+		return fmt.Errorf("provider '%s' is already defined", provider.Metadata().Name)
+	}
+
+	// Find plugin by source
+	plugin, err := r.findPluginBySource(provider.Source)
+	if err != nil {
+		return fmt.Errorf("failed to find plugin for source '%s': %w", provider.Source, err)
+	}
+
+	// Get config type from plugin
+	configType := plugin.GetConfigType()
+	if configType == nil {
+		return fmt.Errorf("plugin for source '%s' does not define a configuration type", provider.Source)
+	}
+
+	// Convert hcl.Body config to concrete type if config is provided
+	if provider.Config != nil {
+		if configBody, ok := provider.Config.(hcl.Body); ok {
+			// Create an instance of the concrete config type
+			configPtr := reflect.New(configType).Interface()
+			
+			// Decode the config body to the concrete type
+			diags := gohcl.DecodeBody(configBody, ctx, configPtr)
+			if diags.HasErrors() {
+				return fmt.Errorf("failed to decode provider config: %s", diags.Error())
+			}
+			
+			// Store the concrete config as a pointer
+			provider.Config = configPtr
+		}
+	}
+
+	// Set up plugin-specific fields
+	provider.ConfigType = configType
+	provider.Initialized = false
+
+	// Register this provider instance for quick lookup
+	r.providers[provider.Metadata().Name] = provider
+	return nil
+}
+
+
+// GetProvider returns a provider instance by name
+func (r *PluginRegistry) GetProvider(name string) (*resources.Provider, error) {
+	providerConfig, exists := r.providers[name]
+	if !exists {
+		return nil, fmt.Errorf("provider '%s' is not defined", name)
+	}
+	return providerConfig, nil
+}
+
+// GetDefaultProvider returns the default provider for a resource type
+// Default provider name matches resource type (e.g., "container" provider for container resources)
+func (r *PluginRegistry) GetDefaultProvider(resourceType string) (*resources.Provider, error) {
+	return r.GetProvider(resourceType)
+}
+
+// ListProviders returns all registered provider names (excluding internal source mappings)
+func (r *PluginRegistry) ListProviders() []string {
+	names := make([]string, 0, len(r.providers))
+	for name := range r.providers {
+		// Skip internal source mapping entries
+		if !strings.HasPrefix(name, "_source_") {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// ResolveProviderForResource determines which provider should handle a resource
+func (r *PluginRegistry) ResolveProviderForResource(resource interface{}) (*resources.Provider, error) {
+	// Check if resource has explicit provider field
+	if providerField, err := getProviderField(resource); err == nil && providerField != "" {
+		return r.GetProvider(providerField)
+	}
+
+	// Fall back to default provider based on resource type
+	resourceType := getResourceType(resource)
+	return r.GetDefaultProvider(resourceType)
+}
+
+// RegisterPluginSource registers a plugin with a source identifier for provider configuration
+func (r *PluginRegistry) RegisterPluginSource(source string, plugin plugins.Plugin) {
+	// Store the plugin directly in the plugins map
+	r.plugins[source] = plugin
+}
+
+// findPluginBySource finds a plugin by its source identifier
+func (r *PluginRegistry) findPluginBySource(source string) (plugins.Plugin, error) {
+	// Look in the dedicated plugins map
+	if plugin, exists := r.plugins[source]; exists {
+		return plugin, nil
+	}
+	
+	return nil, fmt.Errorf("plugin with source '%s' not found - use RegisterPluginSource to register it", source)
+}
+
+// Helper function to extract provider field from resource using reflection
+func getProviderField(resource interface{}) (string, error) {
+	val := reflect.ValueOf(resource)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Struct {
+		return "", fmt.Errorf("resource is not a struct")
+	}
+
+	// Look for Provider field
+	providerField := val.FieldByName("Provider")
+	if !providerField.IsValid() {
+		return "", fmt.Errorf("resource does not have Provider field")
+	}
+
+	if providerField.Kind() != reflect.String {
+		return "", fmt.Errorf("Provider field is not a string")
+	}
+
+	return providerField.String(), nil
+}
+
+// Helper function to extract resource type
+func getResourceType(resource interface{}) string {
+	// This is a simplified implementation
+	// In practice, you'd extract this from the resource's metadata
+	val := reflect.TypeOf(resource)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	return val.Name()
 }

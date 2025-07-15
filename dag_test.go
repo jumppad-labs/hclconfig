@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/logger"
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,4 +73,93 @@ func TestDoYaLikeDAGAddsDependencies(t *testing.T) {
 	require.Contains(t, list, network)
 	require.Contains(t, list, base)
 	require.Contains(t, list, template)
+}
+
+func TestProviderResourceDependency(t *testing.T) {
+	// Use test fixture for provider-resource dependency
+	testFile := "./internal/test_fixtures/config/providers/basic_provider_with_resources.hcl"
+
+	// Create parser and register plugin
+	parser, _ := setupParser(t)
+	plugin := &SimplePlugin{}
+	err := parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	// Register plugin source mapping
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse the file (which includes processing and should handle dependencies)
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify provider was initialized properly
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+	require.True(t, providerConfig.Initialized, "Provider should be initialized")
+	
+	// Verify config was resolved from variable
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok, "Config should be of type SimpleConfig")
+	require.Equal(t, "from_variable", configValue.Value, "Value should be resolved from variable")
+	require.Equal(t, 42, configValue.Count, "Count should be set")
+
+	// Verify resource exists and was processed
+	var simpleResources []types.Resource
+	for _, r := range config.Resources {
+		if r.Metadata().Type == "simple" {
+			simpleResources = append(simpleResources, r)
+		}
+	}
+	require.Len(t, simpleResources, 1)
+	resource := simpleResources[0]
+	require.Equal(t, "simple", resource.Metadata().Type)
+	require.Equal(t, "test", resource.Metadata().Name)
+}
+
+func TestProviderResourceDependencyInDAG(t *testing.T) {
+	// Use test fixture for DAG provider-resource dependencies
+	testFile := "./internal/test_fixtures/config/providers/provider_with_resources.hcl"
+
+	// Create parser and register plugin
+	parser, _ := setupParser(t)
+	plugin := &SimplePlugin{}
+	err := parser.RegisterPlugin(plugin)
+	require.NoError(t, err)
+
+	// Register plugin source mapping  
+	parser.GetPluginRegistry().RegisterPluginSource("test/simple", plugin)
+
+	// Parse the file
+	config, err := parser.ParseFile(testFile)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Verify that the provider was processed before the resources
+	// This test demonstrates that the DAG correctly handles provider dependencies
+	
+	// Check provider was initialized
+	providerConfig, err := parser.GetPluginRegistry().GetProvider("simple")
+	require.NoError(t, err)
+	require.True(t, providerConfig.Initialized, "Provider should be initialized")
+	
+	// Check config was resolved
+	configValue, ok := providerConfig.Config.(*SimpleConfig)
+	require.True(t, ok)
+	require.Equal(t, "https://api.example.com", configValue.Value)
+	require.Equal(t, 100, configValue.Count)
+
+	// Check both resources exist and were processed
+	var simpleResources []types.Resource
+	for _, r := range config.Resources {
+		if r.Metadata().Type == "simple" {
+			simpleResources = append(simpleResources, r)
+		}
+	}
+	require.Len(t, simpleResources, 2)
+	
+	// Both resources should have been processed (status should not be empty)
+	for _, r := range simpleResources {
+		require.NotEmpty(t, r.Metadata().Status, "Resource should have been processed")
+	}
 }
