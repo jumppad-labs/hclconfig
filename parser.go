@@ -5,7 +5,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -766,27 +765,6 @@ func (p *Parser) parseProviderResource(ctx *hcl.EvalContext, c *Config, file str
 		}
 	}
 
-	// Try to resolve simple provider configs during parsing for better referenceability
-	// This handles configs with variables/literals but not resource references
-	if provider.Config != nil {
-		if configBody, ok := provider.Config.(hcl.Body); ok {
-			// Find plugin to get config type
-			plugin, pluginErr := p.pluginRegistry.findPluginBySource(provider.Source)
-			if pluginErr == nil && plugin != nil {
-				configType := plugin.GetConfigType()
-				if configType != nil {
-					// Try to decode config with current context (variables should be available)
-					configPtr := reflect.New(configType).Interface()
-					diags := gohcl.DecodeBody(configBody, ctx, configPtr)
-					if !diags.HasErrors() {
-						// Successfully decoded, use the concrete config
-						provider.Config = configPtr
-					}
-					// If decoding fails, leave as hcl.Body for later resolution
-				}
-			}
-		}
-	}
 
 	// Add the provider to the HCL evaluation context for referenceability
 	providerValue, err := convert.GoToCtyValue(provider)
@@ -1695,7 +1673,7 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, b *hclsyntax.Block, p any,
 				}
 			}
 		} else {
-			// For variables, decode the entire body as before
+			// For variables, decode the entire body
 			diag = gohcl.DecodeBody(b.Body, ctx, p)
 		}
 

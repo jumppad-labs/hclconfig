@@ -1,7 +1,6 @@
 package hclconfig
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -77,38 +76,13 @@ func TestDoYaLikeDAGAddsDependencies(t *testing.T) {
 }
 
 func TestProviderResourceDependency(t *testing.T) {
-	// Create temporary test file that shows provider-resource dependency
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.hcl")
-
-	hclContent := `
-variable "test_value" {
-  default = "from_variable"
-}
-
-provider "simple" {
-  source = "test/simple" 
-  version = "1.0.0"
-  
-  config {
-    value = variable.test_value
-    count = 42
-  }
-}
-
-resource "simple" "test" {
-  provider = "simple"
-  data = "hello world"
-}
-`
-
-	err := os.WriteFile(testFile, []byte(hclContent), 0644)
-	require.NoError(t, err)
+	// Use test fixture for provider-resource dependency
+	testFile := "./internal/test_fixtures/config/providers/basic_provider_with_resources.hcl"
 
 	// Create parser and register plugin
 	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
-	err = parser.RegisterPlugin(plugin)
+	err := parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
 
 	// Register plugin source mapping
@@ -144,43 +118,13 @@ resource "simple" "test" {
 }
 
 func TestProviderResourceDependencyInDAG(t *testing.T) {
-	// Create temporary test file
-	tmpDir := t.TempDir() 
-	testFile := filepath.Join(tmpDir, "test.hcl")
-
-	hclContent := `
-variable "endpoint" {
-  default = "https://api.example.com"
-}
-
-provider "simple" {
-  source = "test/simple"
-  version = "1.0.0"
-  
-  config {
-    value = variable.endpoint
-    count = 100
-  }
-}
-
-resource "simple" "app1" {
-  provider = "simple"
-  data = "application 1"
-}
-
-resource "simple" "app2" {
-  provider = "simple" 
-  data = "application 2"
-}
-`
-
-	err := os.WriteFile(testFile, []byte(hclContent), 0644)
-	require.NoError(t, err)
+	// Use test fixture for DAG provider-resource dependencies
+	testFile := "./internal/test_fixtures/config/providers/provider_with_resources.hcl"
 
 	// Create parser and register plugin
 	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
-	err = parser.RegisterPlugin(plugin)
+	err := parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
 
 	// Register plugin source mapping  

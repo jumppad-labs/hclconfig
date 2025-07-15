@@ -314,7 +314,6 @@ func (r *PluginRegistry) RegisterProvider(provider *resources.Provider, ctx *hcl
 	}
 
 	// Set up plugin-specific fields
-	provider.Plugin = plugin
 	provider.ConfigType = configType
 	provider.Initialized = false
 
@@ -371,16 +370,9 @@ func (r *PluginRegistry) RegisterPluginSource(source string, plugin plugins.Plug
 
 // findPluginBySource finds a plugin by its source identifier
 func (r *PluginRegistry) findPluginBySource(source string) (plugins.Plugin, error) {
-	// Look in the dedicated plugins map first
+	// Look in the dedicated plugins map
 	if plugin, exists := r.plugins[source]; exists {
 		return plugin, nil
-	}
-	
-	// Also look through existing providers to find matching source (for backwards compatibility)
-	for _, provider := range r.providers {
-		if provider.Source == source {
-			return provider.Plugin, nil
-		}
 	}
 	
 	return nil, fmt.Errorf("plugin with source '%s' not found - use RegisterPluginSource to register it", source)

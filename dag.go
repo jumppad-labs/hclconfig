@@ -870,30 +870,27 @@ func initializeProvider(provider *resources.Provider, evalCtx *hcl.EvalContext, 
 
 	// Convert hcl.Body config to concrete type if config is provided
 	if provider.Config != nil {
-		if configBody, ok := provider.Config.(hcl.Body); ok {
-			// Create an instance of the concrete config type
-			configPtr := reflect.New(configType).Interface()
-			
-			// Decode the config body to the concrete type using the evaluation context
-			if evalCtx != nil {
-				diags := gohcl.DecodeBody(configBody, evalCtx, configPtr)
-				if diags.HasErrors() {
-					err := fmt.Errorf("failed to decode provider config: %s", diags.Error())
-					fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
-					return err
-				}
-				
-				// Store the concrete config
-				provider.Config = configPtr
-			} else {
-				// If no context available, leave config as hcl.Body for now
-				// This can happen during early initialization or missing dependencies
-			}
+		configBody, ok := provider.Config.(hcl.Body)
+		if !ok {
+			panic(fmt.Sprintf("provider config should be hcl.Body at this point, got %T", provider.Config))
 		}
+		
+		// Create an instance of the concrete config type
+		configPtr := reflect.New(configType).Interface()
+		
+		// Decode the config body to the concrete type using the evaluation context
+		diags := gohcl.DecodeBody(configBody, evalCtx, configPtr)
+		if diags.HasErrors() {
+			err := fmt.Errorf("failed to decode provider config: %s", diags.Error())
+			fireParserEvent(options, "create", resourceType, resourceID, "error", time.Since(start), err, data)
+			return err
+		}
+		
+		// Store the concrete config
+		provider.Config = configPtr
 	}
 
 	// Set up plugin-specific fields
-	provider.Plugin = plugin
 	provider.ConfigType = configType
 	provider.Initialized = true
 

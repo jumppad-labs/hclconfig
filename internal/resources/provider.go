@@ -3,7 +3,6 @@ package resources
 import (
 	"reflect"
 
-	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -24,7 +23,6 @@ type Provider struct {
 	Config interface{} `json:"config,omitempty"`
 	
 	// Internal fields for plugin management (not exposed via HCL)
-	Plugin       plugins.Plugin `json:"-"`
 	ConfigType   reflect.Type   `json:"-"`
 	Initialized  bool           `json:"-"`
 }

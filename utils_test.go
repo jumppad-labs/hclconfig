@@ -30,6 +30,7 @@ func TestCalculatesHashFromString(t *testing.T) {
 
 var singleLine = `resource "container" "consul"`
 
+// Expected content from lines 13-32 of ./internal/test_fixtures/config/single/container.hcl
 var container = `resource "container" "consul" {
   command = ["consul", "agent", "-dev", "-client", "0.0.0.0"]
 

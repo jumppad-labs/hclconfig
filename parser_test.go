@@ -1251,37 +1251,13 @@ func (p *SimplePlugin) Init(logger plugins.Logger, state plugins.State) error {
 }
 
 func TestParseProviderBlocks(t *testing.T) {
-	// Create temporary test file
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.hcl")
-
-	hclContent := `
-variable "test_value" {
-  default = "test"
-}
-
-provider "simple" {
-  source = "test/simple"
-  version = "1.0.0"
-  
-  config {
-    value = variable.test_value
-    count = 42
-  }
-}
-
-resource "simple" "test" {
-  data = "hello world"
-}
-`
-
-	err := os.WriteFile(testFile, []byte(hclContent), 0644)
-	require.NoError(t, err)
+	// Use test fixture for provider blocks
+	testFile := "./internal/test_fixtures/config/providers/basic_provider.hcl"
 
 	// Create parser and register plugin
 	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
-	err = parser.RegisterPlugin(plugin)
+	err := parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
 
 	// Register plugin source mapping
@@ -1385,39 +1361,13 @@ provider "simple" {
 }
 
 func TestParseMultipleProviders(t *testing.T) {
-	// Create temporary test file
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.hcl")
-
-	hclContent := `
-provider "simple1" {
-  source = "test/simple"
-  version = "1.0.0"
-  
-  config {
-    value = "provider1"
-    count = 1
-  }
-}
-
-provider "simple2" {
-  source = "test/simple"
-  version = "1.0.0"
-  
-  config {
-    value = "provider2"
-    count = 2
-  }
-}
-`
-
-	err := os.WriteFile(testFile, []byte(hclContent), 0644)
-	require.NoError(t, err)
+	// Use test fixture for multiple providers
+	testFile := "./internal/test_fixtures/config/providers/multiple_providers.hcl"
 
 	// Create parser and register plugin
 	parser, _ := setupParser(t)
 	plugin := &SimplePlugin{}
-	err = parser.RegisterPlugin(plugin)
+	err := parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
 
 	// Register plugin source mapping

@@ -115,7 +115,6 @@ func TestPluginRegistryRegisterProvider(t *testing.T) {
 	require.Equal(t, "test-provider", providerConfig.Metadata().Name)
 	require.Equal(t, "test/provider", providerConfig.Source)
 	require.Equal(t, "1.0.0", providerConfig.Version)
-	require.Equal(t, plugin, providerConfig.Plugin)
 }
 
 func TestRegisterProviderDuplicateName(t *testing.T) {
@@ -717,36 +716,13 @@ provider "empty" {
 }
 
 func TestProviderErrorCircularVariableReference(t *testing.T) {
-	// Create temporary test file with circular variable references
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.hcl")
-
-	hclContent := `
-variable "var1" {
-  default = variable.var2
-}
-
-variable "var2" {
-  default = variable.var1
-}
-
-provider "error_test" {
-  source = "test/error"
-  version = "1.0.0"
-  
-  config {
-    required_field = variable.var1
-  }
-}
-`
-
-	err := os.WriteFile(testFile, []byte(hclContent), 0644)
-	require.NoError(t, err)
+	// Use test fixture for circular variable references
+	testFile := "./internal/test_fixtures/config/providers/circular_variables.hcl"
 
 	// Create parser with proper test isolation
 	parser, _ := setupParser(t)
 	plugin := &ErrorTestPlugin{}
-	err = parser.RegisterPlugin(plugin)
+	err := parser.RegisterPlugin(plugin)
 	require.NoError(t, err)
 
 	parser.GetPluginRegistry().RegisterPluginSource("test/error", plugin)
