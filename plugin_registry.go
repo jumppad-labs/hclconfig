@@ -162,7 +162,7 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 	pd := NewPluginDiscovery(options.PluginDirectories, options.PluginNamePattern, loggerFunc)
 
 	// Discover plugins
-	pluginPaths, err := pd.DiscoverPlugins()
+	plugins, err := pd.DiscoverPlugins()
 	if err != nil {
 		return fmt.Errorf("plugin discovery failed: %w", err)
 	}
@@ -172,16 +172,16 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 	successCount := 0
 
 	// Load each discovered plugin
-	for _, pluginPath := range pluginPaths {
-		if err := r.RegisterPluginWithPath(pluginPath); err != nil {
-			loadErrors = append(loadErrors, fmt.Sprintf("%s: %v", pluginPath, err))
+	for _, plugin := range plugins {
+		if err := r.RegisterPluginWithPath(plugin.Path); err != nil {
+			loadErrors = append(loadErrors, fmt.Sprintf("%s/%s (%s): %v", plugin.Namespace, plugin.Type, plugin.Path, err))
 			if options.Logger != nil {
-				options.Logger.Error(fmt.Sprintf("Failed to load plugin %s: %v", pluginPath, err))
+				options.Logger.Error(fmt.Sprintf("Failed to load plugin %s/%s at %s: %v", plugin.Namespace, plugin.Type, plugin.Path, err))
 			}
 		} else {
 			successCount++
 			if options.Logger != nil {
-				options.Logger.Info(fmt.Sprintf("Successfully loaded plugin: %s", pluginPath))
+				options.Logger.Info(fmt.Sprintf("Successfully loaded plugin %s/%s at %s", plugin.Namespace, plugin.Type, plugin.Path))
 			}
 		}
 	}
@@ -197,7 +197,7 @@ func (r *PluginRegistry) DiscoverAndLoadPlugins(options *ParserOptions) error {
 	}
 
 	// Only return error if all plugins failed to load and we found some
-	if len(loadErrors) > 0 && successCount == 0 && len(pluginPaths) > 0 {
+	if len(loadErrors) > 0 && successCount == 0 && len(plugins) > 0 {
 		return fmt.Errorf("all plugin loads failed: %s", strings.Join(loadErrors, "; "))
 	}
 

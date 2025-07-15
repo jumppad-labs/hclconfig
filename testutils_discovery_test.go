@@ -78,9 +78,16 @@ func getRootDir() string {
 	}
 }
 
-// copyPlugin copies a plugin binary to a new location with a new name
-func (s *testPluginSetup) copyPlugin(src, dstDir, dstName string) string {
-	dst := filepath.Join(dstDir, dstName)
+// copyPlugin copies a plugin binary to the proper namespace/type/platform/binary structure
+func (s *testPluginSetup) copyPlugin(src, baseDir, namespace, pluginType, platform, binaryName string) string {
+	// Create directory structure: baseDir/namespace/type/platform/
+	pluginDir := filepath.Join(baseDir, namespace, pluginType, platform)
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		s.t.Fatalf("Failed to create plugin directory %s: %v", pluginDir, err)
+	}
+
+	// Copy the plugin binary
+	dst := filepath.Join(pluginDir, binaryName)
 	if runtime.GOOS == "windows" && !hasExeExtension(dst) {
 		dst += ".exe"
 	}

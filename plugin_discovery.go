@@ -8,7 +8,15 @@ import (
 	"strings"
 )
 
-// PluginDiscovery handles the discovery of plugin binaries in configured directories
+// PluginInfo represents a discovered plugin with its metadata
+type PluginInfo struct {
+	Path      string // Full path to plugin binary
+	Namespace string // Plugin namespace (e.g., "jumppad", "community")
+	Type      string // Plugin type (e.g., "docker", "kubernetes")
+	Platform  string // Platform (e.g., "linux-amd64", "darwin-arm64")
+}
+
+// PluginDiscovery handles the discovery of plugin binaries using namespace/type/platform structure
 type PluginDiscovery struct {
 	directories []string
 	pattern     string
@@ -32,10 +40,14 @@ func NewPluginDiscovery(directories []string, pattern string, logger func(string
 	}
 }
 
-// DiscoverPlugins searches for plugin binaries in all configured directories
-func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
-	var plugins []string
+// DiscoverPlugins searches for plugin binaries and returns detailed info
+func (pd *PluginDiscovery) DiscoverPlugins() ([]PluginInfo, error) {
+	var plugins []PluginInfo
 	var errors []error
+	
+	// Get current platform
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	pd.logger(fmt.Sprintf("Searching for plugins for platform %s", currentPlatform))
 	
 	// Deduplicate directories
 	seen := make(map[string]bool)
@@ -52,64 +64,102 @@ func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
 		}
 	}
 	
+	// Walk through each directory to find plugins
 	for _, dir := range uniqueDirs {
-		found, err := pd.discoverInDirectory(dir)
-		if err != nil {
-			pd.logger(fmt.Sprintf("Failed to discover plugins in %s: %v", dir, err))
-			errors = append(errors, err)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			pd.logger(fmt.Sprintf("Plugin directory does not exist: %s", dir))
 			continue
 		}
-		plugins = append(plugins, found...)
+		
+		pd.logger(fmt.Sprintf("Searching for plugins in %s", dir))
+		
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil // Skip files we can't access
+			}
+			
+			if info.IsDir() {
+				return nil // Continue walking into subdirectories
+			}
+			
+			if !pd.isPluginBinary(path) {
+				return nil // Not a plugin binary
+			}
+			
+			// Determine plugin metadata from path structure
+			pluginInfo := pd.analyzePluginPath(path, dir, currentPlatform)
+			if pluginInfo != nil {
+				pd.logger(fmt.Sprintf("Found plugin: %s/%s at %s", pluginInfo.Namespace, pluginInfo.Type, path))
+				plugins = append(plugins, *pluginInfo)
+			}
+			
+			return nil
+		})
+		
+		if err != nil {
+			pd.logger(fmt.Sprintf("Failed to walk directory %s: %v", dir, err))
+			errors = append(errors, err)
+		}
 	}
 	
 	if len(plugins) == 0 && len(errors) > 0 {
 		return nil, fmt.Errorf("no plugins found, encountered %d errors during discovery", len(errors))
 	}
 	
-	pd.logger(fmt.Sprintf("Discovered %d plugins", len(plugins)))
+	pd.logger(fmt.Sprintf("Discovered %d plugins for platform %s", len(plugins), currentPlatform))
 	return plugins, nil
 }
 
-// discoverInDirectory searches for plugins in a single directory
-func (pd *PluginDiscovery) discoverInDirectory(dir string) ([]string, error) {
-	var plugins []string
-	
-	// Check if directory exists
-	info, err := os.Stat(dir)
+// DiscoverPlugin finds a specific plugin by namespace and type
+func (pd *PluginDiscovery) DiscoverPlugin(namespace, pluginType string) (*PluginInfo, error) {
+	plugins, err := pd.DiscoverPlugins()
 	if err != nil {
-		if os.IsNotExist(err) {
-			pd.logger(fmt.Sprintf("Plugin directory does not exist: %s", dir))
-			return plugins, nil // Not an error, just no plugins
-		}
 		return nil, err
 	}
 	
-	if !info.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", dir)
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	
+	for _, plugin := range plugins {
+		if plugin.Namespace == namespace && plugin.Type == pluginType {
+			return &plugin, nil
+		}
 	}
 	
-	// Read directory contents
-	entries, err := os.ReadDir(dir)
+	return nil, fmt.Errorf("plugin %s/%s not found for platform %s", namespace, pluginType, currentPlatform)
+}
+
+// analyzePluginPath determines plugin metadata from the file path
+// Only supports namespaced structure: namespace/type/platform/binary
+func (pd *PluginDiscovery) analyzePluginPath(pluginPath, baseDir, currentPlatform string) *PluginInfo {
+	// Get relative path from base directory
+	relPath, err := filepath.Rel(baseDir, pluginPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
+		return nil // Invalid path
 	}
 	
-	pd.logger(fmt.Sprintf("Searching for plugins in %s", dir))
+	// Split path into components
+	parts := strings.Split(filepath.ToSlash(relPath), "/")
 	
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		
-		fullPath := filepath.Join(dir, entry.Name())
-		
-		if pd.isPluginBinary(fullPath) {
-			pd.logger(fmt.Sprintf("Found plugin: %s", fullPath))
-			plugins = append(plugins, fullPath)
-		}
+	// Require exactly namespace/type/platform/binary structure
+	if len(parts) != 4 {
+		return nil // Not the expected structure
 	}
 	
-	return plugins, nil
+	namespace := parts[0]
+	pluginType := parts[1]
+	platform := parts[2]
+	
+	// Only include plugins that match current platform
+	if platform != currentPlatform {
+		return nil // Wrong platform
+	}
+	
+	return &PluginInfo{
+		Path:      pluginPath,
+		Namespace: namespace,
+		Type:      pluginType,
+		Platform:  platform,
+	}
 }
 
 // isPluginBinary checks if a file is a valid plugin binary

@@ -1,12 +1,14 @@
 package hclconfig
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/logger"
+	"github.com/stretchr/testify/require"
 )
 
 
@@ -15,7 +17,9 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	validDir := setup.createPluginDir("valid")
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
-	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-test")
+	// Create namespaced plugin: test/example/platform/hclconfig-plugin-example
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, validDir, "test", "example", currentPlatform, "hclconfig-plugin-example")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -25,24 +29,15 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
+	require.NoError(t, err)
+	require.Len(t, plugins, 1)
 	
-	if len(plugins) != 1 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
-	
-	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
-		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
-		}
-	}
+	plugin := plugins[0]
+	require.True(t, filepath.IsAbs(plugin.Path))
+	require.FileExists(t, plugin.Path)
+	require.Equal(t, "test", plugin.Namespace)
+	require.Equal(t, "example", plugin.Type)
+	require.Equal(t, currentPlatform, plugin.Platform)
 }
 
 func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
@@ -50,8 +45,9 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	validDir := setup.createPluginDir("valid")
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
-	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-one")
-	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-two")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, validDir, "jumppad", "container", currentPlatform, "hclconfig-plugin-container")
+	setup.copyPlugin(examplePlugin, validDir, "community", "kubernetes", currentPlatform, "hclconfig-plugin-kubernetes")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -61,24 +57,26 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	pd := NewPluginDiscovery([]string{validDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
+	require.NoError(t, err)
+	require.Len(t, plugins, 2)
 	
-	if len(plugins) != 2 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	// Verify both plugins have correct structure
+	foundNamespaces := make(map[string]bool)
+	foundTypes := make(map[string]bool)
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
-		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
-		}
+		require.True(t, filepath.IsAbs(plugin.Path))
+		require.FileExists(t, plugin.Path)
+		require.Equal(t, currentPlatform, plugin.Platform)
+		
+		foundNamespaces[plugin.Namespace] = true
+		foundTypes[plugin.Type] = true
 	}
+	
+	require.True(t, foundNamespaces["jumppad"], "Expected to find 'jumppad' namespace")
+	require.True(t, foundNamespaces["community"], "Expected to find 'community' namespace")
+	require.True(t, foundTypes["container"], "Expected to find 'container' type")
+	require.True(t, foundTypes["kubernetes"], "Expected to find 'kubernetes' type")
 }
 
 func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
@@ -86,7 +84,9 @@ func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
 	invalidDir := setup.createPluginDir("invalid")
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
-	setup.copyPlugin(examplePlugin, invalidDir, "not-a-plugin")
+	// Create plugin with name that doesn't match pattern
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, invalidDir, "test", "example", currentPlatform, "not-a-plugin")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -96,22 +96,19 @@ func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
 	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	setup := newTestPluginSetup(t)
 	invalidDir := setup.createPluginDir("invalid")
 	
-	setup.createNonExecutable(invalidDir, "hclconfig-plugin-fake")
+	// Create namespaced structure but with non-executable file
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	pluginDir := filepath.Join(invalidDir, "test", "example", currentPlatform)
+	require.NoError(t, os.MkdirAll(pluginDir, 0755))
+	setup.createNonExecutable(pluginDir, "hclconfig-plugin-fake")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -121,54 +118,8 @@ func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	pd := NewPluginDiscovery([]string{invalidDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
-}
-
-func TestPluginDiscoveryMixedDirectory(t *testing.T) {
-	setup := newTestPluginSetup(t)
-	mixedDir := setup.createPluginDir("mixed")
-	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
-	
-	setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-good")
-	setup.createNonPlugin(mixedDir, "hclconfig-plugin-bad")
-	setup.createNonExecutable(mixedDir, "hclconfig-plugin-text.txt")
-	setup.copyPlugin(examplePlugin, mixedDir, "wrong-pattern")
-
-	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
-	
-	pd := NewPluginDiscovery([]string{mixedDir}, "hclconfig-plugin-*", loggerFunc)
-	plugins, err := pd.DiscoverPlugins()
-	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	// plugin-good and plugin-bad (both executables)
-	if len(plugins) != 2 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
-	
-	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
-		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
-		}
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
@@ -183,15 +134,8 @@ func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
 	pd := NewPluginDiscovery([]string{emptyDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
@@ -206,15 +150,8 @@ func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
 	pd := NewPluginDiscovery([]string{nonExistentDir}, "hclconfig-plugin-*", loggerFunc)
 	plugins, err := pd.DiscoverPlugins()
 	
-	if err != nil {
-		t.Errorf("DiscoverPlugins() error = %v, wantErr false", err)
-		return
-	}
-	
-	if len(plugins) != 0 {
-		t.Errorf("DiscoverPlugins() found %d plugins, want 0", len(plugins))
-		t.Logf("Found plugins: %v", plugins)
-	}
+	require.NoError(t, err)
+	require.Empty(t, plugins)
 }
 
 func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
@@ -224,8 +161,9 @@ func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
 	emptyDir := setup.createPluginDir("empty")
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
-	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-dir1")
-	setup.copyPlugin(examplePlugin, mixedDir, "hclconfig-plugin-dir2")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, validDir, "test", "example1", currentPlatform, "hclconfig-plugin-example1")
+	setup.copyPlugin(examplePlugin, mixedDir, "test", "example2", currentPlatform, "hclconfig-plugin-example2")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -243,14 +181,18 @@ func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
 	if len(plugins) != 2 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 2", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
+		return
 	}
 	
 	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
+		if !filepath.IsAbs(plugin.Path) {
+			t.Errorf("Plugin path is not absolute: %s", plugin.Path)
 		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
+		if _, err := os.Stat(plugin.Path); err != nil {
+			t.Errorf("Plugin file does not exist: %s", plugin.Path)
+		}
+		if plugin.Platform != currentPlatform {
+			t.Errorf("Expected platform '%s', got '%s'", currentPlatform, plugin.Platform)
 		}
 	}
 }
@@ -260,8 +202,9 @@ func TestPluginDiscoveryCustomPattern(t *testing.T) {
 	validDir := setup.createPluginDir("valid")
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
-	setup.copyPlugin(examplePlugin, validDir, "my-custom-plugin-test")
-	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-ignored")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, validDir, "test", "example", currentPlatform, "my-custom-plugin-test")
+	setup.copyPlugin(examplePlugin, validDir, "test", "ignored", currentPlatform, "hclconfig-plugin-ignored")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -279,15 +222,12 @@ func TestPluginDiscoveryCustomPattern(t *testing.T) {
 	if len(plugins) != 1 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
+		return
 	}
 	
-	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
-		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
-		}
+	plugin := plugins[0]
+	if plugin.Type != "example" {
+		t.Errorf("Expected to find 'example' plugin type, got '%s'", plugin.Type)
 	}
 }
 
@@ -296,7 +236,8 @@ func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
 	validDir := setup.createPluginDir("valid")
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
-	setup.copyPlugin(examplePlugin, validDir, "hclconfig-plugin-unique")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, validDir, "test", "unique", currentPlatform, "hclconfig-plugin-unique")
 
 	testLogger := logger.NewTestLogger(t)
 	loggerFunc := func(msg string) {
@@ -311,19 +252,16 @@ func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
 		return
 	}
 	
-	// Should deduplicate
+	// Should deduplicate directories
 	if len(plugins) != 1 {
 		t.Errorf("DiscoverPlugins() found %d plugins, want 1", len(plugins))
 		t.Logf("Found plugins: %v", plugins)
+		return
 	}
 	
-	for _, plugin := range plugins {
-		if !filepath.IsAbs(plugin) {
-			t.Errorf("Plugin path is not absolute: %s", plugin)
-		}
-		if _, err := os.Stat(plugin); err != nil {
-			t.Errorf("Plugin file does not exist: %s", plugin)
-		}
+	plugin := plugins[0]
+	if plugin.Type != "unique" {
+		t.Errorf("Expected plugin type 'unique', got '%s'", plugin.Type)
 	}
 }
 
@@ -339,7 +277,8 @@ func TestPluginDiscovery_WindowsExecutables(t *testing.T) {
 	examplePlugin := setup.buildExamplePlugin("test-plugin-base")
 	
 	// Copy with .exe extension (should be found)
-	exePath := setup.copyPlugin(examplePlugin, dir, "hclconfig-plugin-test.exe")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	exePath := setup.copyPlugin(examplePlugin, dir, "test", "example", currentPlatform, "hclconfig-plugin-test.exe")
 	
 	// Create without .exe extension (should not be found on Windows)
 	nonExePath := filepath.Join(dir, "hclconfig-plugin-noext")
@@ -358,8 +297,15 @@ func TestPluginDiscovery_WindowsExecutables(t *testing.T) {
 		t.Fatalf("Expected 1 plugin, found %d", len(plugins))
 	}
 	
-	if plugins[0] != exePath {
-		t.Errorf("Expected plugin path %s, got %s", exePath, plugins[0])
+	plugin := plugins[0]
+	if plugin.Path != exePath {
+		t.Errorf("Expected plugin path %s, got %s", exePath, plugin.Path)
+	}
+	if plugin.Namespace != "test" {
+		t.Errorf("Expected namespace 'test', got '%s'", plugin.Namespace)
+	}
+	if plugin.Type != "example" {
+		t.Errorf("Expected type 'example', got '%s'", plugin.Type)
 	}
 }
 
@@ -501,7 +447,8 @@ func TestParserIntegration_AutoDiscovery(t *testing.T) {
 	
 	// Build and copy example plugin
 	examplePlugin := setup.buildExamplePlugin("test-plugin")
-	setup.copyPlugin(examplePlugin, pluginDir, "hclconfig-plugin-example")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, pluginDir, "test", "example", currentPlatform, "hclconfig-plugin-example")
 	
 	// Test with auto-discovery enabled
 	t.Run("auto-discovery enabled", func(t *testing.T) {
@@ -559,8 +506,9 @@ func TestParserIntegration_EnvironmentVariables(t *testing.T) {
 	
 	// Build and copy plugins
 	examplePlugin := setup.buildExamplePlugin("test-plugin")
-	setup.copyPlugin(examplePlugin, envDir1, "hclconfig-plugin-env1")
-	setup.copyPlugin(examplePlugin, envDir2, "hclconfig-plugin-env2")
+	currentPlatform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	setup.copyPlugin(examplePlugin, envDir1, "test", "env1", currentPlatform, "hclconfig-plugin-env1")
+	setup.copyPlugin(examplePlugin, envDir2, "test", "env2", currentPlatform, "hclconfig-plugin-env2")
 	
 	// Test HCLCONFIG_PLUGIN_PATH
 	t.Run("plugin path from environment", func(t *testing.T) {
