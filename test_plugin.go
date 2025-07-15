@@ -199,6 +199,22 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 	return nil
 }
 
+// Metadata returns the test plugin metadata
+func (p *TestPlugin) Metadata() plugins.Metadata {
+	return plugins.Metadata{
+		Name:         "test",
+		Version:      "v1.0.0",
+		Description:  "Test plugin for HCLConfig testing",
+		Author:       "HCLConfig Team",
+		Homepage:     "https://github.com/jumppad-labs/hclconfig",
+		License:      "MPL-2.0",
+		Capabilities: []string{"container", "sidecar", "network", "template"},
+		API:          "v1",
+		OS:           []string{"linux", "darwin", "windows"},
+		Arch:         []string{"amd64", "arm64"},
+	}
+}
+
 // TestResourceProvider is a generic test provider for any resource type
 type TestResourceProvider[T types.Resource] struct {
 	logger         logger.Logger
@@ -382,4 +398,20 @@ func (p *EmbeddedTestPlugin) Init(logger logger.Logger, state plugins.State) err
 	}
 
 	return nil
+}
+
+// Metadata returns the embedded test plugin metadata
+func (p *EmbeddedTestPlugin) Metadata() plugins.Metadata {
+	return plugins.Metadata{
+		Name:         "embedded-test",
+		Version:      "v1.0.0",
+		Description:  "Embedded test plugin for HCLConfig testing",
+		Author:       "HCLConfig Team",
+		Homepage:     "https://github.com/jumppad-labs/hclconfig",
+		License:      "MPL-2.0",
+		Capabilities: []string{"container", "sidecar"},
+		API:          "v1",
+		OS:           []string{"linux", "darwin", "windows"},
+		Arch:         []string{"amd64", "arm64"},
+	}
 }

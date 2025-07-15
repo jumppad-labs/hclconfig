@@ -50,6 +50,22 @@ func (p *PersonPlugin) Init(logger logger.Logger, state plugins.State) error {
 	return nil
 }
 
+// Metadata returns the plugin metadata
+func (p *PersonPlugin) Metadata() plugins.Metadata {
+	return plugins.Metadata{
+		Name:         "person",
+		Version:      "v1.0.0",
+		Description:  "Example person plugin for HCLConfig",
+		Author:       "HCLConfig Team",
+		Homepage:     "https://github.com/jumppad-labs/hclconfig",
+		License:      "MPL-2.0",
+		Capabilities: []string{"person"},
+		API:          "v1",
+		OS:           []string{"linux", "darwin", "windows"},
+		Arch:         []string{"amd64", "arm64"},
+	}
+}
+
 // main function for the plugin binary
 func main() {
 	// Create the plugin implementation
