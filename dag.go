@@ -61,13 +61,11 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		for _, d := range resourceMeta.Links {
 			err := types.AppendUniqueDependency(resource, d)
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Line = resourceMeta.Line
-				pe.Column = resourceMeta.Column
-				pe.Filename = resourceMeta.File
-				pe.Message = fmt.Sprintf("unable to append dependency: %s, error: %s", d, err)
-				pe.Level = errors.ParserErrorLevelError
-
+				pe := errors.NewParserErrorFromResource(
+					resource,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("unable to append dependency: %s, error: %s", d, err),
+				)
 				return nil, pe
 			}
 		}
@@ -87,13 +85,11 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 			var err error
 			fqdn, err := resources.ParseFQRN(d)
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Line = resourceMeta.Line
-				pe.Column = resourceMeta.Column
-				pe.Filename = resourceMeta.File
-				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
-				pe.Level = errors.ParserErrorLevelError
-
+				pe := errors.NewParserErrorFromResource(
+					resource,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("invalid dependency: %s, error: %s", d, err),
+				)
 				return nil, pe
 			}
 
@@ -138,13 +134,11 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 			d, err := c.FindResource(fqdnString)
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Line = resourceMeta.Line
-				pe.Column = resourceMeta.Column
-				pe.Filename = resourceMeta.File
-				pe.Message = fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err)
-				pe.Level = errors.ParserErrorLevelError
-
+				pe := errors.NewParserErrorFromResource(
+					resource,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err),
+				)
 				return nil, pe
 			}
 
@@ -320,12 +314,11 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 
 			rMeta.Status = "destroyed_failed"
 
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf("no provider found for resource type %s", rMeta.Type)
-			pe.Level = errors.ParserErrorLevelError
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("no provider found for resource type %s", rMeta.Type),
+			)
 			return diags.Append(pe)
 		}
 
@@ -338,12 +331,11 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 		if err != nil {
 			rMeta.Status = "destroyed_failed"
 
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf("failed to serialize resource for destroy: %s", err)
-			pe.Level = errors.ParserErrorLevelError
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("failed to serialize resource for destroy: %s", err),
+			)
 			return diags.Append(pe)
 		}
 
@@ -357,12 +349,11 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 			fireParserEvent(options, "destroy", resourceType, resourceID, "error", duration, err, resourceJSON)
 			rMeta.Status = "destroy_failed"
 
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf("destroy failed: %s", err)
-			pe.Level = errors.ParserErrorLevelError
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("destroy failed: %s", err),
+			)
 			return diags.Append(pe)
 		}
 
@@ -431,13 +422,11 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 
 			// need to handle this error
 			if err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = rMeta.File
-				pe.Line = rMeta.Line
-				pe.Column = rMeta.Column
-				pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, err)
-				pe.Level = errors.ParserErrorLevelError
-
+				pe := errors.NewParserErrorFromResource(
+					r,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf(`unable to process disabled expression: %s`, err),
+				)
 				return diags.Append(pe)
 			}
 
@@ -453,13 +442,11 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 				expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
 				if expdiags.HasErrors() {
 
-					pe := &errors.ParserError{}
-					pe.Filename = rMeta.File
-					pe.Line = rMeta.Line
-					pe.Column = rMeta.Column
-					pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
-					pe.Level = errors.ParserErrorLevelError
-
+					pe := errors.NewParserErrorFromResource(
+						r,
+						errors.ParserErrorLevelError,
+						fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error()),
+					)
 					return diags.Append(pe)
 				}
 
@@ -470,13 +457,11 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		// if the resource is disabled we need to skip the resource
 		disabled, err := types.GetDisabled(r)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf(`unable to get disabled value: %s`, err)
-			pe.Level = errors.ParserErrorLevelError
-
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf(`unable to get disabled value: %s`, err),
+			)
 			return diags.Append(pe)
 		}
 
@@ -498,14 +483,6 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
 			pretty.Println(r)
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
-			// this error is set as warning as it is possible that the resource has
-			// interpolation that is not yet resolved
-
 			// check the error types and determine if we should set a warning or error
 			level := errors.ParserErrorLevelWarning
 
@@ -521,7 +498,13 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 				}
 			}
 
-			pe.Level = level
+			pe := errors.NewParserError(
+				rMeta.File,
+				rMeta.Line,
+				rMeta.Column,
+				level,
+				fmt.Sprintf(`unable to decode body: %s`, diag.Error()),
+			)
 
 			return diags.Append(pe)
 		}
@@ -539,13 +522,11 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			dr, err := c.FindModuleResources(rMeta.ID, true)
 			if err != nil {
 				// should not be here unless an internal error
-				pe := &errors.ParserError{}
-				pe.Filename = rMeta.File
-				pe.Line = rMeta.Line
-				pe.Column = rMeta.Column
-				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, rMeta.ID, err)
-				pe.Level = errors.ParserErrorLevelError
-
+				pe := errors.NewParserErrorFromResource(
+					r,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, rMeta.ID, err),
+				)
 				return diags.Append(pe)
 			}
 
@@ -598,13 +579,11 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		if !disabled {
 			// Call provider lifecycle methods
 			if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
-				pe := &errors.ParserError{}
-				pe.Filename = rMeta.File
-				pe.Line = rMeta.Line
-				pe.Column = rMeta.Column
-				pe.Message = fmt.Sprintf("provider lifecycle error: %s", err)
-				pe.Level = errors.ParserErrorLevelError
-
+				pe := errors.NewParserErrorFromResource(
+					r,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("provider lifecycle error: %s", err),
+				)
 				return diags.Append(pe)
 			}
 		}
@@ -780,19 +759,22 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 	for _, v := range values {
 		rMeta, err := types.GetMeta(r)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Message = fmt.Sprintf("resource does not have ResourceBase embedded: %s", err)
-			pe.Level = errors.ParserErrorLevelError
+			pe := errors.NewParserError(
+				"",
+				0,
+				0,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("resource does not have ResourceBase embedded: %s", err),
+			)
 			return pe
 		}
 		fqrn, err := resources.ParseFQRN(v)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf("error parsing resource link %s", err)
-			pe.Level = errors.ParserErrorLevelError
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("error parsing resource link %s", err),
+			)
 
 			return pe
 		}
@@ -800,13 +782,11 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 		// get the value from the linked resource
 		l, err := c.FindRelativeResource(v, rMeta.Module)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
-			pe.Level = errors.ParserErrorLevelError
-
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err),
+			)
 			return pe
 		}
 
@@ -816,12 +796,11 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 		// set it on the context
 		lMeta, err := types.GetMeta(l)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf("linked resource does not have ResourceBase embedded: %s", err)
-			pe.Level = errors.ParserErrorLevelError
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("linked resource does not have ResourceBase embedded: %s", err),
+			)
 			return pe
 		}
 		switch lMeta.Type {
@@ -836,13 +815,11 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 		}
 
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
-			pe.Level = errors.ParserErrorLevelError
-
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err),
+			)
 			return pe
 		}
 
@@ -851,13 +828,11 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 
 		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
 		if err != nil {
-			pe := &errors.ParserError{}
-			pe.Filename = rMeta.File
-			pe.Line = rMeta.Line
-			pe.Column = rMeta.Column
-			pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
-			pe.Level = errors.ParserErrorLevelError
-
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf(`unable to set context variable: %s`, err),
+			)
 			return pe
 		}
 	}

@@ -561,13 +561,7 @@ func (p *Parser) loadVariablesFromFile(ctx *hcl.EvalContext, path string) error 
 
 	f, diag := parser.ParseHCLFile(path)
 	if diag.HasErrors() {
-		de := &errors.ParserError{}
-		de.Line = diag[0].Subject.Start.Line
-		de.Column = diag[0].Subject.Start.Line
-		de.Filename = path
-		de.Level = errors.ParserErrorLevelError
-		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
-
+		de := errors.NewParserErrorFromHCLDiag(diag[0], path)
 		return de
 	}
 
@@ -622,17 +616,7 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	f, diag := parser.ParseHCLFile(file)
 	if diag.HasErrors() {
-		de := &errors.ParserError{}
-
-		if diag[0].Subject != nil {
-			de.Line = diag[0].Subject.Start.Line
-			de.Column = diag[0].Subject.Start.Line
-		}
-
-		de.Level = errors.ParserErrorLevelError
-		de.Filename = file
-		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
-
+		de := errors.NewParserErrorFromHCLDiag(diag[0], file)
 		return de
 	}
 
@@ -673,12 +657,6 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 
 	f, diag := parser.ParseHCLFile(file)
 	if diag.HasErrors() {
-		de := &errors.ParserError{}
-		de.Line = diag[0].Subject.Start.Line
-		de.Column = diag[0].Subject.Start.Line
-		de.Filename = file
-		de.Message = fmt.Sprintf("unable to parse file: %s", diag[0].Detail)
-
 		// check the error types and determine if we should set a warning or error
 		level := errors.ParserErrorLevelWarning
 
@@ -694,7 +672,13 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			}
 		}
 
-		de.Level = level
+		de := errors.NewParserError(
+			file,
+			diag[0].Subject.Start.Line,
+			diag[0].Subject.Start.Column,
+			level,
+			fmt.Sprintf("unable to parse file: %s", diag[0].Detail),
+		)
 		return []error{de}
 	}
 
@@ -707,12 +691,13 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	for _, b := range body.Blocks {
 		// check the resource has a name
 		if len(b.Labels) == 0 {
-			de := &errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Message = fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type)
-
+			de := errors.NewParserError(
+				file,
+				b.TypeRange.Start.Line,
+				b.TypeRange.Start.Column,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type),
+			)
 			return []error{de}
 		}
 
@@ -736,13 +721,13 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 				return []error{err}
 			}
 		default:
-			de := &errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Level = errors.ParserErrorLevelWarning
-			de.Message = fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column)
-
+			de := errors.NewParserError(
+				file,
+				b.TypeRange.Start.Line,
+				b.TypeRange.Start.Column,
+				errors.ParserErrorLevelWarning,
+				fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column),
+			)
 			return []error{de}
 		}
 	}
@@ -783,25 +768,25 @@ func setDependsOn(ctx *hcl.EvalContext, r any, b *hclsyntax.Body, dependsOn []st
 func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) []error {
 	// check the module has a name
 	if len(b.Labels) != 1 {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = `invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}`
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			`invalid syntax for 'module' stanza, modules should be formatted 'module "name" {}'`,
+		)
 		return []error{de}
 	}
 
 	name := b.Labels[0]
 	if err := validateResourceName(name); err != nil {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = err.Error()
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			err.Error(),
+		)
 		return []error{de}
 	}
 
@@ -809,13 +794,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	meta, err := types.GetMeta(rt)
 	if err != nil {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = fmt.Sprintf("unable to get resource meta for module %s: %s", moduleName, err)
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			fmt.Sprintf("unable to get resource meta for module %s: %s", moduleName, err),
+		)
 		return []error{de}
 	}
 
@@ -826,38 +811,38 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	err = decodeBody(ctx, c, b, rt, false)
 	if err != nil {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = fmt.Sprintf("error creating resource: %s", err)
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			fmt.Sprintf("error creating resource: %s", err),
+		)
 		return []error{de}
 	}
 
 	derr := setDependsOn(ctx, rt, b.Body, dependsOn)
 	if derr != nil {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = derr.Error()
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			derr.Error(),
+		)
 		return []error{de}
 	}
 
 	// we need to fetch the source so that we can process the child resources
 	// "source" is the attribute but we need to read this manually
 	if _, ok := b.Body.Attributes["source"]; !ok {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = "no source property set for module resource"
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			"no source property set for module resource",
+		)
 		return []error{de}
 	}
 
@@ -865,13 +850,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	// "source" is the attribute but we need to read this manually
 	src, diags := b.Body.Attributes["source"].Expr.Value(ctx)
 	if diags.HasErrors() {
-		de := &errors.ParserError{}
-		de.Line = b.TypeRange.Start.Line
-		de.Column = b.TypeRange.Start.Column
-		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
-		de.Message = fmt.Sprintf("unable to read source from module: %s", diags.Error())
-
+		de := errors.NewParserError(
+			file,
+			b.TypeRange.Start.Line,
+			b.TypeRange.Start.Column,
+			errors.ParserErrorLevelError,
+			fmt.Sprintf("unable to read source from module: %s", diags.Error()),
+		)
 		return []error{de}
 	}
 
@@ -879,13 +864,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	if b.Body.Attributes["version"] != nil {
 		v, diags := b.Body.Attributes["version"].Expr.Value(ctx)
 		if diags.HasErrors() {
-			de := &errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
-			de.Message = fmt.Sprintf("unable to read version from module: %s", diags.Error())
-
+			de := errors.NewParserError(
+				file,
+				b.TypeRange.Start.Line,
+				b.TypeRange.Start.Column,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("unable to read version from module: %s", diags.Error()),
+			)
 			return []error{de}
 		}
 		version = v.AsString()
@@ -929,13 +914,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 				// check if the requested version exists
 				versions, err := r.GetModuleVersions(namespace, name)
 				if err != nil {
-					de := &errors.ParserError{}
-					de.Line = b.TypeRange.Start.Line
-					de.Column = b.TypeRange.Start.Column
-					de.Filename = file
-					de.Level = errors.ParserErrorLevelError
-					de.Message = err.Error()
-
+					de := errors.NewParserError(
+						file,
+						b.TypeRange.Start.Line,
+						b.TypeRange.Start.Column,
+						errors.ParserErrorLevelError,
+						err.Error(),
+					)
 					return []error{de}
 				}
 
@@ -953,13 +938,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 					}
 
 					if !versionExists {
-						de := &errors.ParserError{}
-						de.Line = b.TypeRange.Start.Line
-						de.Column = b.TypeRange.Start.Column
-						de.Filename = file
-						de.Level = errors.ParserErrorLevelError
-						de.Message = fmt.Sprintf(`version "%s" does not exist for module "%s/%s" in registry "%s"`, version, namespace, name, host)
-
+						de := errors.NewParserError(
+							file,
+							b.TypeRange.Start.Line,
+							b.TypeRange.Start.Column,
+							errors.ParserErrorLevelError,
+							fmt.Sprintf(`version "%s" does not exist for module "%s/%s" in registry "%s"`, version, namespace, name, host),
+						)
 						return []error{de}
 					}
 				}
@@ -1100,13 +1085,13 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			// Create resource using plugin registry
 			rt, err = p.pluginRegistry.CreateResource(b.Labels[0], name)
 			if err != nil {
-				de := &errors.ParserError{}
-				de.Line = b.TypeRange.Start.Line
-				de.Column = b.TypeRange.Start.Column
-				de.Filename = file
-				de.Message = fmt.Sprintf("unable to create resource '%s' %s", b.Type, err)
-				de.Level = errors.ParserErrorLevelError
-
+				de := errors.NewParserError(
+					file,
+					b.TypeRange.Start.Line,
+					b.TypeRange.Start.Column,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("unable to create resource '%s' %s", b.Type, err),
+				)
 				return de
 			}
 		}

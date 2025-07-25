@@ -600,7 +600,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
 	if res, ok := r.(any); ok {
-		disabled, err := types.GetResourceDisabled(res)
+		disabled, err := types.GetDisabled(res)
 		require.NoError(t, err)
 		require.True(t, disabled)
 	}
@@ -608,7 +608,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 	r, err = c.FindResource("resource.container.disabled_variable")
 	require.NoError(t, err)
 	if res, ok := r.(any); ok {
-		disabled, err := types.GetResourceDisabled(res)
+		disabled, err := types.GetDisabled(res)
 		require.NoError(t, err)
 		require.True(t, disabled)
 	}
@@ -632,7 +632,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	r, err := c.FindResource("module.disabled.resource.container.enabled")
 	require.NoError(t, err)
 	if res, ok := r.(any); ok {
-		disabled, err := types.GetResourceDisabled(res)
+		disabled, err := types.GetDisabled(res)
 		require.NoError(t, err)
 		require.True(t, disabled)
 	}
@@ -640,7 +640,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	r, err = c.FindResource("module.disabled.sub.resource.container.enabled")
 	require.NoError(t, err)
 	if res, ok := r.(any); ok {
-		disabled, err := types.GetResourceDisabled(res)
+		disabled, err := types.GetDisabled(res)
 		require.NoError(t, err)
 		require.True(t, disabled)
 	}

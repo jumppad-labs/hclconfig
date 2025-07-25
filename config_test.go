@@ -22,41 +22,48 @@ func testSetupConfig(t *testing.T) (*Config, []any) {
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
 
 	mod1, _ := typs.CreateResource(resources.TypeModule, "module1")
-	types.AddResourceDependency(mod1, "resource.network.cloud")
+	types.AppendUniqueDependency(mod1, "resource.network.cloud")
 
 	var2, _ := typs.CreateResource(resources.TypeVariable, "var2")
-	types.SetResourceMetaField(var2, "Module", "module1")
+	meta, _ := types.GetMeta(var2)
+	meta.Module = "module1"
 
 	mod2, _ := typs.CreateResource(resources.TypeModule, "module2")
-	types.SetResourceMetaField(mod2, "Module", "module1")
+	meta, _ = types.GetMeta(mod2)
+	meta.Module = "module1"
 
 	// depending on a module should return all resources and
 	// all child resources
 	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	types.AddResourceDependency(con1, "module.module1")
+	types.AppendUniqueDependency(con1, "module.module1")
 
 	// con2 is embedded in module1
 	con2, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	types.SetResourceMetaField(con2, "Module", "module1")
+	meta, _ = types.GetMeta(con2)
+	meta.Module = "module1"
 
 	// con3 is loaded from a module inside module2
 	con3, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	types.SetResourceMetaField(con3, "Module", "module1.module2")
+	meta, _ = types.GetMeta(con3)
+	meta.Module = "module1.module2"
 
 	// con4 is loaded from a module inside module2
 	con4, _ := typs.CreateResource(structs.TypeContainer, "test_dev2")
-	types.SetResourceMetaField(con4, "Module", "module1.module2")
+	meta, _ = types.GetMeta(con4)
+	meta.Module = "module1.module2"
 
 	// depends on would be added relative as a resource
 	// when a resource is defined, it has no idea on its
 	// module
-	types.AddResourceDependency(con4, "resource.container.test_dev")
+	types.AppendUniqueDependency(con4, "resource.container.test_dev")
 
 	out1, _ := typs.CreateResource(resources.TypeOutput, "fqdn")
-	types.SetResourceMetaField(out1, "Module", "module1.module2")
+	meta, _ = types.GetMeta(out1)
+	meta.Module = "module1.module2"
 
 	out2, _ := typs.CreateResource(resources.TypeOutput, "out")
-	types.SetResourceDependencies(out2, []string{"resource.network.cloud.id", "resource.container.test_dev"})
+	types.AppendUniqueDependency(out2, "resource.network.cloud.id")
+	types.AppendUniqueDependency(out2, "resource.container.test_dev")
 
 	c := NewConfig()
 	err := c.addResource(net1, nil, nil)

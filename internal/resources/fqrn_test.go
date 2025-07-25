@@ -252,7 +252,8 @@ func TestFQRNFromResourceReturnsCorrectData(t *testing.T) {
 	r, err := dt.CreateResource(typeTestContainer, "mytest")
 	require.NoError(t, err)
 
-	types.SetResourceMetaField(r, "Module", "mymodule")
+	meta, _ := types.GetMeta(r)
+	meta.Module = "mymodule"
 
 	fqrn := FQRNFromResource(r)
 
@@ -288,7 +289,8 @@ func TestFQRNFromVariableInModuleReturnsCorrectData(t *testing.T) {
 	r, err := dt.CreateResource(TypeVariable, "mytest")
 	require.NoError(t, err)
 
-	types.SetResourceMetaField(r, "Module", "mymodule")
+	meta, _ := types.GetMeta(r)
+	meta.Module = "mymodule"
 
 	fqrn := FQRNFromResource(r)
 
