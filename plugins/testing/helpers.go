@@ -297,7 +297,7 @@ func ParseHCLWithPluginSchemaToEntityData[T any](t *testing.T, host *TestPluginH
 // BuildPlugin builds a plugin binary for testing
 // Returns an error if the build fails
 func BuildPlugin(t *testing.T, pluginDir string) error {
-	cmd := exec.Command("make", "build")
+	cmd := exec.Command("make", "build_plugin")
 	cmd.Dir = pluginDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {

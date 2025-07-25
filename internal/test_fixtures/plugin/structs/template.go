@@ -20,7 +20,3 @@ type Template struct {
 	InternalVars map[string]any // stores a converted go type version of the hcl.Value types
 	AppendFile   bool           `hcl:"append_file,optional" json:"append_file,omitempty"`
 }
-
-func (t *Template) Process() error {
-	return nil
-}

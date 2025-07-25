@@ -9,9 +9,5 @@ const TypeNetwork = "network"
 type Network struct {
 	types.ResourceBase `hcl:",remain"`
 
-	Subnet string `hcl:"subnet" cty:"subnet" json:"subnet"`
-}
-
-func (c *Network) Process() error {
-	return nil
+	Subnet string `hcl:"subnet" json:"subnet"`
 }

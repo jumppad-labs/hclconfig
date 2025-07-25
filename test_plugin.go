@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
@@ -319,49 +318,4 @@ func (p *TestResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bo
 // Functions returns no functions
 func (p *TestResourceProvider[T]) Functions() plugins.ProviderFunctions {
 	return p.functions
-}
-
-// EmbeddedTestPlugin provides embedded test resource types
-type EmbeddedTestPlugin struct {
-	plugins.PluginBase
-}
-
-// Ensure EmbeddedTestPlugin implements Plugin interface
-var _ plugins.Plugin = (*EmbeddedTestPlugin)(nil)
-
-// Init initializes the embedded test plugin
-func (p *EmbeddedTestPlugin) Init(logger logger.Logger, state plugins.State) error {
-	// Register Container resource
-	containerResource := &embedded.Container{}
-	containerProvider := &TestResourceProvider[*embedded.Container]{}
-	err := plugins.RegisterResourceProvider(
-		&p.PluginBase,
-		logger,
-		state,
-		"resource",
-		"container",
-		containerResource,
-		containerProvider,
-	)
-	if err != nil {
-		return err
-	}
-
-	// Register Sidecar resource
-	sidecarResource := &embedded.Sidecar{}
-	sidecarProvider := &TestResourceProvider[*embedded.Sidecar]{}
-	err = plugins.RegisterResourceProvider(
-		&p.PluginBase,
-		logger,
-		state,
-		"resource",
-		"sidecar",
-		sidecarResource,
-		sidecarProvider,
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
