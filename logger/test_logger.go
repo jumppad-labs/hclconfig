@@ -29,12 +29,12 @@ func NewTestLogger(t *testing.T) *TestLogger {
 		t:      t,
 		buffer: make([]logEntry, 0),
 	}
-	
+
 	// Register cleanup function to flush logs if test failed
 	t.Cleanup(func() {
 		logger.flushIfFailed()
 	})
-	
+
 	return logger
 }
 
@@ -60,7 +60,7 @@ func (l *TestLogger) Error(msg string, args ...interface{}) {
 func (l *TestLogger) addEntry(level, msg string, args []interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	l.buffer = append(l.buffer, logEntry{
 		level:     level,
 		message:   msg,
@@ -72,14 +72,14 @@ func (l *TestLogger) addEntry(level, msg string, args []interface{}) {
 func (l *TestLogger) flushIfFailed() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	// Check if test failed
 	if l.t.Failed() {
 		l.t.Log("=== Buffered Logs (test failed) ===")
 		for _, entry := range l.buffer {
 			timestamp := entry.timestamp.Format("15:04:05.000")
 			msg := fmt.Sprintf("[%s] [%s] %s", timestamp, entry.level, entry.message)
-			
+
 			if len(entry.args) > 0 {
 				// Format args as key-value pairs like charmbracelet/log
 				var parts []string
@@ -94,12 +94,12 @@ func (l *TestLogger) flushIfFailed() {
 					msg += " " + strings.Join(parts, " ")
 				}
 			}
-			
+
 			l.t.Log(msg)
 		}
 		l.t.Log("=== End Buffered Logs ===")
 	}
-	
+
 	// Clear buffer after flushing
 	l.buffer = l.buffer[:0]
 }

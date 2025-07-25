@@ -95,9 +95,9 @@ func TestParseFileProcessesResources(t *testing.T) {
 
 	cont := r.(*structs.Container)
 
-	require.Equal(t, "resource.container.consul", cont.Metadata().ID)
-	require.Equal(t, "consul", cont.Metadata().Name)
-	require.Equal(t, absoluteFolderPath, cont.Metadata().File)
+	require.Equal(t, "resource.container.consul", cont.Meta.ID)
+	require.Equal(t, "consul", cont.Meta.Name)
+	require.Equal(t, absoluteFolderPath, cont.Meta.File)
 
 	require.Equal(t, "consul", cont.Command[0], "consul")
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
@@ -599,11 +599,19 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	r, err := c.FindResource("resource.container.disabled_value")
 	require.NoError(t, err)
-	require.True(t, r.GetDisabled())
+	if res, ok := r.(any); ok {
+		disabled, err := types.GetResourceDisabled(res)
+		require.NoError(t, err)
+		require.True(t, disabled)
+	}
 
 	r, err = c.FindResource("resource.container.disabled_variable")
 	require.NoError(t, err)
-	require.True(t, r.GetDisabled())
+	if res, ok := r.(any); ok {
+		disabled, err := types.GetResourceDisabled(res)
+		require.NoError(t, err)
+		require.True(t, disabled)
+	}
 
 	// should have been called for the variable and network (not disabled)
 	// TODO: re-enable when lifecycle is implemented
@@ -623,11 +631,19 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 
 	r, err := c.FindResource("module.disabled.resource.container.enabled")
 	require.NoError(t, err)
-	require.True(t, r.GetDisabled())
+	if res, ok := r.(any); ok {
+		disabled, err := types.GetResourceDisabled(res)
+		require.NoError(t, err)
+		require.True(t, disabled)
+	}
 
 	r, err = c.FindResource("module.disabled.sub.resource.container.enabled")
 	require.NoError(t, err)
-	require.True(t, r.GetDisabled())
+	if res, ok := r.(any); ok {
+		disabled, err := types.GetResourceDisabled(res)
+		require.NoError(t, err)
+		require.True(t, disabled)
+	}
 
 	// should only called for the containing module and variables
 	// TODO: re-enable when lifecycle is implemented
@@ -1154,22 +1170,28 @@ func TestParseParsesToResourceBase(t *testing.T) {
 	r, err := c.FindResource("module.consul_1.resource.container.consul")
 	require.NoError(t, err)
 	require.NotNil(t, r)
-	require.Equal(t, "consul", r.Metadata().Name)
-	require.Equal(t, "container", r.Metadata().Type)
-	require.Equal(t, "resource.network.onprem.meta.name", r.Metadata().Links[0])
+	meta, err := types.GetMeta(r)
+	require.NoError(t, err)
+	require.Equal(t, "consul", meta.Name)
+	require.Equal(t, "container", meta.Type)
+	require.Equal(t, "resource.network.onprem.meta.name", meta.Links[0])
 
 	r, err = c.FindResource("module.consul_2.resource.container.consul")
 	require.NoError(t, err)
 	require.NotNil(t, r)
-	require.Equal(t, "consul", r.Metadata().Name)
-	require.Equal(t, "container", r.Metadata().Type)
-	require.Equal(t, "resource.network.onprem.meta.name", r.Metadata().Links[0])
+	meta, err = types.GetMeta(r)
+	require.NoError(t, err)
+	require.Equal(t, "consul", meta.Name)
+	require.Equal(t, "container", meta.Type)
+	require.Equal(t, "resource.network.onprem.meta.name", meta.Links[0])
 
 	r, err = c.FindResource("module.consul_2")
 	require.NoError(t, err)
 	require.NotNil(t, r)
-	require.Equal(t, "consul_2", r.Metadata().Name)
-	require.Equal(t, "module", r.Metadata().Type)
+	meta, err = types.GetMeta(r)
+	require.NoError(t, err)
+	require.Equal(t, "consul_2", meta.Name)
+	require.Equal(t, "module", meta.Type)
 
 	m1 := r.(*resources.Module)
 	require.Equal(t, "../single", m1.Source)
@@ -1235,7 +1257,7 @@ func TestParserEventCallback(t *testing.T) {
 		require.Equal(t, "success", event.Phase)
 		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
 		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
-		
+
 		// Builtin types (variables, outputs, locals, modules, root) have 0 duration
 		if strings.Contains(event.ResourceType, "variable.") ||
 			strings.Contains(event.ResourceType, "output.") ||
@@ -1246,9 +1268,9 @@ func TestParserEventCallback(t *testing.T) {
 		} else {
 			require.Greater(t, event.Duration, time.Duration(0), "Expected duration to be greater than 0 for provider operations")
 		}
-		
+
 		require.NoError(t, event.Error, "Expected no error for success events")
-		
+
 		// Builtin types don't have data
 		if !strings.Contains(event.ResourceType, "variable.") &&
 			!strings.Contains(event.ResourceType, "output.") &&
@@ -1427,7 +1449,7 @@ func TestDestroyLifecycle(t *testing.T) {
 
 	// Create a smaller config (remove some resources)
 	p2, testPlugin2 := setupParser(t, o)
-	
+
 	// Parse a config with fewer resources (to trigger destroy)
 	absoluteFolderPath2, err := filepath.Abs("./internal/test_fixtures/config/defaults/container.hcl")
 	require.NoError(t, err)
@@ -1438,7 +1460,7 @@ func TestDestroyLifecycle(t *testing.T) {
 
 	// Verify destroy operations were called for removed resources
 	destroyedResources := testPlugin2.GetDestroyedResources()
-	
+
 	// Resources from config1 that are not in config2 should be destroyed
 	// This will depend on what's actually in the test fixtures
 	require.NotEmpty(t, destroyedResources, "Expected some resources to be destroyed")
@@ -1447,11 +1469,11 @@ func TestDestroyLifecycle(t *testing.T) {
 func TestDestroyDependencyValidation(t *testing.T) {
 	// Test that destroy validation prevents destroying resources that others depend on
 	p, _ := setupParser(t)
-	
+
 	// Test validateDestroyDependencies directly with empty slices
-	toDestroy := []types.Resource{}     // Resources to destroy
-	remaining := []types.Resource{}     // Resources that remain
-	
+	toDestroy := []any{} // Resources to destroy
+	remaining := []any{} // Resources that remain
+
 	errors := p.validateDestroyDependencies(toDestroy, remaining)
 	require.Empty(t, errors, "Expected no errors when no dependencies exist")
 }
@@ -1460,96 +1482,96 @@ func TestDestroyWithNoState(t *testing.T) {
 	// Test Destroy when there's no existing state
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
-	
+
 	o := DefaultOptions()
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
-	
+
 	p := NewParser(o)
-	
+
 	config, err := p.Destroy()
 	require.NoError(t, err)
 	require.NotNil(t, config)
 	require.Empty(t, config.Resources)
-	
+
 	ms.AssertNotCalled(t, "Save")
 }
 
 func TestDestroyWithEmptyState(t *testing.T) {
 	// Test Destroy when state exists but has no resources
 	existingState := NewConfig()
-	
+
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
-	
+
 	o := DefaultOptions()
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
-	
+
 	p := NewParser(o)
-	
+
 	config, err := p.Destroy()
 	require.NoError(t, err)
 	require.NotNil(t, config)
 	require.Empty(t, config.Resources)
-	
+
 	ms.AssertNotCalled(t, "Save")
 }
 
 func TestDestroyWithResources(t *testing.T) {
 	// Test Destroy when state has resources
 	existingState := NewConfig()
-	
+
 	// Create test resources with proper metadata
 	container1 := &structs.Container{
 		ContainerBase: structs.ContainerBase{
 			ResourceBase: types.ResourceBase{
 				Meta: types.Meta{
-					Name: "test1",
-					Type: "container",
-					ID: "resource.container.test1",
+					Name:   "test1",
+					Type:   "container",
+					ID:     "resource.container.test1",
 					Status: "created",
 				},
 			},
 		},
 	}
-	
+
 	container2 := &structs.Container{
 		ContainerBase: structs.ContainerBase{
 			ResourceBase: types.ResourceBase{
 				Meta: types.Meta{
-					Name: "test2", 
-					Type: "container",
-					ID: "resource.container.test2",
+					Name:   "test2",
+					Type:   "container",
+					ID:     "resource.container.test2",
 					Status: "created",
 				},
 			},
 		},
 	}
-	
+
 	existingState.Resources = append(existingState.Resources, container1, container2)
-	
+
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
 	ms.On("Save", mock.Anything).Return(nil)
-	
+
 	o := DefaultOptions()
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
-	
+
 	p, testPlugin := setupParser(t, o)
-	
+
 	config, err := p.Destroy()
 	require.NoError(t, err)
 	require.NotNil(t, config)
-	
+
 	// Check that resources were destroyed
 	destroyedResources := testPlugin.GetDestroyedResources()
 	require.Len(t, destroyedResources, 2)
-	
+
 	// Check that destroyed resources were removed from config
 	require.Empty(t, config.Resources)
-	
+
 	// Check that state was saved
 	ms.AssertCalled(t, "Save", mock.Anything)
 }
@@ -1557,44 +1579,44 @@ func TestDestroyWithResources(t *testing.T) {
 func TestDestroyWithFailedDestroy(t *testing.T) {
 	// Test Destroy when destroy operation fails
 	existingState := NewConfig()
-	
+
 	// Create a test resource
 	container := &structs.Container{
 		ContainerBase: structs.ContainerBase{
 			ResourceBase: types.ResourceBase{
 				Meta: types.Meta{
-					Name: "test1",
-					Type: "container", 
-					ID: "resource.container.test1",
+					Name:   "test1",
+					Type:   "container",
+					ID:     "resource.container.test1",
 					Status: "created",
 				},
 			},
 		},
 	}
-	
+
 	existingState.Resources = append(existingState.Resources, container)
-	
+
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
 	ms.On("Save", mock.Anything).Return(nil)
-	
+
 	o := DefaultOptions()
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
-	
+
 	p, testPlugin := setupParser(t, o)
-	
+
 	// Configure the test plugin to fail on destroy for this specific resource
 	testPlugin.SetDestroyError("resource.container.test1", fmt.Errorf("destroy failed"))
-	
+
 	config, err := p.Destroy()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "destroy phase failed")
 	require.NotNil(t, config)
-	
+
 	// Check that failed resource was not removed from config
 	require.Len(t, config.Resources, 1)
-	
+
 	// State should still be saved even on error
 	ms.AssertCalled(t, "Save", mock.Anything)
 }
@@ -1602,16 +1624,16 @@ func TestDestroyWithFailedDestroy(t *testing.T) {
 func TestDestroyWithInvalidStateType(t *testing.T) {
 	// Test Destroy when state has wrong type
 	invalidState := "not a config"
-	
+
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(invalidState, nil)
-	
+
 	o := DefaultOptions()
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
-	
+
 	p := NewParser(o)
-	
+
 	config, err := p.Destroy()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid state type")
@@ -1622,13 +1644,13 @@ func TestDestroyWithStateLoadError(t *testing.T) {
 	// Test Destroy when state load fails
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(nil, fmt.Errorf("failed to load state"))
-	
+
 	o := DefaultOptions()
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
-	
+
 	p := NewParser(o)
-	
+
 	config, err := p.Destroy()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to load state")

@@ -2,14 +2,12 @@ package plugins
 
 import (
 	"context"
-
-	"github.com/jumppad-labs/hclconfig/types"
 )
 
 // DataSourceProvider defines the generic interface that all data source providers must implement.
 // Data sources are read-only resources that fetch external data and return it as a typed resource.
-// T must be a type that implements types.Resource.
-type DataSourceProvider[T types.Resource] interface {
+// T must be a type that has embedded types.ResourceBase.
+type DataSourceProvider[T any] interface {
 	// Init initializes the provider with state access, provider functions, and a logger.
 	// This method is called once when the provider is created and should be used
 	// to set up any required clients or dependencies.

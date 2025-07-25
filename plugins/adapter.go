@@ -3,8 +3,6 @@ package plugins
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/jumppad-labs/hclconfig/types"
 )
 
 // ProviderAdapter defines a common interface for all providers regardless of their concrete type.
@@ -22,11 +20,12 @@ import (
 // Without this adapter, the plugin system would need to use reflection or type assertions
 // to convert between []byte and concrete types, making the code complex and error-prone.
 type ProviderAdapter interface {
+	Init(state State, functions ProviderFunctions, logger Logger) error
 	Validate(ctx context.Context, entityData []byte) error
-	Create(ctx context.Context, entityData []byte) error
+	Create(ctx context.Context, entityData []byte) ([]byte, error)
 	Destroy(ctx context.Context, entityData []byte, force bool) error
-	Refresh(ctx context.Context, entityData []byte) error
-	Update(ctx context.Context, entityData []byte) error
+	Refresh(ctx context.Context, entityData []byte) ([]byte, error)
+	Update(ctx context.Context, entityData []byte) ([]byte, error)
 	Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error)
 }
 
@@ -58,7 +57,7 @@ type ProviderAdapter interface {
 //	Plugin receives: ("resource", "container", []byte{...})
 //	Adapter unmarshals: []byte -> *ContainerResource
 //	Provider receives: ResourceProvider[*ContainerResource].Create(ctx, *ContainerResource)
-type TypedProviderAdapter[T types.Resource] struct {
+type TypedProviderAdapter[T any] struct {
 	provider     ResourceProvider[T]
 	concreteType T
 	state        State
@@ -67,7 +66,7 @@ type TypedProviderAdapter[T types.Resource] struct {
 }
 
 // NewTypedProviderAdapter creates a new adapter for a typed provider
-func NewTypedProviderAdapter[T types.Resource](provider ResourceProvider[T], concreteType T) *TypedProviderAdapter[T] {
+func NewTypedProviderAdapter[T any](provider ResourceProvider[T], concreteType T) *TypedProviderAdapter[T] {
 	return &TypedProviderAdapter[T]{
 		provider:     provider,
 		concreteType: concreteType,
@@ -93,23 +92,33 @@ func (a *TypedProviderAdapter[T]) Validate(ctx context.Context, entityData []byt
 
 	// Additional validation could be added here by calling a Validate method
 	// on the resource if it implements a Validator interface
-	
+
 	return nil
 }
 
-func (a *TypedProviderAdapter[T]) Create(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T]) Create(ctx context.Context, entityData []byte) ([]byte, error) {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
 	// Unmarshal JSON bytes into the concrete type
 	if err := json.Unmarshal(entityData, &resource); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Call the provider's Create method with the concrete type
 	// (provider was already initialized during registration)
-	_, err := a.provider.Create(ctx, resource)
-	return err
+	mutatedResource, err := a.provider.Create(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+
+	// Serialize the mutated resource back to JSON
+	mutatedData, err := json.Marshal(mutatedResource)
+	if err != nil {
+		return nil, err
+	}
+
+	return mutatedData, nil
 }
 
 func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte, force bool) error {
@@ -126,7 +135,7 @@ func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte
 	return a.provider.Destroy(ctx, resource, force)
 }
 
-func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte) ([]byte, error) {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
@@ -134,26 +143,48 @@ func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte
 	if entityData != nil {
 		// Unmarshal JSON bytes into the concrete type
 		if err := json.Unmarshal(entityData, &resource); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// Call the provider's Refresh method with the concrete type
 	// Note: if entityData was nil, resource will be the zero value of T
-	return a.provider.Refresh(ctx, resource)
+	refreshedResource, err := a.provider.Refresh(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+
+	// Serialize the refreshed resource back to JSON
+	refreshedData, err := json.Marshal(refreshedResource)
+	if err != nil {
+		return nil, err
+	}
+
+	return refreshedData, nil
 }
 
-func (a *TypedProviderAdapter[T]) Update(ctx context.Context, entityData []byte) error {
+func (a *TypedProviderAdapter[T]) Update(ctx context.Context, entityData []byte) ([]byte, error) {
 	// Create a new instance of type T to unmarshal into
 	var resource T
 
 	// Unmarshal JSON bytes into the concrete type
 	if err := json.Unmarshal(entityData, &resource); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Call the provider's Update method with the concrete type
-	return a.provider.Update(ctx, resource)
+	updatedResource, err := a.provider.Update(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+
+	// Serialize the updated resource back to JSON
+	updatedData, err := json.Marshal(updatedResource)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedData, nil
 }
 
 func (a *TypedProviderAdapter[T]) Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error) {

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
+func testSetupConfig(t *testing.T) (*Config, []any) {
 	typs := resources.DefaultResources()
 	typs[structs.TypeNetwork] = &structs.Network{}
 	typs[structs.TypeContainer] = &structs.Container{}
@@ -22,41 +22,41 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	net1, _ := typs.CreateResource(structs.TypeNetwork, "cloud")
 
 	mod1, _ := typs.CreateResource(resources.TypeModule, "module1")
-	mod1.AddDependency("resource.network.cloud")
+	types.AddResourceDependency(mod1, "resource.network.cloud")
 
 	var2, _ := typs.CreateResource(resources.TypeVariable, "var2")
-	var2.Metadata().Module = "module1"
+	types.SetResourceMetaField(var2, "Module", "module1")
 
 	mod2, _ := typs.CreateResource(resources.TypeModule, "module2")
-	mod2.Metadata().Module = "module1"
+	types.SetResourceMetaField(mod2, "Module", "module1")
 
 	// depending on a module should return all resources and
 	// all child resources
 	con1, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	con1.AddDependency("module.module1")
+	types.AddResourceDependency(con1, "module.module1")
 
 	// con2 is embedded in module1
 	con2, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	con2.Metadata().Module = "module1"
+	types.SetResourceMetaField(con2, "Module", "module1")
 
 	// con3 is loaded from a module inside module2
 	con3, _ := typs.CreateResource(structs.TypeContainer, "test_dev")
-	con3.Metadata().Module = "module1.module2"
+	types.SetResourceMetaField(con3, "Module", "module1.module2")
 
 	// con4 is loaded from a module inside module2
 	con4, _ := typs.CreateResource(structs.TypeContainer, "test_dev2")
-	con4.Metadata().Module = "module1.module2"
+	types.SetResourceMetaField(con4, "Module", "module1.module2")
 
 	// depends on would be added relative as a resource
 	// when a resource is defined, it has no idea on its
 	// module
-	con4.AddDependency("resource.container.test_dev")
+	types.AddResourceDependency(con4, "resource.container.test_dev")
 
 	out1, _ := typs.CreateResource(resources.TypeOutput, "fqdn")
-	out1.Metadata().Module = "module1.module2"
+	types.SetResourceMetaField(out1, "Module", "module1.module2")
 
 	out2, _ := typs.CreateResource(resources.TypeOutput, "out")
-	out2.SetDependencies([]string{"resource.network.cloud.id", "resource.container.test_dev"})
+	types.SetResourceDependencies(out2, []string{"resource.network.cloud.id", "resource.container.test_dev"})
 
 	c := NewConfig()
 	err := c.addResource(net1, nil, nil)
@@ -93,7 +93,7 @@ func testSetupConfig(t *testing.T) (*Config, []types.Resource) {
 	err = c.addResource(out2, nil, nil)
 	require.NoError(t, err)
 
-	return c, []types.Resource{
+	return c, []any{
 		net1,
 		con1,
 		mod1,
@@ -312,13 +312,17 @@ func TestProcessForwardExecutesCallbacksInCorrectOrder(t *testing.T) {
 	calls := []string{}
 	callSync := sync.Mutex{}
 	err := c.Walk(
-		func(r types.Resource) error {
+		func(r any) error {
 			callSync.Lock()
 
+			meta, err := types.GetMeta(r)
+			if err != nil {
+				return err
+			}
 			calls = append(calls, resources.FQRN{
-				Module:   r.Metadata().Module,
-				Resource: r.Metadata().Name,
-				Type:     r.Metadata().Type,
+				Module:   meta.Module,
+				Resource: meta.Name,
+				Type:     meta.Type,
 			}.String())
 
 			callSync.Unlock()
@@ -344,13 +348,17 @@ func TestProcessReverseExecutesCallbacksInCorrectOrder(t *testing.T) {
 	calls := []string{}
 	callSync := sync.Mutex{}
 	err := c.Walk(
-		func(r types.Resource) error {
+		func(r any) error {
 			callSync.Lock()
 
+			meta, err := types.GetMeta(r)
+			if err != nil {
+				return err
+			}
 			calls = append(calls, resources.FQRN{
-				Module:   r.Metadata().Module,
-				Resource: r.Metadata().Name,
-				Type:     r.Metadata().Type,
+				Module:   meta.Module,
+				Resource: meta.Name,
+				Type:     meta.Type,
 			}.String())
 
 			callSync.Unlock()
@@ -374,17 +382,21 @@ func TestProcessCallbackErrorHaltsExecution(t *testing.T) {
 	calls := []string{}
 	callSync := sync.Mutex{}
 	err := c.Walk(
-		func(r types.Resource) error {
+		func(r any) error {
 			callSync.Lock()
+			meta, err := types.GetMeta(r)
+			if err != nil {
+				return err
+			}
 			calls = append(calls, resources.FQRN{
-				Module:   r.Metadata().Module,
-				Resource: r.Metadata().Name,
-				Type:     r.Metadata().Type,
+				Module:   meta.Module,
+				Resource: meta.Name,
+				Type:     meta.Type,
 			}.String())
 
 			callSync.Unlock()
 
-			if r.Metadata().Name == "cloud" {
+			if meta.Name == "cloud" {
 				return fmt.Errorf("boom")
 			}
 

@@ -10,7 +10,7 @@ import (
 
 func TestDeserializeInt(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyIntJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyIntJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "int", getKindForField(s, 0, 0))
@@ -18,7 +18,7 @@ func TestDeserializeInt(t *testing.T) {
 
 func TestDeserializeInt32(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyInt32JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyInt32JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "int32", getKindForField(s, 0, 0))
@@ -26,7 +26,7 @@ func TestDeserializeInt32(t *testing.T) {
 
 func TestDeserializeInt64(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyInt64JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyInt64JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "int64", getKindForField(s, 0, 0))
@@ -34,7 +34,7 @@ func TestDeserializeInt64(t *testing.T) {
 
 func TestDeserializeIntPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyIntPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyIntPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 0, 0))
@@ -43,7 +43,7 @@ func TestDeserializeIntPtr(t *testing.T) {
 
 func TestDeserializeIntSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyIntSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyIntSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -52,7 +52,7 @@ func TestDeserializeIntSlice(t *testing.T) {
 
 func TestDeserializeIntPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyIntPtrSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyIntPtrSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -62,7 +62,7 @@ func TestDeserializeIntPtrSlice(t *testing.T) {
 
 func TestDeserializeIntMapSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyIntMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyIntMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -71,7 +71,7 @@ func TestDeserializeIntMapSlice(t *testing.T) {
 
 func TestDeserializeIntMapPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyIntMapPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyIntMapPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -81,7 +81,7 @@ func TestDeserializeIntMapPtrSlice(t *testing.T) {
 
 func TestDeserializeUInt(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "uint", getKindForField(s, 0, 0))
@@ -89,7 +89,7 @@ func TestDeserializeUInt(t *testing.T) {
 
 func TestDeserializeUIntPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 0, 0))
@@ -98,7 +98,7 @@ func TestDeserializeUIntPtr(t *testing.T) {
 
 func TestDeserializeUInt32(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUInt32JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUInt32JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "uint32", getKindForField(s, 0, 0))
@@ -106,7 +106,7 @@ func TestDeserializeUInt32(t *testing.T) {
 
 func TestDeserializeUInt64(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUInt64JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUInt64JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "uint64", getKindForField(s, 0, 0))
@@ -114,7 +114,7 @@ func TestDeserializeUInt64(t *testing.T) {
 
 func TestDeserializeUIntSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -123,7 +123,7 @@ func TestDeserializeUIntSlice(t *testing.T) {
 
 func TestDeserializeUIntPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntPtrSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntPtrSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -133,7 +133,7 @@ func TestDeserializeUIntPtrSlice(t *testing.T) {
 
 func TestDeserializeUIntMapSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -142,7 +142,7 @@ func TestDeserializeUIntMapSlice(t *testing.T) {
 
 func TestDeserializeUIntMapPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntMapPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntMapPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -152,7 +152,7 @@ func TestDeserializeUIntMapPtrSlice(t *testing.T) {
 
 func TestDeserializeFloat32(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloat32JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloat32JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "float32", getKindForField(s, 0, 0))
@@ -160,7 +160,7 @@ func TestDeserializeFloat32(t *testing.T) {
 
 func TestDeserializeFloat64(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloat64JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloat64JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "float64", getKindForField(s, 0, 0))
@@ -168,7 +168,7 @@ func TestDeserializeFloat64(t *testing.T) {
 
 func TestDeserializeFloatPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloatPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloatPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 0, 0))
@@ -177,7 +177,7 @@ func TestDeserializeFloatPtr(t *testing.T) {
 
 func TestDeserializeFloatSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloatSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloatSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -186,7 +186,7 @@ func TestDeserializeFloatSlice(t *testing.T) {
 
 func TestDeserializeFloatPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloatPtrSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloatPtrSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -196,7 +196,7 @@ func TestDeserializeFloatPtrSlice(t *testing.T) {
 
 func TestDeserializeFloatMapSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloatMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloatMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -205,7 +205,7 @@ func TestDeserializeFloatMapSlice(t *testing.T) {
 
 func TestDeserializeFloatMapPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyFloatMapPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyFloatMapPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -215,7 +215,7 @@ func TestDeserializeFloatMapPtrSlice(t *testing.T) {
 
 func TestDeserializeComplex64(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplex64JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplex64JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "complex64", getKindForField(s, 0, 0))
@@ -223,7 +223,7 @@ func TestDeserializeComplex64(t *testing.T) {
 
 func TestDeserializeComplex128(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplex128JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplex128JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "complex128", getKindForField(s, 0, 0))
@@ -231,7 +231,7 @@ func TestDeserializeComplex128(t *testing.T) {
 
 func TestDeserializeComplexPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplexPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplexPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 0, 0))
@@ -240,7 +240,7 @@ func TestDeserializeComplexPtr(t *testing.T) {
 
 func TestDeserializeComplexSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplexSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplexSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -249,7 +249,7 @@ func TestDeserializeComplexSlice(t *testing.T) {
 
 func TestDeserializeComplexPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplexPtrSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplexPtrSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -259,7 +259,7 @@ func TestDeserializeComplexPtrSlice(t *testing.T) {
 
 func TestDeserializeComplexMapSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplexMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplexMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -268,7 +268,7 @@ func TestDeserializeComplexMapSlice(t *testing.T) {
 
 func TestDeserializeComplexMapPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyComplexMapPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyComplexMapPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -278,7 +278,7 @@ func TestDeserializeComplexMapPtrSlice(t *testing.T) {
 
 func TestDeserializeString(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStringJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStringJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "string", getKindForField(s, 0, 0))
@@ -286,7 +286,7 @@ func TestDeserializeString(t *testing.T) {
 
 func TestDeserializeStringPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStringPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStringPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 0, 0))
@@ -295,7 +295,7 @@ func TestDeserializeStringPtr(t *testing.T) {
 
 func TestDeserializeStringSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStringSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStringSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -304,7 +304,7 @@ func TestDeserializeStringSlice(t *testing.T) {
 
 func TestDeserializeStringPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStringPtrSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStringPtrSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -314,7 +314,7 @@ func TestDeserializeStringPtrSlice(t *testing.T) {
 
 func TestDeserializeStringMapSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStringMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStringMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -323,7 +323,7 @@ func TestDeserializeStringMapSlice(t *testing.T) {
 
 func TestDeserializeStringMapPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStringMapPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStringMapPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -333,7 +333,7 @@ func TestDeserializeStringMapPtrSlice(t *testing.T) {
 
 func TestDeserializeUIntPtrT(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyUIntPtrTJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyUIntPtrTJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "uintptr", getKindForField(s, 0, 0))
@@ -341,7 +341,7 @@ func TestDeserializeUIntPtrT(t *testing.T) {
 
 func TestDeserializeBool(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyBoolJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyBoolJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "bool", getKindForField(s, 0, 0))
@@ -349,7 +349,7 @@ func TestDeserializeBool(t *testing.T) {
 
 func TestDeserializeBoolPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyBoolPtrJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyBoolPtrJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 0, 0))
@@ -358,7 +358,7 @@ func TestDeserializeBoolPtr(t *testing.T) {
 
 func TestDeserializeBoolSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyBoolSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyBoolSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -367,7 +367,7 @@ func TestDeserializeBoolSlice(t *testing.T) {
 
 func TestDeserializeBoolPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyBoolPtrSliceJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyBoolPtrSliceJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 0, 0))
@@ -377,7 +377,7 @@ func TestDeserializeBoolPtrSlice(t *testing.T) {
 
 func TestDeserializeBoolMap(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyBoolMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyBoolMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -386,7 +386,7 @@ func TestDeserializeBoolMap(t *testing.T) {
 
 func TestDeserializeBoolPtrMap(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyBoolPtrMapJSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyBoolPtrMapJSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 0, 0))
@@ -396,20 +396,32 @@ func TestDeserializeBoolPtrMap(t *testing.T) {
 
 func TestDeserializeStructPtr(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStructPtrDepth2JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStructPtrDepth2JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "ptr", getKindForField(s, 1, 0))
 	require.Equal(t, "struct", getKindForField(s, 1, 1))
 
-	// get the child
-	co := reflect.ValueOf(s).Elem().FieldByName("Struct").Interface()
-	require.Equal(t, "string", getKindForField(co, 0, 0))
+	// get the child field type from the data struct
+	dataValue := reflect.ValueOf(s).Elem()
+	structField, found := dataValue.Type().FieldByName("Struct")
+	require.True(t, found)
+	require.True(t, structField.Type.Kind() == reflect.Ptr)
+
+	// Check that the pointer type points to a struct with the correct fields
+	elemType := structField.Type.Elem()
+	require.Equal(t, reflect.Struct, elemType.Kind())
+	require.Equal(t, 1, elemType.NumField()) // Only Name field
+
+	// Verify the Name field (field 0) is a string
+	nameField := elemType.Field(0)
+	require.Equal(t, "Name", nameField.Name)
+	require.Equal(t, reflect.String, nameField.Type.Kind())
 }
 
 func TestDeserializeStructSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStructSliceDepth2JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStructSliceDepth2JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 1, 0))
@@ -418,7 +430,7 @@ func TestDeserializeStructSlice(t *testing.T) {
 
 func TestDeserializeStructPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStructPtrSliceDepth2JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStructPtrSliceDepth2JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "slice", getKindForField(s, 1, 0))
@@ -428,7 +440,7 @@ func TestDeserializeStructPtrSlice(t *testing.T) {
 
 func TestDeserializeStructMapSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStructMapDepth2JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStructMapDepth2JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 1, 0))
@@ -437,7 +449,7 @@ func TestDeserializeStructMapSlice(t *testing.T) {
 
 func TestDeserializeStructMapPtrSlice(t *testing.T) {
 
-	s, err := CreateStructFromSchema([]byte(fixtures.MyStructMapPtrDepth2JSON))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.MyStructMapPtrDepth2JSON), nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "map", getKindForField(s, 1, 0))
@@ -446,33 +458,68 @@ func TestDeserializeStructMapPtrSlice(t *testing.T) {
 }
 
 func TestDeserializeEmbeddedStruct(t *testing.T) {
-	s, err := CreateStructFromSchema([]byte(fixtures.EmbeddedJson))
+	s, err := CreateInstanceFromSchema([]byte(fixtures.EmbeddedJson), nil)
 	require.NoError(t, err)
-	
+
 	// Add proper assertions instead of t.Fail()
 	require.NotNil(t, s)
-	
-	// Verify the struct has the expected fields
+
 	structType := reflect.TypeOf(s).Elem()
+
+	// should have 2 fields: ResourceBase and Name
 	require.Equal(t, 2, structType.NumField()) // ResourceBase + Name
-	
-	// Verify ResourceBase field exists
-	_, found := structType.FieldByName("ResourceBase")
+
+	// Verify Name field exists
+	_, found := structType.FieldByName("Name")
 	require.True(t, found)
-	
-	// Verify Name field exists  
-	_, found = structType.FieldByName("Name")
+
+	// Verify ResourceBase field exists
+	_, found = structType.FieldByName("ResourceBase")
+	require.True(t, found)
+
+}
+
+func TestDeserializeEmbeddedStructContainingChild(t *testing.T) {
+	s, err := CreateInstanceFromSchema([]byte(fixtures.EmbeddedInEmbeddedJson), nil)
+	require.NoError(t, err)
+
+	structType := reflect.TypeOf(s).Elem()
+
+	// we expect the struct to have 2 fields the embedded type and the ChildName
+	require.Equal(t, 2, structType.NumField()) // ResourceBase + Name
+
+	_, found := structType.FieldByName("ChildName")
+	require.True(t, found)
+
+	// Verify the Embedded field exists
+	_, found = structType.FieldByName("Embedded")
+	require.True(t, found)
+
+	// Verify ResourceBase field exists
+	_, found = structType.FieldByName("ResourceBase")
 	require.True(t, found)
 }
 
 func getKindForField(t any, field, depth int) string {
+	// Now that CreateInstanceFromSchema returns any (the actual struct),
+	// we can work directly with the struct
+	actualType := reflect.TypeOf(t).Elem()
+
+	// No longer need to skip ResourceBase - use field index directly
+	fieldIndex := field
+	if fieldIndex >= actualType.NumField() {
+		return "interface" // fallback
+	}
+
+	fieldType := actualType.Field(fieldIndex).Type
+
 	switch depth {
 	case 0:
-		return reflect.TypeOf(t).Elem().Field(field).Type.Kind().String()
+		return fieldType.Kind().String()
 	case 1:
-		return reflect.TypeOf(t).Elem().Field(field).Type.Elem().Kind().String()
+		return fieldType.Elem().Kind().String()
 	case 2:
-		return reflect.TypeOf(t).Elem().Field(field).Type.Elem().Elem().Kind().String()
+		return fieldType.Elem().Elem().Kind().String()
 	}
 
 	return ""

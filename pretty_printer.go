@@ -93,8 +93,8 @@ type ResourcePrinter struct {
 // NewResourcePrinter creates a new ResourcePrinter with the given options
 func NewResourcePrinter(opts ...PrinterOption) *ResourcePrinter {
 	options := PrinterOptions{
-		Writer:   os.Stdout,
-		MaxWidth: 80,
+		Writer:    os.Stdout,
+		MaxWidth:  80,
 		ShowEmpty: false,
 		Verbosity: 1,
 	}
@@ -130,7 +130,7 @@ func NewResourcePrinter(opts ...PrinterOption) *ResourcePrinter {
 }
 
 // PrintResource prints a single resource in the specified format
-func (p *ResourcePrinter) PrintResource(resource types.Resource, format PrintFormat) error {
+func (p *ResourcePrinter) PrintResource(resource any, format PrintFormat) error {
 	switch format {
 	case FormatTable:
 		return p.printTable(resource)
@@ -146,7 +146,7 @@ func (p *ResourcePrinter) PrintResource(resource types.Resource, format PrintFor
 }
 
 // PrintResources prints multiple resources in the specified format
-func (p *ResourcePrinter) PrintResources(resources []types.Resource, format PrintFormat) error {
+func (p *ResourcePrinter) PrintResources(resources []any, format PrintFormat) error {
 	for i, resource := range resources {
 		if i > 0 {
 			fmt.Fprintln(p.options.Writer) // Add spacing between resources
@@ -252,9 +252,12 @@ func (p *ResourcePrinter) shouldShowField(value interface{}) bool {
 }
 
 // printTable prints a resource in table format with borders
-func (p *ResourcePrinter) printTable(resource types.Resource) error {
-	meta := resource.Metadata()
-	
+func (p *ResourcePrinter) printTable(resource any) error {
+	meta, err := types.GetMeta(resource)
+	if err != nil {
+		return fmt.Errorf("resource does not have ResourceBase: %w", err)
+	}
+
 	// Calculate the width for the table
 	width := p.options.MaxWidth
 	if width < 40 {
@@ -269,7 +272,7 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 
 	// Print top border
 	fmt.Fprintf(p.options.Writer, "┌%s┐\n", strings.Repeat("─", width-2))
-	
+
 	// Print header
 	headerColored := color.New(p.colors.header).Sprint(header)
 	headerVisualLen := visualLength(headerColored)
@@ -277,10 +280,10 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 	if padding < 0 {
 		padding = 0
 	}
-	fmt.Fprintf(p.options.Writer, "│ %s%s │\n", 
-		headerColored, 
+	fmt.Fprintf(p.options.Writer, "│ %s%s │\n",
+		headerColored,
 		strings.Repeat(" ", padding))
-	
+
 	// Print separator
 	fmt.Fprintf(p.options.Writer, "├%s┤\n", strings.Repeat("─", width-2))
 
@@ -296,7 +299,10 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 	}
 
 	// Add dependencies if they exist
-	deps := resource.GetDependencies()
+	deps, err := types.GetDependencies(resource)
+	if err != nil {
+		deps = []string{} // Use empty slice if unable to get dependencies
+	}
 	if len(deps) > 0 || p.options.ShowEmpty {
 		fields = append(fields, struct {
 			name  string
@@ -330,16 +336,16 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 			if i == 0 {
 				// First line with field name
 				fieldLabel := color.New(p.colors.field).Sprint(fieldName)
-				
+
 				// Calculate max width for the value based on visual field name length
-				fieldNameVisualLen := len(fieldName) // Use raw field name length for layout calculation
+				fieldNameVisualLen := len(fieldName)            // Use raw field name length for layout calculation
 				maxValueWidth := width - fieldNameVisualLen - 6 // "│ " + fieldName + ": " + value + " │"
-				
+
 				// Truncate line before applying colors
 				if len(line) > maxValueWidth {
 					line = line[:maxValueWidth-3] + "..."
 				}
-				
+
 				// Apply colors after truncation
 				var coloredLine string
 				if field.name == "Status" && line != "" {
@@ -349,7 +355,7 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 				} else {
 					coloredLine = line
 				}
-				
+
 				// Calculate padding based on visual length
 				// Format: "│ fieldName value%s │" where %s is padding
 				// Use visual length to account for ANSI color codes
@@ -360,7 +366,7 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 				if padding < 0 {
 					padding = 0
 				}
-				fmt.Fprintf(p.options.Writer, "│ %s %s%s │\n", 
+				fmt.Fprintf(p.options.Writer, "│ %s %s%s │\n",
 					fieldLabel, coloredLine, strings.Repeat(" ", padding))
 			} else {
 				// Continuation lines
@@ -369,7 +375,7 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 				if len(line) > maxValueWidth {
 					line = line[:maxValueWidth-3] + "..."
 				}
-				
+
 				coloredLine := color.New(p.colors.value).Sprint(line)
 				// For continuation lines, the format is "│ [spaces] value%s │"
 				coloredLineVisualLen := visualLength(coloredLine)
@@ -378,7 +384,7 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 				if padding < 0 {
 					padding = 0
 				}
-				fmt.Fprintf(p.options.Writer, "│ %s %s%s │\n", 
+				fmt.Fprintf(p.options.Writer, "│ %s %s%s │\n",
 					strings.Repeat(" ", indentSpaces), coloredLine, strings.Repeat(" ", padding))
 			}
 		}
@@ -391,7 +397,10 @@ func (p *ResourcePrinter) printTable(resource types.Resource) error {
 }
 
 // addResourceFields adds resource-specific fields using reflection
-func (p *ResourcePrinter) addResourceFields(resource types.Resource, fields *[]struct{ name string; value interface{} }) {
+func (p *ResourcePrinter) addResourceFields(resource any, fields *[]struct {
+	name  string
+	value interface{}
+}) {
 	v := reflect.ValueOf(resource)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -447,7 +456,10 @@ func (p *ResourcePrinter) addResourceFields(resource types.Resource, fields *[]s
 }
 
 // addEmbeddedFields recursively adds fields from embedded structs
-func (p *ResourcePrinter) addEmbeddedFields(embeddedStruct reflect.Value, fields *[]struct{ name string; value interface{} }) {
+func (p *ResourcePrinter) addEmbeddedFields(embeddedStruct reflect.Value, fields *[]struct {
+	name  string
+	value interface{}
+}) {
 	if embeddedStruct.Kind() == reflect.Ptr {
 		embeddedStruct = embeddedStruct.Elem()
 	}
@@ -501,7 +513,7 @@ func (p *ResourcePrinter) addEmbeddedFields(embeddedStruct reflect.Value, fields
 }
 
 // printJSON prints a resource in JSON format with basic syntax highlighting
-func (p *ResourcePrinter) printJSON(resource types.Resource) error {
+func (p *ResourcePrinter) printJSON(resource any) error {
 	// Convert resource to JSON
 	data, err := json.MarshalIndent(resource, "", "  ")
 	if err != nil {
@@ -531,12 +543,12 @@ func (p *ResourcePrinter) highlightJSON(jsonStr string) string {
 			if len(parts) == 2 {
 				fieldPart := color.New(p.colors.field).Sprint(parts[0])
 				valuePart := parts[1]
-				
+
 				// Highlight string values
 				if strings.Contains(valuePart, "\"") && !strings.HasSuffix(strings.TrimSpace(valuePart), "{") {
 					valuePart = color.New(p.colors.value).Sprint(valuePart)
 				}
-				
+
 				lines[i] = fieldPart + ":" + valuePart
 			}
 		}
@@ -545,16 +557,19 @@ func (p *ResourcePrinter) highlightJSON(jsonStr string) string {
 }
 
 // printTree prints a resource in tree format with Unicode characters and emojis
-func (p *ResourcePrinter) printTree(resource types.Resource) error {
-	meta := resource.Metadata()
-	
+func (p *ResourcePrinter) printTree(resource any) error {
+	meta, err := types.GetMeta(resource)
+	if err != nil {
+		return fmt.Errorf("resource does not have ResourceBase: %w", err)
+	}
+
 	// Get emoji for resource type
 	emoji := p.getResourceEmoji(meta.Type)
-	
+
 	// Print root resource
 	statusColor := color.New(p.getStatusColor(meta.Status))
-	fmt.Fprintf(p.options.Writer, "%s %s %s\n", 
-		emoji, 
+	fmt.Fprintf(p.options.Writer, "%s %s %s\n",
+		emoji,
 		color.New(p.colors.header).Sprint(meta.ID),
 		statusColor.Sprintf("(%s)", meta.Status))
 
@@ -570,7 +585,10 @@ func (p *ResourcePrinter) printTree(resource types.Resource) error {
 	}
 
 	// Add dependencies if they exist
-	deps := resource.GetDependencies()
+	deps, err := types.GetDependencies(resource)
+	if err != nil {
+		deps = []string{} // Use empty slice if unable to get dependencies
+	}
 	if len(deps) > 0 {
 		fields = append(fields, struct {
 			name  string
@@ -596,7 +614,7 @@ func (p *ResourcePrinter) printTree(resource types.Resource) error {
 
 		fieldValue := p.formatValue(field.value)
 		if fieldValue != "" {
-			fmt.Fprintf(p.options.Writer, "%s%s %s: %s\n", 
+			fmt.Fprintf(p.options.Writer, "%s%s %s: %s\n",
 				prefix,
 				field.emoji,
 				color.New(p.colors.field).Sprint(field.name),
@@ -608,7 +626,11 @@ func (p *ResourcePrinter) printTree(resource types.Resource) error {
 }
 
 // addTreeFields adds resource-specific fields for tree format
-func (p *ResourcePrinter) addTreeFields(resource types.Resource, fields *[]struct{ name string; value interface{}; emoji string }) {
+func (p *ResourcePrinter) addTreeFields(resource any, fields *[]struct {
+	name  string
+	value interface{}
+	emoji string
+}) {
 	v := reflect.ValueOf(resource)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -663,7 +685,11 @@ func (p *ResourcePrinter) addTreeFields(resource types.Resource, fields *[]struc
 }
 
 // addEmbeddedTreeFields recursively adds fields from embedded structs for tree format
-func (p *ResourcePrinter) addEmbeddedTreeFields(embeddedStruct reflect.Value, fields *[]struct{ name string; value interface{}; emoji string }) {
+func (p *ResourcePrinter) addEmbeddedTreeFields(embeddedStruct reflect.Value, fields *[]struct {
+	name  string
+	value interface{}
+	emoji string
+}) {
 	if embeddedStruct.Kind() == reflect.Ptr {
 		embeddedStruct = embeddedStruct.Elem()
 	}
@@ -770,7 +796,7 @@ func (p *ResourcePrinter) getFieldEmoji(fieldName string, value interface{}) str
 		if v.Kind() == reflect.Ptr && !v.IsNil() {
 			v = v.Elem()
 		}
-		
+
 		switch v.Kind() {
 		case reflect.Slice, reflect.Array:
 			return "📋"
@@ -781,8 +807,8 @@ func (p *ResourcePrinter) getFieldEmoji(fieldName string, value interface{}) str
 		case reflect.String:
 			return "📝"
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			 reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			 reflect.Float32, reflect.Float64:
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
 			return "🔢"
 		default:
 			return "📄"
@@ -791,9 +817,12 @@ func (p *ResourcePrinter) getFieldEmoji(fieldName string, value interface{}) str
 }
 
 // printCard prints a resource in card format with rounded borders
-func (p *ResourcePrinter) printCard(resource types.Resource) error {
-	meta := resource.Metadata()
-	
+func (p *ResourcePrinter) printCard(resource any) error {
+	meta, err := types.GetMeta(resource)
+	if err != nil {
+		return fmt.Errorf("resource does not have ResourceBase: %w", err)
+	}
+
 	// Calculate the width for the card
 	width := p.options.MaxWidth
 	if width < 50 {
@@ -808,15 +837,15 @@ func (p *ResourcePrinter) printCard(resource types.Resource) error {
 
 	// Print top border
 	fmt.Fprintf(p.options.Writer, "╭%s╮\n", strings.Repeat("─", width-2))
-	
+
 	// Print header
 	headerPadding := width - len(header) - 2
 	if headerPadding < 0 {
 		header = header[:width-5] + "..."
 		headerPadding = 0
 	}
-	fmt.Fprintf(p.options.Writer, "│ %s%s │\n", 
-		color.New(p.colors.header).Sprint(header), 
+	fmt.Fprintf(p.options.Writer, "│ %s%s │\n",
+		color.New(p.colors.header).Sprint(header),
 		strings.Repeat(" ", headerPadding))
 
 	// Print sub-header
@@ -825,10 +854,10 @@ func (p *ResourcePrinter) printCard(resource types.Resource) error {
 		subHeader = subHeader[:width-7] + "..."
 		subHeaderPadding = 0
 	}
-	fmt.Fprintf(p.options.Writer, "│ %s%s │\n", 
-		color.New(color.FgHiBlack).Sprint("📍 "+subHeader), 
+	fmt.Fprintf(p.options.Writer, "│ %s%s │\n",
+		color.New(color.FgHiBlack).Sprint("📍 "+subHeader),
 		strings.Repeat(" ", subHeaderPadding))
-	
+
 	// Print separator
 	fmt.Fprintf(p.options.Writer, "├%s┤\n", strings.Repeat("─", width-2))
 
@@ -845,13 +874,13 @@ func (p *ResourcePrinter) printCard(resource types.Resource) error {
 	default:
 		statusEmoji = "⚪"
 	}
-	
+
 	statusLine := fmt.Sprintf("%s %s", statusEmoji, statusText)
 	statusPadding := width - len(statusLine) - 2
 	if statusPadding < 0 {
 		statusPadding = 0
 	}
-	
+
 	fmt.Fprintf(p.options.Writer, "│ %s %s%s │\n",
 		statusEmoji,
 		color.New(p.getStatusColor(meta.Status)).Sprint(statusText),
@@ -864,8 +893,8 @@ func (p *ResourcePrinter) printCard(resource types.Resource) error {
 		fileText = fileText[:width-5] + "..."
 		filePadding = 0
 	}
-	fmt.Fprintf(p.options.Writer, "│ %s%s │\n", 
-		color.New(p.colors.value).Sprint(fileText), 
+	fmt.Fprintf(p.options.Writer, "│ %s%s │\n",
+		color.New(p.colors.value).Sprint(fileText),
 		strings.Repeat(" ", filePadding))
 
 	// Add empty line
@@ -881,7 +910,7 @@ func (p *ResourcePrinter) printCard(resource types.Resource) error {
 }
 
 // printCardFields prints key fields for card format
-func (p *ResourcePrinter) printCardFields(resource types.Resource, width int) {
+func (p *ResourcePrinter) printCardFields(resource any, width int) {
 	v := reflect.ValueOf(resource)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -893,7 +922,7 @@ func (p *ResourcePrinter) printCardFields(resource types.Resource, width int) {
 
 	// Print a few key fields in card format
 	keyFields := []string{"command", "image", "networks", "ports", "volumes"}
-	
+
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
@@ -931,7 +960,7 @@ func (p *ResourcePrinter) printCardFields(resource types.Resource, width int) {
 		// Format and print the field
 		displayName := strings.Title(strings.ReplaceAll(fieldName, "_", " "))
 		fieldValueStr := p.formatValue(fieldValue.Interface())
-		
+
 		if len(fieldValueStr) > 0 {
 			line := fmt.Sprintf("%s: %s", displayName, fieldValueStr)
 			if len(line) > width-4 {
@@ -941,8 +970,8 @@ func (p *ResourcePrinter) printCardFields(resource types.Resource, width int) {
 			if padding < 0 {
 				padding = 0
 			}
-			fmt.Fprintf(p.options.Writer, "│ %s%s │\n", 
-				color.New(p.colors.value).Sprint(line), 
+			fmt.Fprintf(p.options.Writer, "│ %s%s │\n",
+				color.New(p.colors.value).Sprint(line),
 				strings.Repeat(" ", padding))
 		}
 	}

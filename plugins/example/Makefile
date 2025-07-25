@@ -1,7 +1,7 @@
-build:
+build_plugin:
 	go build -o build/example main.go
 
-test: build
+test: build_plugin
 	go test -v ./...
 
 clean:

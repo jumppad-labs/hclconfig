@@ -72,6 +72,11 @@ resource "config" "myapp" {
   }
 }
 
+resource "person" "erik" {
+  first_name = "Erik"
+  last_name  = "Veld"
+}
+
 output "erik" {
   value = resource.postgres.other2.erik_is_a
 }
@@ -88,9 +93,9 @@ output "depends_on" {
   value = resource.postgres.other2.depends_on
 }
 
-output "meta_id" {
-  value = resource.postgres.other2.meta.id
-}
+//output "meta_id" {
+//  value = resource.postgres.other2.meta.id
+//}
 
 // modules can use a git ref to be remotely downloaded from the source
 //module "mymodule_1" {

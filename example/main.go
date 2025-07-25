@@ -14,6 +14,8 @@ import (
 )
 
 func main() {
+	os.RemoveAll(".hclconfig")
+
 	// Parse command line flags
 	var format = flag.String("format", "table", "Output format: table, tree, card, json, or all")
 	flag.Usage = func() {
@@ -70,6 +72,9 @@ func main() {
 
 func createParser() *hclconfig.Parser {
 	o := hclconfig.DefaultOptions()
+	o.AutoDiscoverPlugins = true                                                  // Enable auto-discovery of plugins
+	o.PluginDirectories = append(o.PluginDirectories, "../plugins/example/build") // Add custom plugin directory
+	o.PluginNamePattern = "*"
 
 	// Configure plugin discovery
 	// By default, plugins are auto-discovered from:
@@ -170,7 +175,7 @@ func demonstrateState(c *hclconfig.Config) {
 	//}
 
 	//fmt.Println("## Process config")
-	//nc.Walk(func(r types.Resource) error {
+	//nc.Walk(func(r any) error {
 	//	fmt.Println("  ", r.Metadata().ID)
 	//	return nil
 	//}, false)
@@ -178,7 +183,7 @@ func demonstrateState(c *hclconfig.Config) {
 	//fmt.Println("")
 	//fmt.Println("## Process config reverse")
 
-	//nc.Walk(func(r types.Resource) error {
+	//nc.Walk(func(r any) error {
 	//	fmt.Println("  ", r.Metadata().ID)
 	//	return nil
 	//}, true)
@@ -222,7 +227,7 @@ func (p *ExamplePlugin) Init(logger logger.Logger, state plugins.State) error {
 }
 
 // ExampleResourceProvider is a generic provider for example resources
-type ExampleResourceProvider[T types.Resource] struct {
+type ExampleResourceProvider[T any] struct {
 	logger    logger.Logger
 	state     plugins.State
 	functions plugins.ProviderFunctions
@@ -237,32 +242,57 @@ func (p *ExampleResourceProvider[T]) Init(state plugins.State, functions plugins
 }
 
 // Refresh is a no-op for the example
-func (p *ExampleResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
-	p.logger.Info("Refreshing resource", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
-	return nil
+func (p *ExampleResourceProvider[T]) Refresh(ctx context.Context, resource T) (T, error) {
+	meta, err := types.GetMeta(any(resource))
+	if err == nil {
+		p.logger.Info("Refreshing resource", "type", meta.Type, "id", meta.ID)
+	} else {
+		p.logger.Info("Refreshing resource", "error", "unable to get metadata")
+	}
+	return resource, nil
 }
 
 // Changed always returns false for the example
 func (p *ExampleResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bool, error) {
-	p.logger.Info("Checking if resource changed", "type", old.Metadata().Type, "id", old.Metadata().ID)
+	meta, err := types.GetMeta(any(old))
+	if err == nil {
+		p.logger.Info("Checking if resource changed", "type", meta.Type, "id", meta.ID)
+	} else {
+		p.logger.Info("Checking if resource changed", "error", "unable to get metadata")
+	}
 	return true, nil
 }
 
 // Create is a no-op for the example
 func (p *ExampleResourceProvider[T]) Create(ctx context.Context, resource T) (T, error) {
-	p.logger.Info("Creating resource", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
+	meta, err := types.GetMeta(any(resource))
+	if err == nil {
+		p.logger.Info("Creating resource", "type", meta.Type, "id", meta.ID)
+	} else {
+		p.logger.Info("Creating resource", "error", "unable to get metadata")
+	}
 	return resource, nil
 }
 
 // Update is a no-op for the example
-func (p *ExampleResourceProvider[T]) Update(ctx context.Context, resource T) error {
-	p.logger.Info("Update resource changed", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
-	return nil
+func (p *ExampleResourceProvider[T]) Update(ctx context.Context, resource T) (T, error) {
+	meta, err := types.GetMeta(any(resource))
+	if err == nil {
+		p.logger.Info("Update resource changed", "type", meta.Type, "id", meta.ID)
+	} else {
+		p.logger.Info("Update resource changed", "error", "unable to get metadata")
+	}
+	return resource, nil
 }
 
 // Destroy is a no-op for the example
 func (p *ExampleResourceProvider[T]) Destroy(ctx context.Context, resource T, force bool) error {
-	p.logger.Info("Destroy resource", "type", resource.Metadata().Type, "id", resource.Metadata().ID)
+	meta, err := types.GetMeta(any(resource))
+	if err == nil {
+		p.logger.Info("Destroy resource", "type", meta.Type, "id", meta.ID)
+	} else {
+		p.logger.Info("Destroy resource", "error", "unable to get metadata")
+	}
 	return nil
 }
 

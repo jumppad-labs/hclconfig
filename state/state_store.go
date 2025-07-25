@@ -2,7 +2,6 @@ package state
 
 //go:generate mockery --name StateStore --output ./mocks --outpkg mocks --filename mock_state_store.go
 
-
 // StateStore provides persistence for configuration state across parser runs.
 // It enables tracking of resource lifecycle (create, update, delete) by storing
 // the previous configuration state and comparing it with the current state.

@@ -8,14 +8,25 @@ import (
 	"strings"
 )
 
-func CreateStructFromSchema(data []byte) (any, error) {
+// CreateInstanceFromSchema takes a JSON schema generally created using GenerateFromInstance
+// and dynamically creates a struct.
+// This is a generic function that can create any struct type.
+// typeMapping allows mapping type names to actual reflect.Types for proper type creation
+func CreateInstanceFromSchema(data []byte, typeMapping map[string]reflect.Type) (any, error) {
 	e := &Attribute{}
 	err := json.Unmarshal(data, e)
 	if err != nil {
 		return nil, err
 	}
 
-	return parseAttribute(e)
+	result, err := parseAttribute(e, typeMapping)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the dynamically created struct directly
+	// It has embedded ResourceBase and schema fields at root level
+	return result, nil
 }
 
 type PropertyType struct {
@@ -28,17 +39,42 @@ type PropertyType struct {
 	Type         string
 }
 
-// always returns a pointer to the struct
-func parseAttribute(attribute *Attribute) (any, error) {
+// parseAttribute always returns a pointer to the struct
+func parseAttribute(attribute *Attribute, typeMapping map[string]reflect.Type) (any, error) {
+	// Start with embedded ResourceBase
 	fields := []reflect.StructField{}
+
 	for _, a := range attribute.Properties {
+		// Handle anonymous embedded fields first
+		if a.Anonymous {
+			t, err := parseType(a.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			embeddedType := parseInnerType(t, a, typeMapping)
+
+			// Extract the field name from the type (e.g., "types.ResourceBase" -> "ResourceBase")
+			fieldName := extractTypeName(a.Type)
+
+			field := reflect.StructField{
+				Name:      fieldName, // Anonymous fields need the type name
+				Type:      embeddedType,
+				Tag:       reflect.StructTag(a.Tags),
+				Anonymous: true,
+			}
+
+			fields = append(fields, field)
+			continue
+		}
+
 		t, err := parseType(a.Type)
 		if err != nil {
 			return nil, err
 		}
 
 		if t.Slice {
-			innerType := parseInnerType(t, a)
+			innerType := parseInnerType(t, a, typeMapping)
 			sliceType := reflect.SliceOf(innerType)
 
 			if t.OuterPointer {
@@ -51,10 +87,15 @@ func parseAttribute(attribute *Attribute) (any, error) {
 				Tag:  reflect.StructTag(a.Tags),
 			}
 
+			// Set PkgPath for unexported fields to avoid reflection errors
+			if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
+				nf.PkgPath = "github.com/jumppad-labs/hclconfig/internal/schema"
+			}
+
 			fields = append(fields, nf)
 
 		} else if t.Map {
-			innerType := parseInnerType(t, a)
+			innerType := parseInnerType(t, a, typeMapping)
 
 			keyType := reflect.TypeOf(t.MapKey)
 			mapType := reflect.MapOf(keyType, innerType)
@@ -63,24 +104,41 @@ func parseAttribute(attribute *Attribute) (any, error) {
 				mapType = reflect.PointerTo(mapType)
 			}
 
-			fields = append(fields, reflect.StructField{
+			field := reflect.StructField{
 				Name: a.Name,
 				Type: mapType,
 				Tag:  reflect.StructTag(a.Tags),
-			})
-		} else {
-			innerType := parseInnerType(t, a)
+			}
 
-			fields = append(fields, reflect.StructField{
+			// Set PkgPath for unexported fields to avoid reflection errors
+			if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
+				field.PkgPath = "github.com/jumppad-labs/hclconfig/internal/schema"
+			}
+
+			fields = append(fields, field)
+		} else {
+			innerType := parseInnerType(t, a, typeMapping)
+
+			field := reflect.StructField{
 				Name: a.Name,
 				Type: innerType,
 				Tag:  reflect.StructTag(a.Tags),
-			})
+			}
+
+			// Set PkgPath for unexported fields to avoid reflection errors
+			if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
+				field.PkgPath = "github.com/jumppad-labs/hclconfig/internal/schema"
+			}
+
+			fields = append(fields, field)
 		}
 	}
 
-	t := reflect.StructOf(fields)
-	return reflect.New(t).Interface(), nil
+	structType := reflect.StructOf(fields)
+	instance := reflect.New(structType)
+
+	// Return the struct directly - it implements Resource through embedded ResourceBase
+	return instance.Interface(), nil
 }
 
 func parseType(t string) (*PropertyType, error) {
@@ -130,8 +188,9 @@ func parseType(t string) (*PropertyType, error) {
 	return &tp, nil
 }
 
-func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
+func parseInnerType(t *PropertyType, a *Attribute, typeMapping map[string]reflect.Type) reflect.Type {
 	var innerType reflect.Type
+
 	switch t.Type {
 	case "string":
 		innerType = reflect.TypeOf("")
@@ -166,6 +225,14 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 	case "complex128":
 		innerType = reflect.TypeOf(complex128(0))
 	default:
+		// Check type mapping first
+		if typeMapping != nil {
+			if mappedType, exists := typeMapping[t.Type]; exists {
+				innerType = mappedType
+				break
+			}
+		}
+		
 		// Handle interface{} and other unrecognized types
 		if strings.Contains(t.Type, "interface") {
 			innerType = reflect.TypeOf((*interface{})(nil)).Elem()
@@ -182,19 +249,48 @@ func parseInnerType(t *PropertyType, a *Attribute) reflect.Type {
 
 	// if there are properties, we need to create a struct
 	if a.Properties != nil {
-		se, err := parseAttribute(a)
-		if err != nil {
-			return nil
+		// Check if we found a real type mapping (not interface{})
+		// We need to handle the case where innerType might be wrapped in a pointer
+		hasRealTypeMapping := false
+		if innerType != nil {
+			checkType := innerType
+			// Unwrap pointer if needed
+			if checkType.Kind() == reflect.Ptr {
+				checkType = checkType.Elem()
+			}
+			// If it's not interface{}, we have a real type mapping
+			if checkType.Kind() != reflect.Interface {
+				hasRealTypeMapping = true
+			}
 		}
+		
+		// Only create anonymous struct if we don't have a real type mapping
+		if !hasRealTypeMapping {
+			se, err := parseAttribute(a, typeMapping)
+			if err != nil {
+				return nil
+			}
 
-		innerType = reflect.TypeOf(se)
+			innerType = reflect.TypeOf(se)
 
-		// parse attribute always returns a pointer to the struct
-		// if the inner type is not a pointer, we need to dereference it
-		if !t.InnerPointer && !t.OuterPointer {
-			innerType = reflect.TypeOf(se).Elem()
+			// parse attribute always returns a pointer to the struct
+			// if the inner type is not a pointer, we need to dereference it
+			if !t.InnerPointer && !t.OuterPointer {
+				innerType = reflect.TypeOf(se).Elem()
+			}
 		}
 	}
 
 	return innerType
+}
+
+// extractTypeName extracts the type name from a full type string
+// e.g., "types.ResourceBase" -> "ResourceBase", "MyStruct" -> "MyStruct"
+func extractTypeName(typeStr string) string {
+	// Handle qualified types like "package.Type"
+	parts := strings.Split(typeStr, ".")
+	if len(parts) > 1 {
+		return parts[len(parts)-1] // Return the last part (type name)
+	}
+	return typeStr // Return as-is if no package qualifier
 }

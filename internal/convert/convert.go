@@ -19,7 +19,7 @@ func GoToCtyValue(val any) (cty.Value, error) {
 		return cty.False, err
 	}
 
-	if r, ok := val.(types.Resource); ok {
+	if r, ok := val.(interface{ Metadata() types.Meta; SetMetadataField(string, any); GetDependencies() []string; SetDependencies([]string); AddDependency(string); GetDisabled() bool; SetDisabled(bool) }); ok {
 		ctyMap := ctyVal.AsValueMap()
 
 		// add disabled to the parent

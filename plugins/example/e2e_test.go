@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
-	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,7 +33,7 @@ func TestInProcessPluginSchemaValidation(t *testing.T) {
 	require.NotEmpty(t, types[0].Schema, "Schema should not be empty")
 
 	// Verify schema can create a concrete type
-	wireType, err := schema.CreateStructFromSchema(types[0].Schema)
+	wireType, err := schema.CreateInstanceFromSchema(types[0].Schema, nil)
 	require.NoError(t, err, "Should be able to create struct from schema")
 	require.NotNil(t, wireType, "Wire type should not be nil")
 }
@@ -79,7 +79,7 @@ func TestInProcessPluginCreate(t *testing.T) {
 	// Test each person individually
 	for i, personJSON := range peopleData {
 		// Call Create on the plugin
-		err := ph.Create("resource", "person", personJSON)
+		_, err := ph.Create("resource", "person", personJSON)
 		require.NoError(t, err, "Should create person %d", i)
 	}
 }
@@ -133,7 +133,7 @@ func TestExternalPluginSchemaValidation(t *testing.T) {
 	require.NotEmpty(t, types[0].Schema, "Schema should not be empty")
 
 	// Verify schema can create a concrete type
-	wireType, err := schema.CreateStructFromSchema(types[0].Schema)
+	wireType, err := schema.CreateInstanceFromSchema(types[0].Schema, nil)
 	require.NoError(t, err, "Should be able to create struct from schema")
 	require.NotNil(t, wireType, "Wire type should not be nil")
 }
@@ -157,7 +157,7 @@ func TestExternalPluginCRUDOperations(t *testing.T) {
 		require.NoError(t, err, "Should validate person %d", i)
 
 		// Test Create
-		err = ph.Create("resource", "person", personJSON)
+		_, err = ph.Create("resource", "person", personJSON)
 		require.NoError(t, err, "Should create person %d", i)
 
 		// Test Changed
@@ -179,8 +179,9 @@ func TestExternalPluginRefresh(t *testing.T) {
 
 	ph := setupExternalPlugin(t)
 
-	// Test refresh
+	// Test refresh with dummy data
 	ctx := context.Background()
-	err := ph.Refresh(ctx)
+	dummyData := []byte(`{"meta":{"id":"test","type":"resource","sub_type":"person"},"first_name":"Test","last_name":"User","age":30,"description":"Test user"}`)
+	_, err := ph.Refresh(ctx, "resource", "person", dummyData)
 	require.NoError(t, err, "Should refresh successfully")
 }

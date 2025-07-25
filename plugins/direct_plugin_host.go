@@ -38,7 +38,7 @@ func (h *DirectPluginHost) Validate(entityType, entitySubType string, entityData
 }
 
 // Create creates a new entity
-func (h *DirectPluginHost) Create(entityType, entitySubType string, entityData []byte) error {
+func (h *DirectPluginHost) Create(entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	return h.plugin.Create(entityType, entitySubType, entityData)
 }
 
@@ -48,12 +48,12 @@ func (h *DirectPluginHost) Destroy(entityType, entitySubType string, entityData 
 }
 
 // Refresh refreshes the plugin state
-func (h *DirectPluginHost) Refresh(ctx context.Context) error {
-	return h.plugin.Refresh(ctx)
+func (h *DirectPluginHost) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
+	return h.plugin.Refresh(ctx, entityType, entitySubType, entityData)
 }
 
 // Update updates an existing entity
-func (h *DirectPluginHost) Update(entityType, entitySubType string, entityData []byte) error {
+func (h *DirectPluginHost) Update(entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	return h.plugin.Update(entityType, entitySubType, entityData)
 }
 

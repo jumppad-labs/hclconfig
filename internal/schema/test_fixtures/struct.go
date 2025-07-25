@@ -192,7 +192,7 @@ var MyStructMapDepth2JSON = `{
  }`
 
 type MyStructMapPtr struct {
-	Name   string                  `json:"name"`
+	Name   string                     `json:"name"`
 	Struct map[string]*MyStructMapPtr `json:"struct"`
 }
 

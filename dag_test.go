@@ -26,14 +26,14 @@ func setupTestParserWithLogger(t *testing.T) *Parser {
 	opts := DefaultOptions()
 	opts.Logger = logger.NewTestLogger(t)
 	p := NewParser(opts)
-	
+
 	// Create and register the test plugin
 	testPlugin := &TestPlugin{}
 	err := p.RegisterPlugin(testPlugin)
 	if err != nil {
 		t.Fatal("Failed to register test plugin:", err)
 	}
-	
+
 	return p
 }
 

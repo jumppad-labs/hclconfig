@@ -6,10 +6,11 @@ import (
 	"strings"
 
 	"github.com/jumppad-labs/hclconfig/internal/resources"
+	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/state"
 	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/kr/pretty"
 )
 
 // PluginRegistry manages all resource types (builtin and plugin-based) and can create resource instances
@@ -30,7 +31,8 @@ func NewPluginRegistry(logger logger.Logger) *PluginRegistry {
 
 // CreateResource creates a new resource instance of the specified type and name
 // It first tries builtin types, then falls back to plugin types
-func (r *PluginRegistry) CreateResource(resourceType, resourceName string) (types.Resource, error) {
+// Returns any to accommodate both builtin resources and schema-generated resources
+func (r *PluginRegistry) CreateResource(resourceType, resourceName string) (any, error) {
 	// First try builtin types
 	if resource, err := r.builtinTypes.CreateResource(resourceType, resourceName); err == nil {
 		return resource, nil
@@ -41,7 +43,13 @@ func (r *PluginRegistry) CreateResource(resourceType, resourceName string) (type
 }
 
 // createResourceFromPlugins attempts to create a resource using registered plugins
-func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName string) (types.Resource, error) {
+func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName string) (any, error) {
+	// Create type mapping for proper type creation
+	typeMapping := map[string]reflect.Type{
+		"types.Meta":         reflect.TypeOf(types.Meta{}),
+		"types.ResourceBase": reflect.TypeOf(types.ResourceBase{}),
+	}
+
 	// Iterate through all plugin hosts
 	for _, host := range r.pluginHosts {
 		pluginTypes := host.GetTypes()
@@ -49,21 +57,24 @@ func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName st
 		// Look for a matching type
 		for _, t := range pluginTypes {
 			if t.Type == "resource" && t.SubType == resourceType {
-				// Found a matching plugin type, create resource from concrete type
-				if t.ConcreteType == nil {
-					return nil, fmt.Errorf("plugin type %s has no concrete type", resourceType)
+				// Create a resource instance from the schema
+				rawResource, err := schema.CreateInstanceFromSchema(t.Schema, typeMapping)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create resource from schema for type %s: %w", resourceType, err)
 				}
 
-				// Create a new instance of the concrete type using reflection
-				ptr := reflect.New(reflect.TypeOf(t.ConcreteType).Elem())
-				resource := ptr.Interface().(types.Resource)
+				meta, err := types.GetMeta(rawResource)
+				if err != nil {
+					pretty.Println(rawResource)
 
-				// Initialize the resource metadata
-				resource.Metadata().Name = resourceName
-				resource.Metadata().Type = resourceType
-				resource.Metadata().Properties = map[string]any{}
+					panic(fmt.Sprintf("resource does not have ResourceBase embedded: %T", rawResource))
+				}
 
-				return resource, nil
+				meta.Name = resourceName
+				meta.Type = resourceType
+				meta.Properties = make(map[string]any)
+
+				return rawResource, nil
 			}
 		}
 	}
@@ -74,19 +85,23 @@ func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName st
 
 // GetProvider finds the provider adapter for a given resource
 // Returns nil if the resource type is a builtin type (not handled by plugins)
-func (r *PluginRegistry) GetProvider(resource types.Resource) plugins.ProviderAdapter {
-	resourceType := resource.Metadata().Type
-	
+func (r *PluginRegistry) GetProvider(resource any) plugins.ProviderAdapter {
+	meta, err := types.GetMeta(resource)
+	if err != nil {
+		return nil // Skip resources without ResourceBase
+	}
+	resourceType := meta.Type
+
 	// Check if it's a builtin type
 	if _, err := r.builtinTypes.CreateResource(resourceType, "dummy"); err == nil {
 		// This is a builtin type, not handled by plugins
 		return nil
 	}
-	
+
 	// Search through plugin hosts
 	for _, host := range r.pluginHosts {
 		pluginTypes := host.GetTypes()
-		
+
 		for _, t := range pluginTypes {
 			if t.Type == "resource" && t.SubType == resourceType {
 				// Found the matching plugin type
@@ -94,7 +109,7 @@ func (r *PluginRegistry) GetProvider(resource types.Resource) plugins.ProviderAd
 			}
 		}
 	}
-	
+
 	// No plugin found for this resource type
 	return nil
 }
@@ -193,59 +208,41 @@ func (r *PluginRegistry) GetPluginHosts() []plugins.PluginHost {
 	return r.pluginHosts
 }
 
-// CastResource attempts to cast a generic resource to its concrete type
-// This is useful when loading resources from state storage
-func (r *PluginRegistry) CastResource(resource types.Resource) (types.Resource, error) {
-	// If it's already a concrete type (not GenericResource), return as-is
-	if _, isGeneric := resource.(*state.GenericResource); !isGeneric {
-		return resource, nil
-	}
-	
-	genericResource := resource.(*state.GenericResource)
-	resourceType := genericResource.Metadata().Type
-	resourceName := genericResource.Metadata().Name
-	
-	// Create the concrete resource type
-	concreteResource, err := r.CreateResource(resourceType, resourceName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create concrete resource: %w", err)
-	}
-	
-	// Copy the metadata
-	*concreteResource.Metadata() = genericResource.Meta
-	
-	// Copy the base fields
-	concreteResource.SetDisabled(genericResource.GetDisabled())
-	concreteResource.SetDependencies(genericResource.GetDependencies())
-	
-	// For now, return the concrete resource with copied metadata
-	// TODO: In a future enhancement, we could use reflection to copy the additional fields
-	// from genericResource.Data into the concrete resource's fields
-	
-	return concreteResource, nil
-}
+// TODO: Rebuild CastResource without GenericResource
 
 // CastResourceTo attempts to cast a resource to a specific concrete type
 // This is a type-safe way to get strongly-typed resources from the registry
-func CastResourceTo[T types.Resource](registry *PluginRegistry, resource types.Resource) (T, error) {
+func CastResourceTo[T any](registry *PluginRegistry, resource any) (T, error) {
 	var zero T
-	
-	// First try direct type assertion
+
+	// Try direct type assertion
 	if concrete, ok := resource.(T); ok {
 		return concrete, nil
 	}
-	
-	// If it's a generic resource, try casting through the registry
-	if _, isGeneric := resource.(*state.GenericResource); isGeneric {
-		cast, err := registry.CastResource(resource)
-		if err != nil {
-			return zero, err
-		}
-		
-		if concrete, ok := cast.(T); ok {
-			return concrete, nil
+
+	return zero, fmt.Errorf("resource cannot be cast to requested type")
+}
+
+// GetProviderForResource gets the provider for any resource that embeds ResourceBase
+func (r *PluginRegistry) GetProviderForResource(resource any) plugins.ProviderAdapter {
+	meta, err := types.GetMeta(resource)
+	if err != nil {
+		panic(fmt.Sprintf("resource does not have ResourceBase embedded: %T", resource))
+	}
+
+	resourceType := meta.Type
+
+	// Search through plugin hosts
+	for _, host := range r.pluginHosts {
+		pluginTypes := host.GetTypes()
+
+		for _, t := range pluginTypes {
+			if t.Type == "resource" && t.SubType == resourceType {
+				// Found the matching plugin type
+				return t.Adapter
+			}
 		}
 	}
-	
-	return zero, fmt.Errorf("resource cannot be cast to requested type")
+
+	return nil
 }

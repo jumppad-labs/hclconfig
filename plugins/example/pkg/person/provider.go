@@ -27,7 +27,7 @@ func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFu
 
 func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, error) {
 	if p.logger != nil {
-		p.logger.Info("Creating person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Creating person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
 	}
 
 	// Check for context cancellation
@@ -37,15 +37,15 @@ func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, 
 	default:
 	}
 
-	// Simulate person creation (e.g., save to database, create user account, etc.)
-	// In a real implementation, this would interact with APIs, databases, etc.
+	// Modify the email field to demonstrate provider logic
+	person.Description = "<Created by ExampleProvider> By the way, " + person.FirstName + " " + person.LastName + " is not as good as Nic as he could not make this work even with AI help!"
 
 	return person, nil
 }
 
 func (p *ExampleProvider) Destroy(ctx context.Context, person *Person, force bool) error {
 	if p.logger != nil {
-		p.logger.Info("Destroying person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName, "force", force)
+		p.logger.Info("Destroying person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName, "force", force)
 	}
 
 	// Check for context cancellation
@@ -61,27 +61,37 @@ func (p *ExampleProvider) Destroy(ctx context.Context, person *Person, force boo
 	return nil
 }
 
-func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) error {
+func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) (*Person, error) {
+	// Handle nil person (when no entity data is provided)
+	if person == nil {
+		if p.logger != nil {
+			p.logger.Info("Refreshing person with no entity data")
+		}
+		return nil, nil
+	}
+
 	if p.logger != nil {
-		p.logger.Info("Refreshing person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Refreshing person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
 	}
 
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
 	// Simulate person refresh (e.g., sync from database, update fields, etc.)
 	// In a real implementation, this would sync resource state
+	// Add a refresh timestamp to demonstrate mutation
+	person.Description = "<Refreshed by ExampleProvider> " + person.FirstName + " " + person.LastName + " was refreshed!"
 
-	return nil
+	return person, nil
 }
 
 func (p *ExampleProvider) Changed(ctx context.Context, old *Person, new *Person) (bool, error) {
 	if p.logger != nil {
-		p.logger.Info("Checking if person changed", "id", new.Metadata().ID, "old_name", old.FirstName+" "+old.LastName, "new_name", new.FirstName+" "+new.LastName)
+		p.logger.Info("Checking if person changed", "id", new.Meta.ID, "old_name", old.FirstName+" "+old.LastName, "new_name", new.FirstName+" "+new.LastName)
 	}
 
 	// Check for context cancellation
@@ -101,22 +111,32 @@ func (p *ExampleProvider) Changed(ctx context.Context, old *Person, new *Person)
 	return false, nil
 }
 
-func (p *ExampleProvider) Update(ctx context.Context, person *Person) error {
+func (p *ExampleProvider) Update(ctx context.Context, person *Person) (*Person, error) {
+	// Handle nil person (when no entity data is provided)
+	if person == nil {
+		if p.logger != nil {
+			p.logger.Info("Updating person with no entity data")
+		}
+		return nil, nil
+	}
+
 	if p.logger != nil {
-		p.logger.Info("Updating person", "id", person.Metadata().ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Updating person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
 	}
 
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
 	// Simulate person update (e.g., update in database, modify user account, etc.)
 	// In a real implementation, this would update the resource
+	// Add an update marker to demonstrate mutation
+	person.Description = "<Updated by ExampleProvider> " + person.FirstName + " " + person.LastName + " was updated!"
 
-	return nil
+	return person, nil
 }
 
 func (p *ExampleProvider) Functions() plugins.ProviderFunctions {

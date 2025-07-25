@@ -3,10 +3,9 @@ package hclconfig
 import (
 	"context"
 
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
-	"github.com/jumppad-labs/hclconfig/types"
 )
 
 // TestPlugin provides test resource types for testing the parser
@@ -86,7 +85,7 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 }
 
 // TestResourceProvider is a generic test provider for any resource type
-type TestResourceProvider[T types.Resource] struct {
+type TestResourceProvider[T any] struct {
 	logger    logger.Logger
 	state     plugins.State
 	functions plugins.ProviderFunctions
@@ -111,13 +110,13 @@ func (p *TestResourceProvider[T]) Destroy(ctx context.Context, resource T, force
 }
 
 // Refresh is a no-op for testing
-func (p *TestResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
-	return nil
+func (p *TestResourceProvider[T]) Refresh(ctx context.Context, resource T) (T, error) {
+	return resource, nil
 }
 
 // Update is a no-op for testing
-func (p *TestResourceProvider[T]) Update(ctx context.Context, resource T) error {
-	return nil
+func (p *TestResourceProvider[T]) Update(ctx context.Context, resource T) (T, error) {
+	return resource, nil
 }
 
 // Changed always returns false for testing

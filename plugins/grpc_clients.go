@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/jumppad-labs/hclconfig/plugins/proto"
-	"github.com/jumppad-labs/hclconfig/types"
 )
 
 // GRPCLogger implements Logger interface using consolidated HostCallbackService client
@@ -54,7 +53,7 @@ type GRPCState struct {
 // Ensure GRPCState implements State interface
 var _ State = (*GRPCState)(nil)
 
-func (s *GRPCState) Get(key string) (types.Resource, error) {
+func (s *GRPCState) Get(key string) (any, error) {
 	resp, err := s.client.Get(context.Background(), &proto.StateGetRequest{Key: key})
 	if err != nil {
 		return nil, err
@@ -64,7 +63,7 @@ func (s *GRPCState) Get(key string) (types.Resource, error) {
 		return nil, fmt.Errorf(resp.Error)
 	}
 
-	// Unmarshal the resource data back to types.Resource
+	// Unmarshal the resource data back to any
 	// This is a simplified implementation - in practice you'd need type information
 	// to properly unmarshal to the correct concrete type
 	var resource map[string]interface{}
@@ -77,7 +76,7 @@ func (s *GRPCState) Get(key string) (types.Resource, error) {
 	return nil, fmt.Errorf("resource deserialization not implemented")
 }
 
-func (s *GRPCState) Find(pattern string) ([]types.Resource, error) {
+func (s *GRPCState) Find(pattern string) ([]any, error) {
 	resp, err := s.client.Find(context.Background(), &proto.StateFindRequest{Pattern: pattern})
 	if err != nil {
 		return nil, err

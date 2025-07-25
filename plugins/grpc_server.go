@@ -28,6 +28,16 @@ func NewGRPCServer(plugin Plugin, broker *plugin.GRPCBroker) (*GRPCServer, error
 	return server, nil
 }
 
+func (s *GRPCServer) getRegisteredType(entityType, entitySubType string) *RegisteredType {
+	types := s.plugin.GetTypes()
+	for i := range types {
+		if types[i].Type == entityType && types[i].SubType == entitySubType {
+			return &types[i]
+		}
+	}
+	return nil
+}
+
 func (s *GRPCServer) GetTypes(ctx context.Context, req *proto.GetTypesRequest) (*proto.GetTypesResponse, error) {
 	l, err := s.getLogger()
 	if err != nil {
@@ -79,8 +89,18 @@ func (s *GRPCServer) Create(ctx context.Context, req *proto.CreateRequest) (*pro
 
 	l.Info("Creating entity")
 
-	err = s.plugin.Create(req.EntityType, req.EntitySubType, req.EntityData)
-	return &proto.CreateResponse{Error: errorToString(err)}, nil
+	// Get the registered type to access its adapter
+	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
+	if rt == nil {
+		return &proto.CreateResponse{Error: "no registered type found for " + req.EntityType + "." + req.EntitySubType}, nil
+	}
+
+	// Call the adapter's Create method which returns mutated data
+	mutatedData, err := rt.Adapter.Create(ctx, req.EntityData)
+	return &proto.CreateResponse{
+		Error:              errorToString(err),
+		MutatedEntityData: mutatedData,
+	}, nil
 }
 
 func (s *GRPCServer) Destroy(ctx context.Context, req *proto.DestroyRequest) (*proto.DestroyResponse, error) {
@@ -109,8 +129,18 @@ func (s *GRPCServer) Refresh(ctx context.Context, req *proto.RefreshRequest) (*p
 
 	l.Info("Refreshing entity")
 
-	err = s.plugin.Refresh(ctx)
-	return &proto.RefreshResponse{Error: errorToString(err)}, nil
+	// Get the registered type to access its adapter
+	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
+	if rt == nil {
+		return &proto.RefreshResponse{Error: "no registered type found for " + req.EntityType + "." + req.EntitySubType}, nil
+	}
+
+	// Call the adapter's Refresh method which returns mutated data
+	refreshedData, err := rt.Adapter.Refresh(ctx, req.EntityData)
+	return &proto.RefreshResponse{
+		Error:                 errorToString(err),
+		RefreshedEntityData: refreshedData,
+	}, nil
 }
 
 func (s *GRPCServer) Update(ctx context.Context, req *proto.UpdateRequest) (*proto.UpdateResponse, error) {
@@ -124,8 +154,18 @@ func (s *GRPCServer) Update(ctx context.Context, req *proto.UpdateRequest) (*pro
 
 	l.Info("Updating entity")
 
-	err = s.plugin.Update(req.EntityType, req.EntitySubType, req.EntityData)
-	return &proto.UpdateResponse{Error: errorToString(err)}, nil
+	// Get the registered type to access its adapter
+	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
+	if rt == nil {
+		return &proto.UpdateResponse{Error: "no registered type found for " + req.EntityType + "." + req.EntitySubType}, nil
+	}
+
+	// Call the adapter's Update method which returns mutated data
+	updatedData, err := rt.Adapter.Update(ctx, req.EntityData)
+	return &proto.UpdateResponse{
+		Error:             errorToString(err),
+		UpdatedEntityData: updatedData,
+	}, nil
 }
 
 func (s *GRPCServer) Changed(ctx context.Context, req *proto.ChangedRequest) (*proto.ChangedResponse, error) {

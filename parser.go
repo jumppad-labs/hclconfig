@@ -177,8 +177,8 @@ func NewParser(options *ParserOptions) *Parser {
 	if o.StateStore != nil {
 		p.stateStore = o.StateStore
 	} else {
-		// Create default file-based state store
-		p.stateStore = state.NewFileStateStore("", func() any { return NewConfig() })
+		// TODO: Rebuild state store
+		// p.stateStore = state.NewFileStateStore("", func() any { return NewConfig() })
 	}
 
 	// Auto-discover and load plugins if enabled
@@ -226,7 +226,7 @@ func (p *Parser) RegisterPluginWithPath(pluginPath string) error {
 }
 
 // createBuiltinResource creates built-in resource types (local, output, variable, module)
-func (p *Parser) createBuiltinResource(resourceType, resourceName string) (types.Resource, error) {
+func (p *Parser) createBuiltinResource(resourceType, resourceName string) (any, error) {
 	builtinTypes := resources.DefaultResources()
 	return builtinTypes.CreateResource(resourceType, resourceName)
 }
@@ -257,21 +257,22 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return c, nil
 	}
 
-	// Load previous state
-	prevState, stateErr := p.stateStore.Load()
-	if stateErr != nil {
-		// Log error but continue - we can operate without previous state
-		// This allows the system to recover from corrupted state files
-		// TODO: Add proper logging when logger is available
-	}
-
-	// Type assert the loaded state to *Config
 	var previousState *Config
-	if prevState != nil {
-		if config, ok := prevState.(*Config); ok {
-			previousState = config
-		}
-	}
+
+	// Load previous state
+	//prevState, stateErr := p.stateStore.Load()
+	//if stateErr != nil {
+	//	// Log error but continue - we can operate without previous state
+	//	// This allows the system to recover from corrupted state files
+	//	// TODO: Add proper logging when logger is available
+	//}
+
+	//// Type assert the loaded state to *Config
+	//if prevState != nil {
+	//	if config, ok := prevState.(*Config); ok {
+	//		previousState = config
+	//	}
+	//}
 
 	// Create working config - start with previous state or empty config
 	var workingConfig *Config
@@ -283,33 +284,38 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		workingConfig = c
 		// Set status for new resources when no previous state
 		for _, r := range workingConfig.Resources {
-			if r.Metadata().Status == "" {
-				r.Metadata().Status = "pending"
+			meta, err := types.GetMeta(r)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get resource meta: %w", err)
+			}
+
+			if meta.Status == "" {
+				meta.Status = "pending"
 			}
 		}
 	}
 
 	// Defer saving working state to ensure it's saved even on errors
 	defer func() {
-		if saveErr := p.stateStore.Save(workingConfig); saveErr != nil {
-			// TODO: Add proper logging when logger is available
-			// Log error but don't override the original error
-		}
+		//if saveErr := p.stateStore.Save(workingConfig); saveErr != nil {
+		//	// TODO: Add proper logging when logger is available
+		//	// Log error but don't override the original error
+		//}
 	}()
 
 	// DESTROY PHASE: Handle resources that exist in state but not in new config
 	toDestroy := p.identifyResourcesToDestroy(previousState, c)
-	
+
 	// Validate that no remaining resources depend on resources to be destroyed
 	destroyDepErrors := p.validateDestroyDependencies(toDestroy, c.Resources)
 	for _, e := range destroyDepErrors {
 		ce.AppendError(e)
 	}
-	
+
 	if len(ce.Errors) > 0 {
 		return workingConfig, ce
 	}
-	
+
 	// Execute destroy operations
 	destroyErr := p.processDestroyPhase(toDestroy)
 	if destroyErr != nil {
@@ -319,10 +325,14 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		})
 		return workingConfig, ce
 	}
-	
+
 	// Remove successfully destroyed resources from working config
 	for _, destroyedResource := range toDestroy {
-		if destroyedResource.Metadata().Status == "destroyed" {
+		meta, err := types.GetMeta(destroyedResource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.Status == "destroyed" {
 			workingConfig.RemoveResource(destroyedResource)
 		}
 	}
@@ -395,8 +405,13 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		workingConfig = c
 		// Set status for new resources when no previous state
 		for _, r := range workingConfig.Resources {
-			if r.Metadata().Status == "" {
-				r.Metadata().Status = "pending"
+			meta, err := types.GetMeta(r)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get resource meta: %w", err)
+			}
+
+			if meta.Status == "" {
+				meta.Status = "pending"
 			}
 		}
 	}
@@ -411,17 +426,17 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 
 	// DESTROY PHASE: Handle resources that exist in state but not in new config
 	toDestroy := p.identifyResourcesToDestroy(previousState, c)
-	
+
 	// Validate that no remaining resources depend on resources to be destroyed
 	destroyDepErrors := p.validateDestroyDependencies(toDestroy, c.Resources)
 	for _, e := range destroyDepErrors {
 		ce.AppendError(e)
 	}
-	
+
 	if len(ce.Errors) > 0 {
 		return workingConfig, ce
 	}
-	
+
 	// Execute destroy operations
 	destroyErr := p.processDestroyPhase(toDestroy)
 	if destroyErr != nil {
@@ -431,10 +446,14 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		})
 		return workingConfig, ce
 	}
-	
+
 	// Remove successfully destroyed resources from working config
 	for _, destroyedResource := range toDestroy {
-		if destroyedResource.Metadata().Status == "destroyed" {
+		meta, err := types.GetMeta(destroyedResource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.Status == "destroyed" {
 			workingConfig.RemoveResource(destroyedResource)
 		}
 	}
@@ -637,8 +656,8 @@ func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Conf
 			c.AppendResource(v)
 
 			// Fire parser event for variable processing (always succeeds with 0 time)
-			resourceType := fmt.Sprintf("%s.%s", v.Metadata().Type, v.Metadata().Name)
-			fireParserEvent(&p.options, "create", resourceType, v.Metadata().ID, "success", 0, nil, nil)
+			resourceType := fmt.Sprintf("%s.%s", v.Meta.Type, v.Meta.Name)
+			fireParserEvent(&p.options, "create", resourceType, v.Meta.ID, "success", 0, nil, nil)
 
 			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
 			setContextVariableIfMissing(ctx, v.Meta.Name, val)
@@ -731,9 +750,11 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 	return nil
 }
 
-func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dependsOn []string) error {
+func setDependsOn(ctx *hcl.EvalContext, r any, b *hclsyntax.Body, dependsOn []string) error {
 	for _, d := range dependsOn {
-		r.AddDependency(d)
+		if err := types.AppendUniqueDependency(r, d); err != nil {
+			return fmt.Errorf("failed to add dependency %s: %w", d, err)
+		}
 	}
 
 	if attr, ok := b.Attributes["depends_on"]; ok {
@@ -745,12 +766,14 @@ func setDependsOn(ctx *hcl.EvalContext, r types.Resource, b *hclsyntax.Body, dep
 		// depends on is a slice of string
 		dependsOnSlice := dependsOnVal.AsValueSlice()
 		for _, d := range dependsOnSlice {
-			_, err := resources.ParseFQRN(d.AsString())
+			fqdn, err := resources.ParseFQRN(d.AsString())
 			if err != nil {
 				return fmt.Errorf("invalid dependency %s, %s", d.AsString(), err)
 			}
 
-			r.AddDependency(d.AsString())
+			if err := types.AppendUniqueDependency(r, fqdn.String()); err != nil {
+				return fmt.Errorf("failed to add dependency %s: %w", d, err)
+			}
 		}
 	}
 
@@ -784,12 +807,24 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 
 	rt, _ := p.createBuiltinResource(string(resources.TypeModule), b.Labels[0])
 
-	rt.Metadata().Module = moduleName
-	rt.Metadata().File = file
-	rt.Metadata().Line = b.TypeRange.Start.Line
-	rt.Metadata().Column = b.TypeRange.Start.Column
+	meta, err := types.GetMeta(rt)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf("unable to get resource meta for module %s: %s", moduleName, err)
 
-	err := decodeBody(ctx, c, b, rt, false)
+		return []error{de}
+	}
+
+	meta.Module = moduleName
+	meta.File = file
+	meta.Line = b.TypeRange.Start.Line
+	meta.Column = b.TypeRange.Start.Column
+
+	err = decodeBody(ctx, c, b, rt, false)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -984,8 +1019,13 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	// we need to add the module name to all the returned resources
 	for _, r := range moduleConfig.Resources {
 		// ensure the module name has the parent appended to it
-		r.Metadata().Module = fmt.Sprintf("%s.%s", name, r.Metadata().Module)
-		r.Metadata().Module = strings.TrimSuffix(r.Metadata().Module, ".")
+		rMeta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		moduleName = fmt.Sprintf("%s.%s", name, rMeta.Module)
+		moduleName = strings.TrimSuffix(moduleName, ".")
+		rMeta.Module = moduleName
 
 		ctx, err := moduleConfig.getContext(r)
 		if err != nil {
@@ -1013,7 +1053,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 }
 
 func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
-	var rt types.Resource
+	var rt any
 	var err error
 
 	ignoreErrors := false
@@ -1146,10 +1186,21 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		}
 	}
 
-	rt.Metadata().Module = moduleName
-	rt.Metadata().File = file
-	rt.Metadata().Line = b.TypeRange.Start.Line
-	rt.Metadata().Column = b.TypeRange.Start.Column
+	rtMeta, err := types.GetMeta(rt)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf("unable to get resource meta for resource %s: %s", b.Labels[0], err)
+		return de
+	}
+
+	rtMeta.Module = moduleName
+	rtMeta.File = file
+	rtMeta.Line = b.TypeRange.Start.Line
+	rtMeta.Column = b.TypeRange.Start.Column
 
 	err = decodeBody(ctx, c, b, rt, ignoreErrors)
 	if err != nil {
@@ -1165,7 +1216,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	// if we have an output, get the description
 	// this is only needed when parsing primatives as
 	// this value is normally set during walk
-	if rt.Metadata().Type == resources.TypeOutput && b.Body.Attributes["description"] != nil {
+	if err == nil && rtMeta.Type == resources.TypeOutput && b.Body.Attributes["description"] != nil {
 		desc, diags := b.Body.Attributes["description"].Expr.Value(ctx)
 		if !diags.HasErrors() {
 			rt.(*resources.Output).Description = desc.AsString()
@@ -1192,7 +1243,13 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Level = errors.ParserErrorLevelError
-		de.Message = fmt.Sprintf(`unable to add resource "%s" to config %s`, resources.FQRNFromResource(rt).String(), err)
+		meta, metaErr := types.GetMeta(rt)
+		if metaErr != nil {
+			de.Message = fmt.Sprintf(`unable to add resource to config: %s (also failed to get metadata: %s)`, err, metaErr)
+		} else {
+			fqdn := &resources.FQRN{Module: meta.Module, Resource: meta.Name, Type: meta.Type}
+			de.Message = fmt.Sprintf(`unable to add resource "%s" to config %s`, fqdn.String(), err)
+		}
 
 		return de
 	}
@@ -1465,9 +1522,12 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, b *hclsyntax.Block, p any,
 		}
 	}
 
-	// set the dependent resources
-	res := p.(types.Resource)
-	res.Metadata().Links = uniqueResources
+	meta, err := types.GetMeta(p)
+	if err != nil {
+		return err
+	}
+
+	meta.Links = uniqueResources
 
 	return nil
 }
@@ -1515,7 +1575,11 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 		references = append(references, cr...)
 	}
 
-	me := resource.(types.Resource)
+	// Get metadata using helper function instead of interface
+	myMeta, err := types.GetMeta(resource)
+	if err != nil {
+		return nil, fmt.Errorf("resource does not have ResourceBase: %w", err)
+	}
 
 	// we have the references, now check that the references
 	// are not cyclical
@@ -1526,14 +1590,18 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 		//fqdnD := resources.FQDNFromResource(me)
 		if err == nil {
 			// check the deps on the linked resource
-			for _, cdep := range d.Metadata().Links {
+			dMeta, err := types.GetMeta(d)
+			if err != nil {
+				continue // Skip dependencies without ResourceBase
+			}
+			for _, cdep := range dMeta.Links {
 
 				fqrn, err := resources.ParseFQRN(cdep)
 				fqrn.Attribute = ""
 
 				// append the parent module to the link as they are relative
-				if d.Metadata().Module != "" {
-					fqrn.Module = d.Metadata().Module
+				if dMeta.Module != "" {
+					fqrn.Module = dMeta.Module
 				}
 
 				if err != nil {
@@ -1546,15 +1614,15 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 					return nil, pe
 				}
 
-				if me.Metadata().Name == fqrn.Resource &&
-					me.Metadata().Type == fqrn.Type &&
-					me.Metadata().Module == fqrn.Module {
+				if myMeta.Name == fqrn.Resource &&
+					myMeta.Type == fqrn.Type &&
+					myMeta.Module == fqrn.Module {
 
 					pe := &errors.ParserError{}
 					pe.Column = b.Body.SrcRange.Start.Column
 					pe.Line = b.Body.SrcRange.Start.Line
 					pe.Filename = b.Body.SrcRange.Filename
-					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqrn.String(), d.Metadata().ID)
+					pe.Message = fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency, remove the dependency from one of the resources", fqrn.String(), dMeta.ID)
 					pe.Level = errors.ParserErrorLevelError
 
 					return nil, pe
@@ -1727,28 +1795,44 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 // preserving existing status and adding new resources
 func (p *Parser) mergeNewResources(workingConfig *Config, newConfig *Config) {
 	// Create a map of existing resources for quick lookup
-	existingMap := make(map[string]types.Resource)
+	existingMap := make(map[string]any)
 	for _, r := range workingConfig.Resources {
-		existingMap[r.Metadata().ID] = r
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		existingMap[meta.ID] = r
 	}
 
 	// For each resource in new config
 	for _, newResource := range newConfig.Resources {
-		if existingResource, exists := existingMap[newResource.Metadata().ID]; exists {
+		newMeta, err := types.GetMeta(newResource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if existingResource, exists := existingMap[newMeta.ID]; exists {
 			// Resource exists in both, preserve status and update with new config
-			if existingResource.Metadata().Status != "" {
-				newResource.Metadata().Status = existingResource.Metadata().Status
+			existingMeta, err := types.GetMeta(existingResource)
+			if err != nil {
+				continue // Skip if unable to get existing metadata
 			}
+			if existingMeta.Status != "" {
+				newMeta.Status = existingMeta.Status // Preserve existing status
+			}
+
 			// Replace the existing resource with the new one (to get updated config)
 			for i, r := range workingConfig.Resources {
-				if r.Metadata().ID == newResource.Metadata().ID {
+				rMeta, err := types.GetMeta(r)
+				if err != nil {
+					continue // Skip resources without ResourceBase
+				}
+				if rMeta.ID == newMeta.ID {
 					workingConfig.Resources[i] = newResource
 					break
 				}
 			}
 		} else {
-			// New resource, add it to working config with pending status
-			newResource.Metadata().Status = "pending"
+			newMeta.Status = "pending"
 			workingConfig.Resources = append(workingConfig.Resources, newResource)
 		}
 	}
@@ -1765,115 +1849,134 @@ func (p *Parser) mergeNewResources(workingConfig *Config, newConfig *Config) {
 }
 
 // identifyResourcesToDestroy returns resources that exist in previousState but not in newConfig
-func (p *Parser) identifyResourcesToDestroy(previousState *Config, newConfig *Config) []types.Resource {
+func (p *Parser) identifyResourcesToDestroy(previousState *Config, newConfig *Config) []any {
 	if previousState == nil {
 		return nil
 	}
-	
+
 	// Create a map of new config resources for quick lookup
 	newConfigMap := make(map[string]bool)
 	for _, r := range newConfig.Resources {
-		newConfigMap[r.Metadata().ID] = true
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		newConfigMap[meta.ID] = true
 	}
-	
+
 	// Find resources in previous state that are not in new config
-	var toDestroy []types.Resource
+	var toDestroy []any
 	for _, r := range previousState.Resources {
-		if !newConfigMap[r.Metadata().ID] {
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if !newConfigMap[meta.ID] {
 			toDestroy = append(toDestroy, r)
 		}
 	}
-	
+
 	return toDestroy
 }
 
 // validateDestroyDependencies checks that no remaining resources depend on resources to be destroyed
-func (p *Parser) validateDestroyDependencies(toDestroy []types.Resource, remainingResources []types.Resource) []*errors.ParserError {
+func (p *Parser) validateDestroyDependencies(toDestroy []any, remainingResources []any) []*errors.ParserError {
 	var parserErrors []*errors.ParserError
-	
+
 	// Create a map of resources to be destroyed for quick lookup
 	destroyMap := make(map[string]bool)
 	for _, r := range toDestroy {
-		destroyMap[r.Metadata().ID] = true
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		destroyMap[meta.ID] = true
 	}
-	
+
 	// Check each remaining resource for dependencies on resources to be destroyed
 	for _, resource := range remainingResources {
 		// Skip validation for certain resource types that don't have dependencies
-		if resource.Metadata().Type == resources.TypeVariable ||
-			resource.Metadata().Type == resources.TypeRoot {
+		resourceMeta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if resourceMeta.Type == resources.TypeVariable ||
+			resourceMeta.Type == resources.TypeRoot {
 			continue
 		}
-		
+
 		// Collect all dependencies for this resource
 		var allDependencies []string
-		
+
 		// Add explicit dependencies from depends_on
-		allDependencies = append(allDependencies, resource.GetDependencies()...)
-		
+		deps, err := types.GetDependencies(resource)
+		if err == nil {
+			allDependencies = append(allDependencies, deps...)
+		}
+
 		// Add implicit dependencies from resource links (interpolations)
-		allDependencies = append(allDependencies, resource.Metadata().Links...)
-		
+		allDependencies = append(allDependencies, resourceMeta.Links...)
+
 		// Check each dependency
 		for _, dependency := range allDependencies {
 			if dependency == "" {
 				continue // Skip empty dependencies
 			}
-			
+
 			// Check if this dependency is on a resource to be destroyed
 			if destroyMap[dependency] {
 				// Found a dependency on a resource to be destroyed - this is an error
 				pe := &errors.ParserError{}
-				pe.Filename = resource.Metadata().File
-				pe.Line = resource.Metadata().Line
-				pe.Column = resource.Metadata().Column
+				pe.Filename = resourceMeta.File
+				pe.Line = resourceMeta.Line
+				pe.Column = resourceMeta.Column
 				pe.Level = errors.ParserErrorLevelError
 				pe.Message = fmt.Sprintf(
 					"Cannot destroy resource '%s' because resource '%s' depends on it. Remove or update the dependency first.",
 					dependency,
-					resource.Metadata().ID,
+					resourceMeta.ID,
 				)
-				
+
 				parserErrors = append(parserErrors, pe)
 			}
 		}
 	}
-	
+
 	return parserErrors
 }
 
 // processDestroyPhase handles the destruction of resources that exist in state but not in new config
-func (p *Parser) processDestroyPhase(toDestroy []types.Resource) error {
+func (p *Parser) processDestroyPhase(toDestroy []any) error {
 	if len(toDestroy) == 0 {
 		return nil
 	}
-	
+
 	// Build destroy DAG with reversed dependencies
 	destroyGraph, err := buildDestroyDAG(toDestroy)
 	if err != nil {
 		return fmt.Errorf("failed to build destroy DAG: %w", err)
 	}
-	
+
 	// Reduce the graph nodes to unique instances
 	destroyGraph.TransitiveReduction()
-	
+
 	// Validate the dependency graph is ok
 	err = destroyGraph.Validate()
 	if err != nil {
 		return fmt.Errorf("unable to validate destroy dependency graph: %w", err)
 	}
-	
+
 	// Walk the destroy DAG to execute destroy operations
 	w := dag.Walker{}
 	w.Callback = destroyWalkCallback(p.pluginRegistry, &p.options)
 	w.Reverse = false // We've already reversed the dependencies in buildDestroyDAG
-	
+
 	w.Update(destroyGraph)
 	diags := w.Wait()
 	if diags.HasErrors() {
 		return fmt.Errorf("destroy operations failed: %w", diags.Err())
 	}
-	
+
 	return nil
 }
 
@@ -1949,8 +2052,12 @@ func validateResourceDependencies(c *Config, previousState *Config) []*errors.Pa
 
 	for _, resource := range c.Resources {
 		// Skip validation for certain resource types that don't have dependencies
-		if resource.Metadata().Type == resources.TypeVariable ||
-			resource.Metadata().Type == resources.TypeRoot {
+		resourceMeta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if resourceMeta.Type == resources.TypeVariable ||
+			resourceMeta.Type == resources.TypeRoot {
 			continue
 		}
 
@@ -1958,10 +2065,13 @@ func validateResourceDependencies(c *Config, previousState *Config) []*errors.Pa
 		var allDependencies []string
 
 		// Add explicit dependencies from depends_on
-		allDependencies = append(allDependencies, resource.GetDependencies()...)
+		deps, err := types.GetDependencies(resource)
+		if err == nil {
+			allDependencies = append(allDependencies, deps...)
+		}
 
 		// Add implicit dependencies from resource links (interpolations)
-		allDependencies = append(allDependencies, resource.Metadata().Links...)
+		allDependencies = append(allDependencies, resourceMeta.Links...)
 
 		// Check each dependency
 		for _, dependency := range allDependencies {
@@ -1970,45 +2080,48 @@ func validateResourceDependencies(c *Config, previousState *Config) []*errors.Pa
 			}
 
 			// Try to find the dependency in the current configuration
-			_, err := c.FindRelativeResource(dependency, resource.Metadata().Module)
+			_, err := c.FindRelativeResource(dependency, resourceMeta.Module)
 			if err != nil {
 				// Dependency not found in current config
 				// Check if it existed in the previous state for better error messaging
 				var wasInPreviousState bool
 				if previousState != nil {
-					_, prevErr := previousState.FindRelativeResource(dependency, resource.Metadata().Module)
+					_, prevErr := previousState.FindRelativeResource(dependency, resourceMeta.Module)
 					wasInPreviousState = (prevErr == nil)
 				}
 
 				// Create context-aware error message
 				pe := &errors.ParserError{}
-				pe.Filename = resource.Metadata().File
-				pe.Line = resource.Metadata().Line
-				pe.Column = resource.Metadata().Column
+				pe.Filename = resourceMeta.File
+				pe.Line = resourceMeta.Line
+				pe.Column = resourceMeta.Column
 				pe.Level = errors.ParserErrorLevelError
 
 				if wasInPreviousState {
+					fqrn := &resources.FQRN{Module: resourceMeta.Module, Resource: resourceMeta.Name, Type: resourceMeta.Type}
 					pe.Message = fmt.Sprintf(
 						"Resource '%s' was removed from the config but is still referenced by '%s'. "+
 							"Either remove dependent resources or update references to the missing resource.",
 						dependency,
-						resources.FQRNFromResource(resource).String(),
+						fqrn.String(),
 					)
 				} else if previousState == nil {
 					// First run, no previous state
+					fqrn := &resources.FQRN{Module: resourceMeta.Module, Resource: resourceMeta.Name, Type: resourceMeta.Type}
 					pe.Message = fmt.Sprintf(
 						"Resource '%s' referenced by '%s' does not exist in the configuration. "+
 							"Check the resource name and ensure it's defined.",
 						dependency,
-						resources.FQRNFromResource(resource).String(),
+						fqrn.String(),
 					)
 				} else {
 					// Resource never existed in previous state either
+					fqrn := &resources.FQRN{Module: resourceMeta.Module, Resource: resourceMeta.Name, Type: resourceMeta.Type}
 					pe.Message = fmt.Sprintf(
 						"Resource '%s' referenced by '%s' does not exist in the configuration. "+
 							"Check the resource name and ensure it's defined.",
 						dependency,
-						resources.FQRNFromResource(resource).String(),
+						fqrn.String(),
 					)
 				}
 
@@ -2029,23 +2142,23 @@ func (p *Parser) Destroy() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load state: %w", err)
 	}
-	
+
 	// If there's no state, nothing to destroy
 	if savedState == nil {
 		return NewConfig(), nil
 	}
-	
+
 	// Type assert the loaded state to *Config
 	previousState, ok := savedState.(*Config)
 	if !ok {
 		return nil, fmt.Errorf("invalid state type: expected *Config, got %T", savedState)
 	}
-	
+
 	// If there are no resources in the state, nothing to destroy
 	if len(previousState.Resources) == 0 {
 		return previousState, nil
 	}
-	
+
 	// Defer saving the final state
 	defer func() {
 		if saveErr := p.stateStore.Save(previousState); saveErr != nil {
@@ -2053,19 +2166,23 @@ func (p *Parser) Destroy() (*Config, error) {
 			// TODO: Add proper logging when logger is available
 		}
 	}()
-	
+
 	// Execute destroy operations on all resources
 	destroyErr := p.processDestroyPhase(previousState.Resources)
 	if destroyErr != nil {
 		return previousState, fmt.Errorf("destroy phase failed: %w", destroyErr)
 	}
-	
+
 	// Remove successfully destroyed resources from state
 	for _, destroyedResource := range previousState.Resources {
-		if destroyedResource.Metadata().Status == "destroyed" {
+		meta, err := types.GetMeta(destroyedResource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.Status == "destroyed" {
 			previousState.RemoveResource(destroyedResource)
 		}
 	}
-	
+
 	return previousState, nil
 }

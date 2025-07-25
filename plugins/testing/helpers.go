@@ -10,10 +10,10 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/plugins/mocks"
-	"github.com/jumppad-labs/hclconfig/internal/schema"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -21,7 +21,7 @@ import (
 // TestPluginHost provides a convenient interface for testing plugins
 type TestPluginHost struct {
 	plugins.PluginHost // Embed the interface, not a specific implementation
-	t       *testing.T
+	t                  *testing.T
 }
 
 // InProcessPluginSetup creates an in-process plugin host for testing
@@ -88,7 +88,7 @@ func (ops *TestPluginOperations) TestValidate(entityType, entitySubType string, 
 	// Parse HCL file to get test data
 	types := ops.host.GetTypes()
 	require.NotEmpty(ops.host.t, types, "Plugin should have registered types")
-	
+
 	result := ParseHCLFile(ops.host.t, hclFilePath, types[0].Schema, (*interface{})(nil))
 	require.NotEmpty(ops.host.t, result.Objects, "Should have test data from HCL file")
 
@@ -107,7 +107,7 @@ func (ops *TestPluginOperations) TestCreate(entityType, entitySubType string, hc
 	// Parse HCL file to get test data
 	types := ops.host.GetTypes()
 	require.NotEmpty(ops.host.t, types, "Plugin should have registered types")
-	
+
 	result := ParseHCLFile(ops.host.t, hclFilePath, types[0].Schema, (*interface{})(nil))
 	require.NotEmpty(ops.host.t, result.Objects, "Should have test data from HCL file")
 
@@ -116,7 +116,7 @@ func (ops *TestPluginOperations) TestCreate(entityType, entitySubType string, hc
 		dataJSON, err := json.Marshal(obj)
 		require.NoError(ops.host.t, err, "Should marshal test data to JSON for object %d", i)
 
-		err = ops.host.Create(entityType, entitySubType, dataJSON)
+		_, err = ops.host.Create(entityType, entitySubType, dataJSON)
 		require.NoError(ops.host.t, err, "Should create object %d", i)
 	}
 }
@@ -126,7 +126,7 @@ func (ops *TestPluginOperations) TestChanged(entityType, entitySubType string, h
 	// Parse HCL file to get test data
 	types := ops.host.GetTypes()
 	require.NotEmpty(ops.host.t, types, "Plugin should have registered types")
-	
+
 	result := ParseHCLFile(ops.host.t, hclFilePath, types[0].Schema, (*interface{})(nil))
 	require.NotEmpty(ops.host.t, result.Objects, "Should have test data from HCL file")
 
@@ -146,7 +146,7 @@ func (ops *TestPluginOperations) TestDestroy(entityType, entitySubType string, h
 	// Parse HCL file to get test data
 	types := ops.host.GetTypes()
 	require.NotEmpty(ops.host.t, types, "Plugin should have registered types")
-	
+
 	result := ParseHCLFile(ops.host.t, hclFilePath, types[0].Schema, (*interface{})(nil))
 	require.NotEmpty(ops.host.t, result.Objects, "Should have test data from HCL file")
 
@@ -171,7 +171,7 @@ func (ops *TestPluginOperations) TestCRUDOperations(entityType, entitySubType st
 	require.NoError(ops.host.t, err, "Should validate valid data")
 
 	// Test Create
-	err = ops.host.Create(entityType, entitySubType, dataJSON)
+	_, err = ops.host.Create(entityType, entitySubType, dataJSON)
 	require.NoError(ops.host.t, err, "Should create resource successfully")
 
 	// Test Changed
@@ -203,10 +203,9 @@ func (ops *TestPluginOperations) TestBasicOperations(entityType, entitySubType s
 	require.NoError(ops.host.t, err, "Should validate data")
 
 	// Test Create (if this works, we know the basic plugin functionality is working)
-	err = ops.host.Create(entityType, entitySubType, dataJSON)
+	_, err = ops.host.Create(entityType, entitySubType, dataJSON)
 	require.NoError(ops.host.t, err, "Should create resource")
 }
-
 
 // HCLParseResult represents the result of parsing an HCL file
 type HCLParseResult[T any] struct {
@@ -222,7 +221,7 @@ type HCLParseResult[T any] struct {
 // It returns a slice of the target type with all parsed objects
 func ParseHCLFile[T any](t *testing.T, hclFilePath string, pluginSchema []byte, targetType T) HCLParseResult[T] {
 	// Create wire type from plugin schema
-	wireType, err := schema.CreateStructFromSchema(pluginSchema)
+	wireType, err := schema.CreateInstanceFromSchema(pluginSchema, nil)
 	require.NoError(t, err, "Should be able to create struct from schema")
 
 	// Parse HCL file

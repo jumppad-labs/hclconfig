@@ -57,6 +57,7 @@ message CreateRequest {
 
 message CreateResponse {
   string error = 1;
+  bytes mutated_entity_data = 2;
 }
 
 message DestroyRequest {
@@ -69,10 +70,15 @@ message DestroyResponse {
   string error = 1;
 }
 
-message RefreshRequest {}
+message RefreshRequest {
+  string entity_type = 1;
+  string entity_sub_type = 2;
+  bytes entity_data = 3;
+}
 
 message RefreshResponse {
   string error = 1;
+  bytes refreshed_entity_data = 2;
 }
 
 message UpdateRequest {
@@ -83,6 +89,7 @@ message UpdateRequest {
 
 message UpdateResponse {
   string error = 1;
+  bytes updated_entity_data = 2;
 }
 
 message ChangedRequest {

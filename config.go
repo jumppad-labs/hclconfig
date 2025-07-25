@@ -19,9 +19,9 @@ import (
 
 // Config defines the stack config
 type Config struct {
-	Resources []types.Resource `json:"resources"`
-	contexts  map[types.Resource]*hcl.EvalContext
-	bodies    map[types.Resource]*hclsyntax.Body
+	Resources []any `json:"resources"`
+	contexts  map[any]*hcl.EvalContext
+	bodies    map[any]*hclsyntax.Body
 	sync      sync.Mutex
 }
 
@@ -46,9 +46,9 @@ func (e ResourceExistsError) Error() string {
 // New creates a new Config
 func NewConfig() *Config {
 	c := &Config{
-		Resources: []types.Resource{},
-		contexts:  map[types.Resource]*hcl.EvalContext{},
-		bodies:    map[types.Resource]*hclsyntax.Body{},
+		Resources: []any{},
+		contexts:  map[any]*hcl.EvalContext{},
+		bodies:    map[any]*hclsyntax.Body{},
 		sync:      sync.Mutex{},
 	}
 
@@ -72,7 +72,7 @@ func NewConfig() *Config {
 //
 // e.g. to find a cluster named k3s in the module module1
 // r, err := c.FindResource("module.module1.resource.cluster.k3s")
-func (c *Config) FindResource(path string) (types.Resource, error) {
+func (c *Config) FindResource(path string) (any, error) {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
@@ -80,7 +80,7 @@ func (c *Config) FindResource(path string) (types.Resource, error) {
 }
 
 // local version of FindResource that does not lock the config
-func (c *Config) findResource(path string) (types.Resource, error) {
+func (c *Config) findResource(path string) (any, error) {
 	fqdn, err := resources.ParseFQRN(path)
 	if err != nil {
 		return nil, err
@@ -93,9 +93,13 @@ func (c *Config) findResource(path string) (types.Resource, error) {
 	}
 
 	for _, r := range c.Resources {
-		if r.Metadata().Module == fqdn.Module &&
-			r.Metadata().Type == fqdn.Type &&
-			r.Metadata().Name == fqdn.Resource {
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.Module == fqdn.Module &&
+			meta.Type == fqdn.Type &&
+			meta.Name == fqdn.Resource {
 			return r, nil
 		}
 	}
@@ -103,7 +107,7 @@ func (c *Config) findResource(path string) (types.Resource, error) {
 	return nil, ResourceNotFoundError{fqdn.StringWithoutAttribute()}
 }
 
-func (c *Config) FindRelativeResource(path string, parentModule string) (types.Resource, error) {
+func (c *Config) FindRelativeResource(path string, parentModule string) (any, error) {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
@@ -129,14 +133,18 @@ func (c *Config) FindRelativeResource(path string, parentModule string) (types.R
 }
 
 // FindResourcesByType returns the resources from the given type
-func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
+func (c *Config) FindResourcesByType(t string) ([]any, error) {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
-	res := []types.Resource{}
+	res := []any{}
 
 	for _, r := range c.Resources {
-		if r.Metadata().Type == t {
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.Type == t {
 			res = append(res, r)
 		}
 	}
@@ -152,7 +160,7 @@ func (c *Config) FindResourcesByType(t string) ([]types.Resource, error) {
 // if includeSubModules is true then resources in any submodules
 // are also returned
 // if includeSubModules is false only the resources defined in the given module are returned
-func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]types.Resource, error) {
+func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]any, error) {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
@@ -168,15 +176,19 @@ func (c *Config) FindModuleResources(module string, includeSubModules bool) ([]t
 	moduleString := fmt.Sprintf("%s.%s", fqdn.Module, fqdn.Resource)
 	moduleString = strings.TrimPrefix(moduleString, ".")
 
-	resources := []types.Resource{}
+	resources := []any{}
 
 	for _, r := range c.Resources {
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
 		match := false
-		if includeSubModules && strings.HasPrefix(r.Metadata().Module, moduleString) {
+		if includeSubModules && strings.HasPrefix(meta.Module, moduleString) {
 			match = true
 		}
 
-		if !includeSubModules && r.Metadata().Module == moduleString {
+		if !includeSubModules && meta.Module == moduleString {
 			match = true
 		}
 
@@ -205,11 +217,16 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 	defer c.sync.Unlock()
 
 	for _, r := range new.Resources {
-		fqdn := resources.FQRNFromResource(r).String()
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		fqdn := &resources.FQRN{Module: meta.Module, Resource: meta.Name, Type: meta.Type}
+		fqdnString := fqdn.String()
 
 		// does the resource already exist?
-		if _, err := c.findResource(fqdn); err == nil {
-			return ResourceExistsError{Name: fqdn}
+		if _, err := c.findResource(fqdnString); err == nil {
+			return ResourceExistsError{Name: fqdnString}
 		}
 
 		// we need to add the context and the body from the other resource
@@ -222,24 +239,30 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 
 // AppendResource adds a given resource to the resource list
 // if the resource already exists an error will be returned
-func (c *Config) AppendResource(r types.Resource) error {
+func (c *Config) AppendResource(r any) error {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
 	return c.addResource(r, nil, nil)
 }
 
-
-
-func (c *Config) RemoveResource(rf types.Resource) error {
+func (c *Config) RemoveResource(rf any) error {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
 	pos := -1
+	rfMeta, err := types.GetMeta(rf)
+	if err != nil {
+		return ResourceNotFoundError{}
+	}
 	for i, r := range c.Resources {
-		if rf.Metadata().Name == r.Metadata().Name &&
-			rf.Metadata().Type == r.Metadata().Type &&
-			rf.Metadata().Module == r.Metadata().Module {
+		rMeta, err := types.GetMeta(r)
+		if err != nil {
+			continue
+		}
+		if rfMeta.Name == rMeta.Name &&
+			rfMeta.Type == rMeta.Type &&
+			rfMeta.Module == rMeta.Module {
 			pos = i
 			break
 		}
@@ -260,7 +283,7 @@ func (c *Config) RemoveResource(rf types.Resource) error {
 }
 
 // WalkCallback is called with the resource when the graph processes that particular node
-type WalkCallback func(r types.Resource) error
+type WalkCallback func(r any) error
 
 // Walk creates a Directed Acyclic Graph for the configuration resources depending on their
 // links and references. All the resources defined in the graph are traversed and
@@ -282,14 +305,19 @@ func (c *Config) Walk(wf WalkCallback, reverse bool) error {
 	errs := c.walk(
 		func(v dag.Vertex) (diags dag.Diagnostics) {
 
-			r, ok := v.(types.Resource)
-			// not a resource skip, this should never happen
-			if !ok {
-				panic("an item has been added to the graph that is not a resource")
-			}
+			// v should be a resource (either builtin or schema-generated)
+			r := v
 
 			// if this is the root module or is disabled skip
-			if (r.Metadata().Type == resources.TypeRoot || r.Metadata().Type == resources.TypeModule) || r.GetDisabled() {
+			meta, err := types.GetMeta(r)
+			if err != nil {
+				return nil // Skip resources without ResourceBase
+			}
+			disabled, err := types.GetDisabled(r)
+			if err != nil {
+				disabled = false
+			}
+			if (meta.Type == resources.TypeRoot || meta.Type == resources.TypeModule) || disabled {
 				return nil
 			}
 
@@ -298,7 +326,7 @@ func (c *Config) Walk(wf WalkCallback, reverse bool) error {
 				return nil
 			}
 
-			err := wf(r)
+			err = wf(r)
 			if err != nil {
 				// set the global error mutex to stop further processing
 				hasError.Store(true)
@@ -361,17 +389,39 @@ func (c *Config) walk(wf dag.WalkFunc, reverse bool) []error {
 	return nil
 }
 
-func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
-	fqdn := resources.FQRNFromResource(r)
-
-	// set the ID
-	r.Metadata().ID = fqdn.String()
-
-	rf, err := c.findResource(fqdn.String())
-	if err == nil && rf != nil {
-		return ResourceExistsError{r.Metadata().Name}
+func (c *Config) addResource(r any, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
+	// Get metadata using helper function
+	meta, err := types.GetMeta(r)
+	if err != nil {
+		return fmt.Errorf("resource does not have ResourceBase embedded: %w", err)
 	}
 
+	// Create FQRN from metadata
+	fqdn := &resources.FQRN{
+		Module:   meta.Module,
+		Resource: meta.Name,
+		Type:     meta.Type,
+	}
+
+	// set the ID
+	meta, err = types.GetMeta(r)
+	if err != nil {
+		return fmt.Errorf("resource does not have ResourceBase embedded: %w", err)
+	}
+	meta.ID = fqdn.String()
+
+	rf, findErr := c.findResource(fqdn.String())
+	if findErr == nil && rf != nil {
+		for _, res := range c.Resources {
+			resMeta, err := types.GetMeta(res)
+			if err == nil {
+				fmt.Println("Resource already exists:", resMeta.ID)
+			}
+		}
+		return ResourceExistsError{meta.Name}
+	}
+
+	// Now we can store any type of resource (builtin or schema-generated)
 	c.Resources = append(c.Resources, r)
 	c.contexts[r] = ctx
 	c.bodies[r] = b
@@ -379,7 +429,7 @@ func (c *Config) addResource(r types.Resource, ctx *hcl.EvalContext, b *hclsynta
 	return nil
 }
 
-func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
+func (c *Config) getContext(rf any) (*hcl.EvalContext, error) {
 	if ctx, ok := c.contexts[rf]; ok {
 		return ctx, nil
 	}
@@ -387,7 +437,7 @@ func (c *Config) getContext(rf types.Resource) (*hcl.EvalContext, error) {
 	return nil, ResourceNotFoundError{}
 }
 
-func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
+func (c *Config) getBody(rf any) (*hclsyntax.Body, error) {
 	if b, ok := c.bodies[rf]; ok {
 		return b, nil
 	}
@@ -395,17 +445,21 @@ func (c *Config) getBody(rf types.Resource) (*hclsyntax.Body, error) {
 	return nil, ResourceNotFoundError{}
 }
 
-func NewQuerier[T types.Resource](c *Config) *Querier[T] {
+func NewQuerier[T any](c *Config) *Querier[T] {
 	return &Querier[T]{config: c}
 }
 
-type Querier[T types.Resource] struct {
+type Querier[T any] struct {
 	config *Config
 }
 
 func (q *Querier[T]) FindResource(path string) (T, error) {
 	for _, r := range q.config.Resources {
-		if r.Metadata().ID == path {
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.ID == path {
 			return r.(T), nil
 		}
 	}

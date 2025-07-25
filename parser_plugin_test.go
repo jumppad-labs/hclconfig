@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/hclconfig/logger"
-	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
 	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
+	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,8 +31,10 @@ func TestPluginRegistration(t *testing.T) {
 	resource, err := parser.pluginRegistry.CreateResource("person", "test_person")
 	require.NoError(t, err, "Should create resource from plugin")
 	require.NotNil(t, resource, "Resource should not be nil")
-	require.Equal(t, "test_person", resource.Metadata().Name)
-	require.Equal(t, "person", resource.Metadata().Type)
+	meta, err := types.GetMeta(resource)
+	require.NoError(t, err)
+	require.Equal(t, "test_person", meta.Name)
+	require.Equal(t, "person", meta.Type)
 }
 
 // TestPluginResourceCreationWithFallback tests plugin creation with fallback to registered types

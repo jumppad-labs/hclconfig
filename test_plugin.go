@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
+	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
-	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/embedded"
 	"github.com/jumppad-labs/hclconfig/types"
 )
 
@@ -19,7 +19,7 @@ type TestPlugin struct {
 	DestroyedResources []string // Track all destroyed resource names
 	UpdatedResources   []string // Track all updated resource names
 	ChangedCalls       []string // Track all changed checks (format: "oldID->newID")
-	
+
 	// Error configuration maps
 	CreateErrors  map[string]error // Maps resource ID to error for Create operations
 	DestroyErrors map[string]error // Maps resource ID to error for Destroy operations
@@ -113,14 +113,14 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 	p.DestroyedResources = []string{}
 	p.UpdatedResources = []string{}
 	p.ChangedCalls = []string{}
-	
+
 	// Initialize error maps
 	p.CreateErrors = make(map[string]error)
 	p.DestroyErrors = make(map[string]error)
 	p.UpdateErrors = make(map[string]error)
 	p.RefreshErrors = make(map[string]error)
 	p.ChangedErrors = make(map[string]error)
-	
+
 	// Register Container resource
 	containerResource := &structs.Container{}
 	containerProvider := &TestResourceProvider[*structs.Container]{plugin: p}
@@ -188,11 +188,11 @@ func (p *TestPlugin) Init(logger logger.Logger, state plugins.State) error {
 }
 
 // TestResourceProvider is a generic test provider for any resource type
-type TestResourceProvider[T types.Resource] struct {
-	logger         logger.Logger
-	state          plugins.State
-	functions      plugins.ProviderFunctions
-	plugin         *TestPlugin // Reference to parent plugin for tracking
+type TestResourceProvider[T any] struct {
+	logger    logger.Logger
+	state     plugins.State
+	functions plugins.ProviderFunctions
+	plugin    *TestPlugin // Reference to parent plugin for tracking
 }
 
 // Init initializes the test provider
@@ -207,16 +207,16 @@ func (p *TestResourceProvider[T]) Init(state plugins.State, functions plugins.Pr
 func (p *TestResourceProvider[T]) Create(ctx context.Context, resource T) (T, error) {
 	// Always track the resource name when create is called first
 	if p.plugin != nil {
-		// Use type assertion to check if resource implements the Resource interface
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			p.plugin.CreatedResources = append(p.plugin.CreatedResources, res.Metadata().ID)
+		// Use helper function to get resource metadata
+		if meta, err := types.GetMeta(resource); err == nil {
+			p.plugin.CreatedResources = append(p.plugin.CreatedResources, meta.ID)
 		}
 	}
-	
+
 	// Then check if an error is configured for this resource ID
 	if p.plugin != nil {
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			if err, exists := p.plugin.CreateErrors[res.Metadata().ID]; exists && err != nil {
+		if meta, err := types.GetMeta(resource); err == nil {
+			if err, exists := p.plugin.CreateErrors[meta.ID]; exists && err != nil {
 				return resource, err
 			}
 		}
@@ -228,16 +228,16 @@ func (p *TestResourceProvider[T]) Create(ctx context.Context, resource T) (T, er
 func (p *TestResourceProvider[T]) Destroy(ctx context.Context, resource T, force bool) error {
 	// Always track the resource name when destroy is called first
 	if p.plugin != nil {
-		// Use type assertion to check if resource implements the Resource interface
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			p.plugin.DestroyedResources = append(p.plugin.DestroyedResources, res.Metadata().ID)
+		// Use helper function to get resource metadata
+		if meta, err := types.GetMeta(resource); err == nil {
+			p.plugin.DestroyedResources = append(p.plugin.DestroyedResources, meta.ID)
 		}
 	}
-	
+
 	// Then check if an error is configured for this resource ID
 	if p.plugin != nil {
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			if err, exists := p.plugin.DestroyErrors[res.Metadata().ID]; exists && err != nil {
+		if meta, err := types.GetMeta(resource); err == nil {
+			if err, exists := p.plugin.DestroyErrors[meta.ID]; exists && err != nil {
 				return err
 			}
 		}
@@ -246,69 +246,69 @@ func (p *TestResourceProvider[T]) Destroy(ctx context.Context, resource T, force
 }
 
 // Refresh tracks the resource name for testing
-func (p *TestResourceProvider[T]) Refresh(ctx context.Context, resource T) error {
+func (p *TestResourceProvider[T]) Refresh(ctx context.Context, resource T) (T, error) {
 	// Always track the resource name when refresh is called first
 	if p.plugin != nil {
-		// Use type assertion to check if resource implements the Resource interface
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			p.plugin.RefreshedResources = append(p.plugin.RefreshedResources, res.Metadata().ID)
+		// Use helper function to get resource metadata
+		if meta, err := types.GetMeta(resource); err == nil {
+			p.plugin.RefreshedResources = append(p.plugin.RefreshedResources, meta.ID)
 		}
 	}
-	
+
 	// Then check if an error is configured for this resource ID
 	if p.plugin != nil {
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			if err, exists := p.plugin.RefreshErrors[res.Metadata().ID]; exists && err != nil {
-				return err
+		if meta, err := types.GetMeta(resource); err == nil {
+			if err, exists := p.plugin.RefreshErrors[meta.ID]; exists && err != nil {
+				return resource, err
 			}
 		}
 	}
-	return nil
+	return resource, nil
 }
 
 // Update tracks the resource name for testing
-func (p *TestResourceProvider[T]) Update(ctx context.Context, resource T) error {
+func (p *TestResourceProvider[T]) Update(ctx context.Context, resource T) (T, error) {
 	// Always track the resource name when update is called first
 	if p.plugin != nil {
-		// Use type assertion to check if resource implements the Resource interface
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			p.plugin.UpdatedResources = append(p.plugin.UpdatedResources, res.Metadata().ID)
+		// Use helper function to get resource metadata
+		if meta, err := types.GetMeta(resource); err == nil {
+			p.plugin.UpdatedResources = append(p.plugin.UpdatedResources, meta.ID)
 		}
 	}
-	
+
 	// Then check if an error is configured for this resource ID
 	if p.plugin != nil {
-		if res, ok := any(resource).(types.Resource); ok && res != nil {
-			if err, exists := p.plugin.UpdateErrors[res.Metadata().ID]; exists && err != nil {
-				return err
+		if meta, err := types.GetMeta(resource); err == nil {
+			if err, exists := p.plugin.UpdateErrors[meta.ID]; exists && err != nil {
+				return resource, err
 			}
 		}
 	}
-	return nil
+	return resource, nil
 }
 
 // Changed tracks the comparison and always returns false for testing
 func (p *TestResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bool, error) {
 	// Always track the changed check when it's called first
 	if p.plugin != nil {
-		// Use type assertion to check if resources implement the Resource interface
-		oldRes, oldOk := any(old).(types.Resource)
-		newRes, newOk := any(new).(types.Resource)
-		
-		if oldOk && newOk && oldRes != nil && newRes != nil {
+		// Use helper functions to get resource metadata
+		oldMeta, oldErr := types.GetMeta(old)
+		newMeta, newErr := types.GetMeta(new)
+
+		if oldErr == nil && newErr == nil {
 			// Format: "oldID->newID"
-			call := fmt.Sprintf("%s->%s", oldRes.Metadata().ID, newRes.Metadata().ID)
+			call := fmt.Sprintf("%s->%s", oldMeta.ID, newMeta.ID)
 			p.plugin.ChangedCalls = append(p.plugin.ChangedCalls, call)
 		}
 	}
-	
+
 	// Then check if an error is configured for this resource ID (using new resource ID)
 	if p.plugin != nil {
-		oldRes, oldOk := any(old).(types.Resource)
-		newRes, newOk := any(new).(types.Resource)
-		
-		if oldOk && newOk && oldRes != nil && newRes != nil {
-			if err, exists := p.plugin.ChangedErrors[newRes.Metadata().ID]; exists && err != nil {
+		_, oldErr := types.GetMeta(old)
+		newMeta, newErr := types.GetMeta(new)
+
+		if oldErr == nil && newErr == nil {
+			if err, exists := p.plugin.ChangedErrors[newMeta.ID]; exists && err != nil {
 				return false, err
 			}
 		}
@@ -320,7 +320,6 @@ func (p *TestResourceProvider[T]) Changed(ctx context.Context, old T, new T) (bo
 func (p *TestResourceProvider[T]) Functions() plugins.ProviderFunctions {
 	return p.functions
 }
-
 
 // EmbeddedTestPlugin provides embedded test resource types
 type EmbeddedTestPlugin struct {

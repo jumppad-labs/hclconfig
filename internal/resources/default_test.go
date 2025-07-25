@@ -30,6 +30,6 @@ func TestCreateResourceCreatesType(t *testing.T) {
 	require.NoError(t, e)
 	require.NotNil(t, r)
 
-	require.Equal(t, r.Metadata().Type, TypeVariable)
-	require.Equal(t, r.Metadata().Name, "test")
+	require.Equal(t, r.(*Variable).Meta.Type, TypeVariable)
+	require.Equal(t, r.(*Variable).Meta.Name, "test")
 }

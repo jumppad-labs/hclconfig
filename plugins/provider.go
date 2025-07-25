@@ -3,8 +3,6 @@ package plugins
 
 import (
 	"context"
-
-	"github.com/jumppad-labs/hclconfig/types"
 )
 
 // Jumppad uses a plugin model that allows you to register custom providers
@@ -14,8 +12,8 @@ import (
 // ResourceProvider defines the generic interface that all resource providers must implement.
 // It provides lifecycle management for resources including creation, destruction,
 // refresh, and state checking operations.
-// T must be a type that implements types.Resource.
-type ResourceProvider[T types.Resource] interface {
+// T must be a type that has embedded types.ResourceBase.
+type ResourceProvider[T any] interface {
 	// Init initializes the provider with state access, provider functions, and a logger.
 	// This method is called once when the provider is created and should be used
 	// to set up any required clients or dependencies.
@@ -55,9 +53,10 @@ type ResourceProvider[T types.Resource] interface {
 	//
 	// The ctx parameter provides cancellation and timeout control.
 	// The resource parameter contains the resource configuration to refresh.
+	// Returns the refreshed resource with updated state and any refresh error.
 	//
 	// The implementation should periodically check the context for cancellation.
-	Refresh(ctx context.Context, resource T) error
+	Refresh(ctx context.Context, resource T) (T, error)
 
 	// Update updates an existing resource to match the desired configuration.
 	// This method is called after Changed() returns true, indicating the resource
@@ -65,10 +64,10 @@ type ResourceProvider[T types.Resource] interface {
 	//
 	// The ctx parameter provides cancellation and timeout control.
 	// The resource parameter contains the desired resource configuration.
-	// Returns an error if the update fails.
+	// Returns the updated resource with new state and any update error.
 	//
 	// The implementation should periodically check the context for cancellation.
-	Update(ctx context.Context, resource T) error
+	Update(ctx context.Context, resource T) (T, error)
 
 	// Changed determines if a resource has changed by comparing the current state
 	// with the desired configuration.
@@ -84,4 +83,3 @@ type ResourceProvider[T types.Resource] interface {
 	// by other providers.
 	Functions() ProviderFunctions
 }
-

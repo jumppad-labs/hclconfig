@@ -49,6 +49,6 @@ func TestPluginCreateCallsTheProviderWithAConcreteType(t *testing.T) {
 	require.NoError(t, err)
 
 	// Call the plugin's Create method
-	err = p.Create("resource", "person", personJSON)
+	_, err = p.Create("resource", "person", personJSON)
 	require.NoError(t, err)
 }

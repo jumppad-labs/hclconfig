@@ -6,11 +6,11 @@ import (
 )
 
 /*
-* GenerateFromInstance creates a json structure based on the
+* GenerateSchemaFromInstance creates a json structure based on the
 * fields in the given instance. If depth is specified then
 * recursion does not go deeper than depth levels.
  */
-func GenerateFromInstance(v any, depth int) ([]byte, error) {
+func GenerateSchemaFromInstance(v any, depth int) ([]byte, error) {
 	elem := reflect.ValueOf(v)
 	e, err := serializeAttribute(elem, 0, depth)
 	if err != nil {
@@ -39,9 +39,18 @@ func serializeAttribute(v reflect.Value, currentDepth, maxDepth int) (*Attribute
 			}
 
 			if fe != nil {
-				fe.Name = v.Type().Field(i).Name
+				fieldType := v.Type().Field(i)
+
+				// Check if field is anonymous embedded
+				if fieldType.Anonymous {
+					fe.Anonymous = true
+					fe.Name = "" // No name for anonymous fields
+				} else {
+					fe.Name = fieldType.Name
+				}
+
 				fe.Type = v.Field(i).Type().String()
-				fe.Tags = string(v.Type().Field(i).Tag)
+				fe.Tags = string(fieldType.Tag)
 
 				e.Properties = append(e.Properties, fe)
 			}

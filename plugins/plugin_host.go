@@ -13,16 +13,16 @@ type PluginHost interface {
 	Validate(entityType, entitySubType string, entityData []byte) error
 
 	// Create creates a new entity
-	Create(entityType, entitySubType string, entityData []byte) error
+	Create(entityType, entitySubType string, entityData []byte) ([]byte, error)
 
 	// Destroy deletes an existing entity
 	Destroy(entityType, entitySubType string, entityData []byte) error
 
 	// Refresh refreshes the plugin state
-	Refresh(ctx context.Context) error
+	Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error)
 
 	// Update updates an existing entity
-	Update(entityType, entitySubType string, entityData []byte) error
+	Update(entityType, entitySubType string, entityData []byte) ([]byte, error)
 
 	// Changed checks if the entity has changed by comparing old and new
 	Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error)

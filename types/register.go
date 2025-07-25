@@ -17,18 +17,20 @@ func NewTypeNotRegisteredError(t string) *ErrTypeNotRegistered {
 	return &ErrTypeNotRegistered{Type: t}
 }
 
-type RegisteredTypes map[string]Resource
+type RegisteredTypes map[string]any
 
 // CreateResource creates a new instance of a resource from one of the registered types.
-func (r RegisteredTypes) CreateResource(resourceType, resourceName string) (Resource, error) {
+func (r RegisteredTypes) CreateResource(resourceType, resourceName string) (any, error) {
 	// check that the type exists
 	if t, ok := r[resourceType]; ok {
 		ptr := reflect.New(reflect.TypeOf(t).Elem())
 
-		res := ptr.Interface().(Resource)
-		res.Metadata().Name = resourceName
-		res.Metadata().Type = resourceType
-		res.Metadata().Properties = map[string]any{}
+		res := ptr.Interface()
+
+		meta, _ := GetMeta(res)
+		meta.Name = resourceName
+		meta.Type = resourceType
+		meta.Properties = make(map[string]any)
 
 		return res, nil
 	}

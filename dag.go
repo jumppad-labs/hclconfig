@@ -9,6 +9,7 @@ import (
 	"github.com/creasty/defaults"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
+	"github.com/kr/pretty"
 
 	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/internal/convert"
@@ -32,7 +33,11 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 	// Loop over all resources and add to graph
 	for _, resource := range c.Resources {
 		// ignore variables
-		if resource.Metadata().Type != resources.TypeVariable {
+		meta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if meta.Type != resources.TypeVariable {
 			graph.Add(resource)
 		}
 	}
@@ -42,28 +47,50 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		hasDeps := false
 
 		// do nothing with variables
-		if resource.Metadata().Type == resources.TypeVariable {
+		resourceMeta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		if resourceMeta.Type == resources.TypeVariable {
 			continue
 		}
 
 		// use a map to keep a unique list
-		dependencies := map[types.Resource]bool{}
 
 		// add links to dependencies
-		// this is here for now as we might need to process these two lists separately
-		// resource.SetDependsOn(append(resource.GetDependsOn(), resource.Metadata().Links...))
-		for _, d := range resource.Metadata().Links {
-			resource.AddDependency(d)
+		for _, d := range resourceMeta.Links {
+			err := types.AppendUniqueDependency(resource, d)
+			if err != nil {
+				pe := &errors.ParserError{}
+				pe.Line = resourceMeta.Line
+				pe.Column = resourceMeta.Column
+				pe.Filename = resourceMeta.File
+				pe.Message = fmt.Sprintf("unable to append dependency: %s, error: %s", d, err)
+				pe.Level = errors.ParserErrorLevelError
+
+				return nil, pe
+			}
 		}
 
-		for _, d := range resource.GetDependencies() {
+		deps, err := types.GetDependencies(resource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get dependencies for resource %s: %w", resourceMeta.ID, err)
+		}
+
+		// create a map to keep track of unique dependencies
+		// a map is easier than a slice for this purpose
+		// as with a slice we would have to check if the dependency
+		// already exists before adding it
+		dependencies := make(map[any]bool)
+
+		for _, d := range deps {
 			var err error
 			fqdn, err := resources.ParseFQRN(d)
 			if err != nil {
 				pe := &errors.ParserError{}
-				pe.Line = resource.Metadata().Line
-				pe.Column = resource.Metadata().Column
-				pe.Filename = resource.Metadata().File
+				pe.Line = resourceMeta.Line
+				pe.Column = resourceMeta.Column
+				pe.Filename = resourceMeta.File
 				pe.Message = fmt.Sprintf("invalid dependency: %s, error: %s", d, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -77,7 +104,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				// "module1" and the reference is "module.module2.resource.container.mine.id"
 				// then the reference should be modified to include the parent reference
 				// "module.module1.module2.resource.container.mine.id"
-				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
+				relFQDN := fqdn.AppendParentModule(resourceMeta.Module)
 
 				// we ignore the error here as it may be possible that the module depends on
 				// disabled resources
@@ -95,7 +122,7 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				// "module1" and the reference is "module.module2.resource.container.mine.id"
 				// then the reference should be modified to include the parent reference
 				// "module.module1.module2.resource.container.mine.id"
-				relFQDN := fqdn.AppendParentModule(resource.Metadata().Module)
+				relFQDN := fqdn.AppendParentModule(resourceMeta.Module)
 
 				// we ignore the error here as it may be possible that the module depends on
 				// disabled resources
@@ -106,15 +133,15 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 		}
 
 		// if this resource is part of a module make it depend on that module
-		if resource.Metadata().Module != "" {
-			fqdnString := fmt.Sprintf("module.%s", resource.Metadata().Module)
+		if resourceMeta.Module != "" {
+			fqdnString := fmt.Sprintf("module.%s", resourceMeta.Module)
 
 			d, err := c.FindResource(fqdnString)
 			if err != nil {
 				pe := &errors.ParserError{}
-				pe.Line = resource.Metadata().Line
-				pe.Column = resource.Metadata().Column
-				pe.Filename = resource.Metadata().File
+				pe.Line = resourceMeta.Line
+				pe.Column = resourceMeta.Column
+				pe.Filename = resourceMeta.File
 				pe.Message = fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -143,50 +170,61 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 
 // buildDestroyDAG creates a DAG for destroying resources with reversed dependencies
 // Resources with dependencies must be destroyed before their dependencies
-func buildDestroyDAG(toDestroy []types.Resource) (*dag.AcyclicGraph, error) {
+func buildDestroyDAG(toDestroy []any) (*dag.AcyclicGraph, error) {
 	graph := &dag.AcyclicGraph{}
-	
+
 	if len(toDestroy) == 0 {
 		return graph, nil
 	}
-	
+
 	// Add a root node for the destroy graph
 	root, _ := resources.DefaultResources().CreateResource(resources.TypeRoot, "destroy_root")
 	graph.Add(root)
-	
+
 	// Add all resources to be destroyed to the graph
 	for _, resource := range toDestroy {
 		graph.Add(resource)
 	}
-	
+
 	// Create a map for quick lookup of resources in destroy list
-	destroyMap := make(map[string]types.Resource)
+	destroyMap := make(map[string]any)
 	for _, resource := range toDestroy {
-		destroyMap[resource.Metadata().ID] = resource
+		meta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		destroyMap[meta.ID] = resource
 	}
-	
+
 	// Add REVERSED dependencies between resources to be destroyed
 	// If A depends on B, we want to destroy A before B, so we create edge A -> B
-	resourcesWithDeps := make(map[types.Resource]bool)
-	
+	resourcesWithDeps := make(map[any]bool)
+
 	for _, resource := range toDestroy {
 		// Collect all dependencies for this resource
 		var allDependencies []string
-		
+
 		// Add explicit dependencies from depends_on
-		allDependencies = append(allDependencies, resource.GetDependencies()...)
-		
+		deps, err := types.GetDependencies(resource)
+		if err == nil {
+			allDependencies = append(allDependencies, deps...)
+		}
+
 		// Add implicit dependencies from resource links (interpolations)
-		allDependencies = append(allDependencies, resource.Metadata().Links...)
-		
+		resourceMeta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+		allDependencies = append(allDependencies, resourceMeta.Links...)
+
 		hasDepsInDestroyList := false
-		
+
 		// For each dependency, if it's also being destroyed, create a dependency edge
 		for _, dependency := range allDependencies {
 			if dependency == "" {
 				continue
 			}
-			
+
 			// Check if the dependency is also in the destroy list
 			if depResource, exists := destroyMap[dependency]; exists {
 				// Create edge: resource -> depResource (destroy resource before depResource)
@@ -196,27 +234,36 @@ func buildDestroyDAG(toDestroy []types.Resource) (*dag.AcyclicGraph, error) {
 				hasDepsInDestroyList = true
 			}
 		}
-		
+
 		// If this resource has no dependencies in the destroy list, connect it to root
 		if !hasDepsInDestroyList {
 			graph.Connect(dag.BasicEdge(root, resource))
 		}
 	}
-	
+
 	// Connect all resources without dependencies to root
 	for _, resource := range toDestroy {
 		hasIncomingEdges := false
-		
+		resourceMeta, err := types.GetMeta(resource)
+		if err != nil {
+			continue // Skip resources without ResourceBase
+		}
+
 		// Check if this resource has any incoming edges from other destroy resources
 		for _, otherResource := range toDestroy {
 			if otherResource == resource {
 				continue
 			}
-			
+
 			// Check if otherResource depends on this resource
-			otherDeps := append(otherResource.GetDependencies(), otherResource.Metadata().Links...)
+			otherResourceMeta, err := types.GetMeta(otherResource)
+			if err != nil {
+				continue
+			}
+			otherDeps, _ := types.GetDependencies(otherResource)
+			otherDeps = append(otherDeps, otherResourceMeta.Links...)
 			for _, dep := range otherDeps {
-				if dep == resource.Metadata().ID {
+				if dep == resourceMeta.ID {
 					hasIncomingEdges = true
 					break
 				}
@@ -225,13 +272,13 @@ func buildDestroyDAG(toDestroy []types.Resource) (*dag.AcyclicGraph, error) {
 				break
 			}
 		}
-		
+
 		// If no incoming edges from destroy resources, connect to root
 		if !hasIncomingEdges {
 			graph.Connect(dag.BasicEdge(root, resource))
 		}
 	}
-	
+
 	return graph, nil
 }
 
@@ -239,82 +286,89 @@ func buildDestroyDAG(toDestroy []types.Resource) (*dag.AcyclicGraph, error) {
 // Skips complex processing since resources are already fully processed
 func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
-		r, ok := v.(types.Resource)
-		// not a resource skip, this should never happen
-		if !ok {
-			panic("an item has been added to the destroy graph that is not a resource")
-		}
-		
+		// v should be a resource (either builtin or schema-generated)
+		r := v
+
 		// Skip the destroy root node
-		if r.Metadata().Type == resources.TypeRoot {
+		rMeta, err := types.GetMeta(r)
+		if err != nil {
+			return nil // Skip resources without ResourceBase
+		}
+		if rMeta.Type == resources.TypeRoot {
 			return nil
 		}
-		
+
 		// Skip builtin resource types that don't have providers
-		if r.Metadata().Type == resources.TypeVariable ||
-			r.Metadata().Type == resources.TypeOutput ||
-			r.Metadata().Type == resources.TypeLocal ||
-			r.Metadata().Type == resources.TypeModule ||
-			r.Metadata().Type == resources.TypeRoot {
-			
+		if rMeta.Type == resources.TypeVariable ||
+			rMeta.Type == resources.TypeOutput ||
+			rMeta.Type == resources.TypeLocal ||
+			rMeta.Type == resources.TypeModule ||
+			rMeta.Type == resources.TypeRoot {
+
 			// Fire destroy events for builtin types (always succeed with 0 time)
-			resourceType := fmt.Sprintf("%s.%s", r.Metadata().Type, r.Metadata().Name)
-			fireParserEvent(options, "destroy", resourceType, r.Metadata().ID, "success", 0, nil, nil)
-			r.Metadata().Status = "destroyed"
+			resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
+			fireParserEvent(options, "destroy", resourceType, rMeta.ID, "success", 0, nil, nil)
+
+			rMeta.Status = "destroyed"
+
 			return nil
 		}
-		
+
 		// Get the provider for this resource
-		adapter := registry.GetProvider(r)
+		adapter := registry.GetProviderForResource(r)
 		if adapter == nil {
-			r.Metadata().Status = "destroy_failed"
+
+			rMeta.Status = "destroyed_failed"
+
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
-			pe.Message = fmt.Sprintf("no provider found for resource type %s", r.Metadata().Type)
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
+			pe.Message = fmt.Sprintf("no provider found for resource type %s", rMeta.Type)
 			pe.Level = errors.ParserErrorLevelError
 			return diags.Append(pe)
 		}
-		
+
 		ctx := context.Background()
-		resourceID := r.Metadata().ID
-		resourceType := fmt.Sprintf("%s.%s", r.Metadata().Type, r.Metadata().Name)
-		
+		resourceID := rMeta.ID
+		resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
+
 		// Serialize the resource to JSON for provider call
 		resourceJSON, err := json.Marshal(r)
 		if err != nil {
-			r.Metadata().Status = "destroy_failed"
+			rMeta.Status = "destroyed_failed"
+
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf("failed to serialize resource for destroy: %s", err)
 			pe.Level = errors.ParserErrorLevelError
 			return diags.Append(pe)
 		}
-		
+
 		// Call destroy on the provider
 		fireParserEvent(options, "destroy", resourceType, resourceID, "start", 0, nil, resourceJSON)
 		start := time.Now()
 		err = adapter.Destroy(ctx, resourceJSON, false)
 		duration := time.Since(start)
-		
+
 		if err != nil {
 			fireParserEvent(options, "destroy", resourceType, resourceID, "error", duration, err, resourceJSON)
-			r.Metadata().Status = "destroy_failed"
+			rMeta.Status = "destroy_failed"
+
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf("destroy failed: %s", err)
 			pe.Level = errors.ParserErrorLevelError
 			return diags.Append(pe)
 		}
-		
+
 		fireParserEvent(options, "destroy", resourceType, resourceID, "success", duration, nil, resourceJSON)
-		r.Metadata().Status = "destroyed"
-		
+		rMeta.Status = "destroyed"
+
 		return nil
 	}
 }
@@ -342,20 +396,22 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
-		r, ok := v.(types.Resource)
-		// not a resource skip, this should never happen
-		if !ok {
-			panic("an item has been added to the graph that is not a resource")
-		}
+		// v should be a resource (either builtin or schema-generated)
+		r := v
 
 		// if this is the root module or is disabled skip or is a variable
-		if r.Metadata().Type == resources.TypeRoot {
+		rMeta, err := types.GetMeta(r)
+		if err != nil {
+			return diags.Append(err)
+		}
+
+		if rMeta.Type == resources.TypeRoot {
 			return nil
 		}
 
 		bdy, err := c.getBody(r)
 		if err != nil {
-			panic(fmt.Sprintf(`no body found for resource "%s"`, r.Metadata().ID))
+			panic(fmt.Sprintf(`no body found for resource "%s"`, rMeta.ID))
 		}
 
 		ctx, err := c.getContext(r)
@@ -376,9 +432,9 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			// need to handle this error
 			if err != nil {
 				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
+				pe.Filename = rMeta.File
+				pe.Line = rMeta.Line
+				pe.Column = rMeta.Column
 				pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -398,26 +454,38 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 				if expdiags.HasErrors() {
 
 					pe := &errors.ParserError{}
-					pe.Filename = r.Metadata().File
-					pe.Line = r.Metadata().Line
-					pe.Column = r.Metadata().Column
+					pe.Filename = rMeta.File
+					pe.Line = rMeta.Line
+					pe.Column = rMeta.Column
 					pe.Message = fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error())
 					pe.Level = errors.ParserErrorLevelError
 
 					return diags.Append(pe)
 				}
 
-				r.SetDisabled(isDisabled)
+				types.SetDisabled(r, isDisabled)
 			}
 		}
 
 		// if the resource is disabled we need to skip the resource
-		if r.GetDisabled() {
+		disabled, err := types.GetDisabled(r)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
+			pe.Message = fmt.Sprintf(`unable to get disabled value: %s`, err)
+			pe.Level = errors.ParserErrorLevelError
+
+			return diags.Append(pe)
+		}
+
+		if disabled {
 			return nil
 		}
 
 		// set the context variables from the linked resources
-		setContextVariablesFromList(c, r, r.Metadata().Links, ctx)
+		setContextVariablesFromList(c, r, rMeta.Links, ctx)
 
 		// Process the raw resource now we have the context from the linked
 		// resources
@@ -429,10 +497,11 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
+			pretty.Println(r)
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf(`unable to decode body: %s`, diag.Error())
 			// this error is set as warning as it is possible that the resource has
 			// interpolation that is not yet resolved
@@ -461,16 +530,20 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		// disabled
 
 		// as an additional check, set all module resources to disabled if the module is disabled
-		if r.GetDisabled() && r.Metadata().Type == resources.TypeModule {
+		disabled, err = types.GetDisabled(r)
+		if err != nil {
+			disabled = false
+		}
+		if disabled && rMeta.Type == resources.TypeModule {
 			// find all dependent resources
-			dr, err := c.FindModuleResources(r.Metadata().ID, true)
+			dr, err := c.FindModuleResources(rMeta.ID, true)
 			if err != nil {
 				// should not be here unless an internal error
 				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
-				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, r.Metadata().ID, err)
+				pe.Filename = rMeta.File
+				pe.Line = rMeta.Line
+				pe.Column = rMeta.Column
+				pe.Message = fmt.Sprintf(`unable to find disabled module resources "%s", %s"`, rMeta.ID, err)
 				pe.Level = errors.ParserErrorLevelError
 
 				return diags.Append(pe)
@@ -478,13 +551,13 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 
 			// set all the dependents to disabled
 			for _, d := range dr {
-				d.SetDisabled(true)
+				types.SetDisabled(d, true)
 			}
 		}
 
 		// if the type is a module we need to add the variables to the
 		// context
-		if r.Metadata().Type == resources.TypeModule {
+		if rMeta.Type == resources.TypeModule {
 			mod := r.(*resources.Module)
 
 			var mapVars map[string]cty.Value
@@ -500,7 +573,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 
 		// if this is an output or local we need to convert the value into
 		// a go type
-		if r.Metadata().Type == resources.TypeOutput {
+		if rMeta.Type == resources.TypeOutput {
 			o := r.(*resources.Output)
 
 			if !o.CtyValue.IsNull() {
@@ -508,7 +581,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			}
 		}
 
-		if r.Metadata().Type == resources.TypeLocal {
+		if rMeta.Type == resources.TypeLocal {
 			o := r.(*resources.Local)
 
 			if !o.CtyValue.IsNull() {
@@ -518,13 +591,17 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 
 		// if disabled was set through interpolation, the value has only been set here
 		// we need to handle an additional check
-		if !r.GetDisabled() {
+		disabled, err = types.GetDisabled(r)
+		if err != nil {
+			disabled = false
+		}
+		if !disabled {
 			// Call provider lifecycle methods
 			if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
 				pe := &errors.ParserError{}
-				pe.Filename = r.Metadata().File
-				pe.Line = r.Metadata().Line
-				pe.Column = r.Metadata().Column
+				pe.Filename = rMeta.File
+				pe.Line = rMeta.Line
+				pe.Column = rMeta.Column
 				pe.Message = fmt.Sprintf("provider lifecycle error: %s", err)
 				pe.Level = errors.ParserErrorLevelError
 
@@ -537,33 +614,38 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 }
 
 // callProviderLifecycle calls the appropriate provider lifecycle methods for a resource
-func callProviderLifecycle(resource types.Resource, previousState *Config, registry *PluginRegistry, options *ParserOptions) error {
+func callProviderLifecycle(resource any, previousState *Config, registry *PluginRegistry, options *ParserOptions) error {
+
+	resourceMeta, err := types.GetMeta(resource)
+	if err != nil {
+		return fmt.Errorf("resource does not have ResourceBase embedded: %w", err)
+	}
 
 	// Skip builtin resource types that don't have providers, but fire events for them
-	if resource.Metadata().Type == resources.TypeVariable ||
-		resource.Metadata().Type == resources.TypeOutput ||
-		resource.Metadata().Type == resources.TypeLocal ||
-		resource.Metadata().Type == resources.TypeModule ||
-		resource.Metadata().Type == resources.TypeRoot {
+	if resourceMeta.Type == resources.TypeVariable ||
+		resourceMeta.Type == resources.TypeOutput ||
+		resourceMeta.Type == resources.TypeLocal ||
+		resourceMeta.Type == resources.TypeModule ||
+		resourceMeta.Type == resources.TypeRoot {
 
 		// Fire events for all builtin types (always succeed with 0 time)
 		// Note: Variables are also handled in parseVariablesInFile, but this catches any that go through DAG
-		resourceType := fmt.Sprintf("%s.%s", resource.Metadata().Type, resource.Metadata().Name)
-		fireParserEvent(options, "create", resourceType, resource.Metadata().ID, "success", 0, nil, nil)
+		resourceType := fmt.Sprintf("%s.%s", resourceMeta.Type, resourceMeta.Name)
+		fireParserEvent(options, "create", resourceType, resourceMeta.ID, "success", 0, nil, nil)
 
 		return nil
 	}
 
 	// Get the provider for this resource
-	adapter := registry.GetProvider(resource)
+	adapter := registry.GetProviderForResource(resource)
 	if adapter == nil {
 		// No provider found - this might be a builtin type without a provider
-		return fmt.Errorf("no provider found for resource type %s", resource.Metadata().Type)
+		return fmt.Errorf("no provider found for resource type %s", resourceMeta.Type)
 	}
 
 	ctx := context.Background()
-	resourceID := resource.Metadata().ID
-	resourceType := fmt.Sprintf("%s.%s", resource.Metadata().Type, resource.Metadata().Name)
+	resourceID := resourceMeta.ID
+	resourceType := fmt.Sprintf("%s.%s", resourceMeta.Type, resourceMeta.Name)
 
 	// Serialize the current resource to JSON
 	currentJSON, err := json.Marshal(resource)
@@ -572,7 +654,7 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 	}
 
 	// Check if resource exists in state
-	var stateResource types.Resource
+	var stateResource any
 	var existsInState bool
 	if previousState != nil {
 		var err error
@@ -586,14 +668,24 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		// 1. Call Refresh to ensure state is up to date
 		fireParserEvent(options, "refresh", resourceType, resourceID, "start", 0, nil, currentJSON)
 		start := time.Now()
-		err := adapter.Refresh(ctx, currentJSON)
+		refreshedData, err := adapter.Refresh(ctx, currentJSON)
 		duration := time.Since(start)
-		
+
 		if err != nil {
 			fireParserEvent(options, "refresh", resourceType, resourceID, "error", duration, err, currentJSON)
-			resource.Metadata().Status = "failed"
+			resourceMeta.Status = "failed"
 			return fmt.Errorf("refresh failed: %w", err)
 		}
+
+		// Unmarshal refreshed data back into the resource object to preserve provider mutations
+		if refreshedData != nil {
+			if err := json.Unmarshal(refreshedData, resource); err != nil {
+				fireParserEvent(options, "refresh", resourceType, resourceID, "error", duration, err, currentJSON)
+				resourceMeta.Status = "failed"
+				return fmt.Errorf("failed to unmarshal refreshed resource: %w", err)
+			}
+		}
+
 		fireParserEvent(options, "refresh", resourceType, resourceID, "success", duration, nil, currentJSON)
 
 		// 2. Serialize state resource for comparison
@@ -607,10 +699,10 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		start = time.Now()
 		changed, err := adapter.Changed(ctx, stateJSON, currentJSON)
 		duration = time.Since(start)
-		
+
 		if err != nil {
 			fireParserEvent(options, "changed", resourceType, resourceID, "error", duration, err, currentJSON)
-			resource.Metadata().Status = "failed"
+			resourceMeta.Status = "failed"
 			return fmt.Errorf("changed check failed: %w", err)
 		}
 		fireParserEvent(options, "changed", resourceType, resourceID, "success", duration, nil, currentJSON)
@@ -619,36 +711,58 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 		if changed {
 			fireParserEvent(options, "update", resourceType, resourceID, "start", 0, nil, currentJSON)
 			start = time.Now()
-			err := adapter.Update(ctx, currentJSON)
+			updatedData, err := adapter.Update(ctx, currentJSON)
 			duration = time.Since(start)
-			
+
 			if err != nil {
 				fireParserEvent(options, "update", resourceType, resourceID, "error", duration, err, currentJSON)
-				resource.Metadata().Status = "failed"
+				resourceMeta.Status = "failed"
 				return fmt.Errorf("update failed: %w", err)
 			}
+
+			// Unmarshal updated data back into the resource object to preserve provider mutations
+			if updatedData != nil {
+				if err := json.Unmarshal(updatedData, resource); err != nil {
+					fireParserEvent(options, "update", resourceType, resourceID, "error", duration, err, currentJSON)
+					resourceMeta.Status = "failed"
+					return fmt.Errorf("failed to unmarshal updated resource: %w", err)
+				}
+			}
+
 			fireParserEvent(options, "update", resourceType, resourceID, "success", duration, nil, currentJSON)
-			resource.Metadata().Status = "updated"
+			resourceMeta.Status = "updated"
 		} else {
 			// No changes needed, preserve existing status
-			if stateResource.Metadata().Status != "" {
-				resource.Metadata().Status = stateResource.Metadata().Status
+			// TODO, I don't think this code is correct, needs investigation
+			stateMeta, err := types.GetMeta(stateResource)
+			if err == nil && stateMeta.Status != "" {
+				resourceMeta.Status = stateMeta.Status
 			}
 		}
 	} else {
 		// Resource doesn't exist in state - create it
 		fireParserEvent(options, "create", resourceType, resourceID, "start", 0, nil, currentJSON)
 		start := time.Now()
-		err := adapter.Create(ctx, currentJSON)
+		mutatedData, err := adapter.Create(ctx, currentJSON)
 		duration := time.Since(start)
-		
+
 		if err != nil {
 			fireParserEvent(options, "create", resourceType, resourceID, "error", duration, err, currentJSON)
-			resource.Metadata().Status = "failed"
+			resourceMeta.Status = "failed"
 			return fmt.Errorf("create failed: %w", err)
 		}
+
+		// Unmarshal mutated data back into the resource object to preserve provider mutations
+		if mutatedData != nil {
+			if err := json.Unmarshal(mutatedData, resource); err != nil {
+				fireParserEvent(options, "create", resourceType, resourceID, "error", duration, err, currentJSON)
+				resourceMeta.Status = "failed"
+				return fmt.Errorf("failed to unmarshal mutated resource: %w", err)
+			}
+		}
+
 		fireParserEvent(options, "create", resourceType, resourceID, "success", duration, nil, currentJSON)
-		resource.Metadata().Status = "created"
+		resourceMeta.Status = "created"
 	}
 
 	return nil
@@ -659,17 +773,24 @@ func callProviderLifecycle(resource types.Resource, previousState *Config, regis
 // for example: given the values ["module.module1.module2.resource.container.mine.id"]
 // the context variable "module.module1.module2.resource.container.mine.id" will be set to the
 // value defined by the resource of type container with the name mine and the attribute id
-func setContextVariablesFromList(c *Config, r types.Resource, values []string, ctx *hcl.EvalContext) *errors.ParserError {
+func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.EvalContext) *errors.ParserError {
 	// attempt to set the values in the resource links to the resource attribute
 	// all linked values should now have been processed as the graph
 	// will have handled them first
 	for _, v := range values {
+		rMeta, err := types.GetMeta(r)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Message = fmt.Sprintf("resource does not have ResourceBase embedded: %s", err)
+			pe.Level = errors.ParserErrorLevelError
+			return pe
+		}
 		fqrn, err := resources.ParseFQRN(v)
 		if err != nil {
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf("error parsing resource link %s", err)
 			pe.Level = errors.ParserErrorLevelError
 
@@ -677,12 +798,12 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 		}
 
 		// get the value from the linked resource
-		l, err := c.FindRelativeResource(v, r.Metadata().Module)
+		l, err := c.FindRelativeResource(v, rMeta.Module)
 		if err != nil {
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err)
 			pe.Level = errors.ParserErrorLevelError
 
@@ -693,7 +814,17 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 
 		// once we have found a resource convert it to a cty type and then
 		// set it on the context
-		switch l.Metadata().Type {
+		lMeta, err := types.GetMeta(l)
+		if err != nil {
+			pe := &errors.ParserError{}
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
+			pe.Message = fmt.Sprintf("linked resource does not have ResourceBase embedded: %s", err)
+			pe.Level = errors.ParserErrorLevelError
+			return pe
+		}
+		switch lMeta.Type {
 		case resources.TypeLocal:
 			loc := l.(*resources.Local)
 			ctyRes = loc.CtyValue
@@ -706,9 +837,9 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 
 		if err != nil {
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf(`unable to convert reference %s to context variable: %s`, v, err)
 			pe.Level = errors.ParserErrorLevelError
 
@@ -721,9 +852,9 @@ func setContextVariablesFromList(c *Config, r types.Resource, values []string, c
 		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
 		if err != nil {
 			pe := &errors.ParserError{}
-			pe.Filename = r.Metadata().File
-			pe.Line = r.Metadata().Line
-			pe.Column = r.Metadata().Column
+			pe.Filename = rMeta.File
+			pe.Line = rMeta.Line
+			pe.Column = rMeta.Column
 			pe.Message = fmt.Sprintf(`unable to set context variable: %s`, err)
 			pe.Level = errors.ParserErrorLevelError
 

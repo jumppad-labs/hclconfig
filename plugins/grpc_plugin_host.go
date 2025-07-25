@@ -11,10 +11,12 @@ import (
 
 // GRPCPluginHost manages external plugin processes via gRPC and provides host services
 type GRPCPluginHost struct {
-	logger Logger
-	state  State
-	client *plugin.Client
-	plugin PluginEntityProvider
+	logger         Logger
+	state          State
+	client         *plugin.Client
+	plugin         PluginEntityProvider
+	cachedTypes    []RegisteredType // cached types with adapters
+	typesCached    bool             // flag to track if types have been cached
 }
 
 // NewGRPCPluginHost creates a new gRPC plugin host for external plugin binaries
@@ -24,7 +26,6 @@ func NewGRPCPluginHost(logger Logger, state State) *GRPCPluginHost {
 		state:  state,
 	}
 }
-
 
 // Start initializes and starts the external plugin process
 func (h *GRPCPluginHost) Start(pluginPath string) error {
@@ -83,7 +84,7 @@ func (w *grpcPluginWrapper) GetTypes() []RegisteredType {
 			Type:    t.Type,
 			SubType: t.SubType,
 			Schema:  t.Schema,
-			// Note: ConcreteType and Adapter are not relevant for remote plugins
+			// Note: Adapter is set to nil for remote plugins as it's handled by the gRPC wrapper
 		}
 	}
 
@@ -107,21 +108,21 @@ func (w *grpcPluginWrapper) Validate(entityType, entitySubType string, entityDat
 	return nil
 }
 
-func (w *grpcPluginWrapper) Create(entityType, entitySubType string, entityData []byte) error {
+func (w *grpcPluginWrapper) Create(entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	resp, err := w.client.Create(context.Background(), &proto.CreateRequest{
 		EntityType:    entityType,
 		EntitySubType: entitySubType,
 		EntityData:    entityData,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp.Error != "" {
-		return fmt.Errorf(resp.Error)
+		return nil, fmt.Errorf(resp.Error)
 	}
 
-	return nil
+	return resp.MutatedEntityData, nil
 }
 
 func (w *grpcPluginWrapper) Destroy(entityType, entitySubType string, entityData []byte) error {
@@ -141,34 +142,38 @@ func (w *grpcPluginWrapper) Destroy(entityType, entitySubType string, entityData
 	return nil
 }
 
-func (w *grpcPluginWrapper) Refresh(ctx context.Context) error {
-	resp, err := w.client.Refresh(ctx, &proto.RefreshRequest{})
+func (w *grpcPluginWrapper) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
+	resp, err := w.client.Refresh(ctx, &proto.RefreshRequest{
+		EntityType:    entityType,
+		EntitySubType: entitySubType,
+		EntityData:    entityData,
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp.Error != "" {
-		return fmt.Errorf(resp.Error)
+		return nil, fmt.Errorf(resp.Error)
 	}
 
-	return nil
+	return resp.RefreshedEntityData, nil
 }
 
-func (w *grpcPluginWrapper) Update(entityType, entitySubType string, entityData []byte) error {
+func (w *grpcPluginWrapper) Update(entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	resp, err := w.client.Update(context.Background(), &proto.UpdateRequest{
 		EntityType:    entityType,
 		EntitySubType: entitySubType,
 		EntityData:    entityData,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp.Error != "" {
-		return fmt.Errorf(resp.Error)
+		return nil, fmt.Errorf(resp.Error)
 	}
 
-	return nil
+	return resp.UpdatedEntityData, nil
 }
 
 func (w *grpcPluginWrapper) Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error) {
@@ -192,12 +197,41 @@ func (w *grpcPluginWrapper) Changed(entityType, entitySubType string, oldEntityD
 // Ensure GRPCPluginHost implements PluginHost interface
 var _ PluginHost = (*GRPCPluginHost)(nil)
 
-// GetTypes returns the types handled by the plugin
+// GetTypes returns the types handled by the plugin, creating and caching adapters on first call
 func (h *GRPCPluginHost) GetTypes() []RegisteredType {
 	if h.plugin == nil {
 		return nil
 	}
-	return h.plugin.GetTypes()
+
+	// Return cached types if already created
+	if h.typesCached {
+		return h.cachedTypes
+	}
+
+	// Get types from remote plugin (this calls grpcPluginWrapper.GetTypes())
+	remoteTypes := h.plugin.GetTypes()
+	if remoteTypes == nil {
+		return nil
+	}
+
+	// Create resource-specific adapters for each type
+	h.cachedTypes = make([]RegisteredType, len(remoteTypes))
+	wrapper := h.plugin.(*grpcPluginWrapper) // cast to access wrapper
+
+	for i, t := range remoteTypes {
+		// Create a resource-specific adapter
+		adapter := NewGRPCResourceProviderAdapter(wrapper, t.Type, t.SubType)
+		
+		h.cachedTypes[i] = RegisteredType{
+			Type:    t.Type,
+			SubType: t.SubType,
+			Schema:  t.Schema,
+			Adapter: adapter,
+		}
+	}
+
+	h.typesCached = true
+	return h.cachedTypes
 }
 
 // Validate validates the given entity data
@@ -209,11 +243,11 @@ func (h *GRPCPluginHost) Validate(entityType, entitySubType string, entityData [
 }
 
 // Create creates a new entity
-func (h *GRPCPluginHost) Create(entityType, entitySubType string, entityData []byte) error {
+func (h *GRPCPluginHost) Create(entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	if h.plugin == nil {
-		return fmt.Errorf("plugin not initialized")
+		return nil, fmt.Errorf("plugin not initialized")
 	}
-	return h.plugin.Create(entityType, entitySubType, entityData)
+	return h.plugin.(*grpcPluginWrapper).Create(entityType, entitySubType, entityData)
 }
 
 // Destroy deletes an existing entity
@@ -225,19 +259,19 @@ func (h *GRPCPluginHost) Destroy(entityType, entitySubType string, entityData []
 }
 
 // Refresh refreshes the plugin state
-func (h *GRPCPluginHost) Refresh(ctx context.Context) error {
+func (h *GRPCPluginHost) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	if h.plugin == nil {
-		return fmt.Errorf("plugin not initialized")
+		return nil, fmt.Errorf("plugin not initialized")
 	}
-	return h.plugin.Refresh(ctx)
+	return h.plugin.(*grpcPluginWrapper).Refresh(ctx, entityType, entitySubType, entityData)
 }
 
 // Update updates an existing entity
-func (h *GRPCPluginHost) Update(entityType, entitySubType string, entityData []byte) error {
+func (h *GRPCPluginHost) Update(entityType, entitySubType string, entityData []byte) ([]byte, error) {
 	if h.plugin == nil {
-		return fmt.Errorf("plugin not initialized")
+		return nil, fmt.Errorf("plugin not initialized")
 	}
-	return h.plugin.Update(entityType, entitySubType, entityData)
+	return h.plugin.(*grpcPluginWrapper).Update(entityType, entitySubType, entityData)
 }
 
 // Changed checks if the entity has changed by comparing old and new

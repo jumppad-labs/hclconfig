@@ -25,16 +25,6 @@ type Parsable interface {
 	Parse(config Findable) error
 }
 
-// Resource is an interface that all
-type Resource interface {
-	// return the resource Metadata
-	Metadata() *Meta
-	GetDisabled() bool
-	SetDisabled(bool)
-	GetDependencies() []string
-	SetDependencies([]string)
-	AddDependency(string)
-}
 
 type Meta struct {
 	// ID is the unique id for the resource
@@ -89,44 +79,4 @@ type ResourceBase struct {
 	Disabled bool `hcl:"disabled,optional" json:"disabled,omitempty"`
 
 	Meta Meta `hcl:"meta,optional" json:"meta,omitempty"`
-}
-
-// Metadata is a function that ensures the struct that embeds the ResourceBase
-// struct conforms to the interface Resource
-func (r *ResourceBase) Metadata() *Meta {
-	return &r.Meta
-}
-
-func (r *ResourceBase) GetDisabled() bool {
-	return r.Disabled
-}
-
-func (r *ResourceBase) SetDisabled(v bool) {
-	r.Disabled = v
-}
-
-func (r *ResourceBase) GetDependencies() []string {
-	return r.DependsOn
-}
-
-func (r *ResourceBase) SetDependencies(v []string) {
-	r.DependsOn = v
-}
-
-func (r *ResourceBase) AddDependency(v string) {
-	r.DependsOn = appendIfNotContains(r.DependsOn, v)
-}
-
-func appendIfNotContains(list []string, value string) []string {
-	contains := false
-	for _, item := range list {
-		if value == item {
-			contains = true
-		}
-	}
-
-	if !contains {
-		list = append(list, value)
-	}
-	return list
 }

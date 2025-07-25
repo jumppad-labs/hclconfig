@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/kr/pretty"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -43,9 +42,8 @@ type MyEntity struct {
 
 func TestEnd2EndTestConfigToStruct(t *testing.T) {
 	// create the scehma from the struct
-	jsonSchema, err := GenerateFromInstance(MyEntity{}, 10)
+	jsonSchema, err := GenerateSchemaFromInstance(MyEntity{}, 10)
 	require.NoError(t, err)
-	pretty.Println(string(jsonSchema))
 
 	// parse the HCL file
 	parser := hclparse.NewParser()
@@ -67,9 +65,8 @@ func TestEnd2EndTestConfigToStruct(t *testing.T) {
 
 	for _, block := range body.Blocks {
 		// Create a new struct from the schema
-		wireType, err := CreateStructFromSchema(jsonSchema)
+		wireType, err := CreateInstanceFromSchema(jsonSchema, nil)
 		require.NoError(t, err)
-		pretty.Println("wiretype", wireType)
 
 		// Decode the block into the struct
 		diags := gohcl.DecodeBody(block.Body, ctx, wireType)
