@@ -2,30 +2,6 @@ package types
 
 var TypeResource = "resource"
 
-// Parsable defines an optional interface that allows a resource to be
-// modified directly after it has been loaded from a file
-//
-// Parsable should be implemented when you want to do basic validation of
-// resources before they are processed by the graph.
-//
-// Parse is called sequentially for each resource as it is loaded from the
-// config file. This occurs before the graph of dependent resources has been
-// built.
-type Parsable interface {
-	// Parse is called when the resource is created from a file, it is called
-	// after all configuration files have been read a list of which are passed
-	// to Parse to allow validation based on other resources.
-	//
-	// Note: it is not possible to set resource properties from parse
-	// as all properties are overwritten when the resource is processed
-	// by the dag and any dependencies are resolved.
-	//
-	// ResourceBase can be set by this method as this is not overridden
-	// when processed.
-	Parse(config Findable) error
-}
-
-
 type Meta struct {
 	// ID is the unique id for the resource
 	// this follows the convention module_name.resource_name

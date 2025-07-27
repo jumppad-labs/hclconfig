@@ -87,8 +87,6 @@ func createParser() *hclconfig.Parser {
 	// o.PluginDirectories = append(o.PluginDirectories, "/custom/plugin/path")
 	// o.PluginNamePattern = "my-plugin-*"  // Change pattern (default: "hclconfig-plugin-*")
 
-	// o.PrimativesOnly = true
-
 	return hclconfig.NewParser(o)
 }
 

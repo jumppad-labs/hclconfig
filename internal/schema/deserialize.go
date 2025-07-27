@@ -24,8 +24,6 @@ func CreateInstanceFromSchema(data []byte, typeMapping map[string]reflect.Type) 
 		return nil, err
 	}
 
-	// Return the dynamically created struct directly
-	// It has embedded ResourceBase and schema fields at root level
 	return result, nil
 }
 
@@ -45,17 +43,22 @@ func parseAttribute(attribute *Attribute, typeMapping map[string]reflect.Type) (
 	fields := []reflect.StructField{}
 
 	for _, a := range attribute.Properties {
-		// Handle anonymous embedded fields first
 		if a.Anonymous {
+			// Extract the field name from the type (e.g., "types.ResourceBase" -> "ResourceBase")
+			fieldName := extractTypeName(a.Type)
+
+			// Skip anonymous fields with unexported names since they can't have PkgPath set
+			// and would cause reflection errors
+			if len(fieldName) > 0 && fieldName[0] >= 'a' && fieldName[0] <= 'z' {
+				continue
+			}
+
 			t, err := parseType(a.Type)
 			if err != nil {
 				return nil, err
 			}
 
 			embeddedType := parseInnerType(t, a, typeMapping)
-
-			// Extract the field name from the type (e.g., "types.ResourceBase" -> "ResourceBase")
-			fieldName := extractTypeName(a.Type)
 
 			field := reflect.StructField{
 				Name:      fieldName, // Anonymous fields need the type name
@@ -65,6 +68,11 @@ func parseAttribute(attribute *Attribute, typeMapping map[string]reflect.Type) (
 			}
 
 			fields = append(fields, field)
+			continue
+		}
+
+		// Skip regular fields with unexported names since they can't be set via reflection
+		if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
 			continue
 		}
 
@@ -87,11 +95,6 @@ func parseAttribute(attribute *Attribute, typeMapping map[string]reflect.Type) (
 				Tag:  reflect.StructTag(a.Tags),
 			}
 
-			// Set PkgPath for unexported fields to avoid reflection errors
-			if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
-				nf.PkgPath = "github.com/jumppad-labs/hclconfig/internal/schema"
-			}
-
 			fields = append(fields, nf)
 
 		} else if t.Map {
@@ -110,11 +113,6 @@ func parseAttribute(attribute *Attribute, typeMapping map[string]reflect.Type) (
 				Tag:  reflect.StructTag(a.Tags),
 			}
 
-			// Set PkgPath for unexported fields to avoid reflection errors
-			if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
-				field.PkgPath = "github.com/jumppad-labs/hclconfig/internal/schema"
-			}
-
 			fields = append(fields, field)
 		} else {
 			innerType := parseInnerType(t, a, typeMapping)
@@ -123,11 +121,6 @@ func parseAttribute(attribute *Attribute, typeMapping map[string]reflect.Type) (
 				Name: a.Name,
 				Type: innerType,
 				Tag:  reflect.StructTag(a.Tags),
-			}
-
-			// Set PkgPath for unexported fields to avoid reflection errors
-			if len(a.Name) > 0 && a.Name[0] >= 'a' && a.Name[0] <= 'z' {
-				field.PkgPath = "github.com/jumppad-labs/hclconfig/internal/schema"
 			}
 
 			fields = append(fields, field)
@@ -232,7 +225,7 @@ func parseInnerType(t *PropertyType, a *Attribute, typeMapping map[string]reflec
 				break
 			}
 		}
-		
+
 		// Handle interface{} and other unrecognized types
 		if strings.Contains(t.Type, "interface") {
 			innerType = reflect.TypeOf((*interface{})(nil)).Elem()
@@ -249,23 +242,17 @@ func parseInnerType(t *PropertyType, a *Attribute, typeMapping map[string]reflec
 
 	// if there are properties, we need to create a struct
 	if a.Properties != nil {
-		// Check if we found a real type mapping (not interface{})
-		// We need to handle the case where innerType might be wrapped in a pointer
-		hasRealTypeMapping := false
-		if innerType != nil {
-			checkType := innerType
-			// Unwrap pointer if needed
-			if checkType.Kind() == reflect.Ptr {
-				checkType = checkType.Elem()
-			}
-			// If it's not interface{}, we have a real type mapping
-			if checkType.Kind() != reflect.Interface {
-				hasRealTypeMapping = true
+		// Check if we have a type mapping that should take precedence
+		hasTypeMapping := false
+		if typeMapping != nil {
+			if _, exists := typeMapping[t.Type]; exists {
+				hasTypeMapping = true
 			}
 		}
-		
-		// Only create anonymous struct if we don't have a real type mapping
-		if !hasRealTypeMapping {
+
+		// Only create anonymous struct if we don't have a type mapping
+		// Type mappings should take precedence over property-based struct creation
+		if !hasTypeMapping {
 			se, err := parseAttribute(a, typeMapping)
 			if err != nil {
 				return nil
@@ -293,4 +280,12 @@ func extractTypeName(typeStr string) string {
 		return parts[len(parts)-1] // Return the last part (type name)
 	}
 	return typeStr // Return as-is if no package qualifier
+}
+
+// getPkgPathForType returns a consistent package path for all unexported fields
+// Go reflection requires all unexported fields in a struct to have the same PkgPath
+func getPkgPathForType(typeStr string) string {
+	// Use a consistent package path for all unexported fields
+	// This is safe because unexported fields can't be set via reflection anyway
+	return "github.com/jumppad-labs/hclconfig/internal/schema"
 }

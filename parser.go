@@ -63,12 +63,6 @@ type ParserOptions struct {
 	// credentials to use with the registries
 	RegistryCredentials map[string]string
 
-	// PrimativesOnly will parse a structure including modules:
-	// * registered types for the resources are not loaded, all resources are
-	//   parsed as ResourceBase, custom properties are discarded
-	// * the graph of resources is not walked, any interpolated properties
-	//   are not resolved.
-	PrimativesOnly bool
 
 	// PluginDirectories is a list of directories to search for plugins
 	PluginDirectories []string
@@ -252,11 +246,6 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 		return nil, ce
 	}
 
-	// do not walk the dag when we are only dealing with primatives
-	if p.options.PrimativesOnly {
-		return c, nil
-	}
-
 	var previousState *Config
 
 	// Load previous state
@@ -388,11 +377,6 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 		if config, ok := prevState.(*Config); ok {
 			previousState = config
 		}
-	}
-
-	// do not walk the dag when we are only dealing with primatives
-	if p.options.PrimativesOnly {
-		return c, nil
 	}
 
 	// Create working config - start with previous state or empty config
@@ -1069,31 +1053,17 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-		// PrimativesOnly parse to ResourceBase
-		if p.options.PrimativesOnly {
-			rt = &types.ResourceBase{
-				Meta: types.Meta{
-					Name:       name,
-					Type:       b.Labels[0],
-					Properties: map[string]any{},
-				},
-			}
-
-			// ignore any errors when parsing
-			ignoreErrors = true
-		} else {
-			// Create resource using plugin registry
-			rt, err = p.pluginRegistry.CreateResource(b.Labels[0], name)
-			if err != nil {
-				de := errors.NewParserError(
-					file,
-					b.TypeRange.Start.Line,
-					b.TypeRange.Start.Column,
-					errors.ParserErrorLevelError,
-					fmt.Sprintf("unable to create resource '%s' %s", b.Type, err),
-				)
-				return de
-			}
+		// Create resource using plugin registry
+		rt, err = p.pluginRegistry.CreateResource(b.Labels[0], name)
+		if err != nil {
+			de := errors.NewParserError(
+				file,
+				b.TypeRange.Start.Line,
+				b.TypeRange.Start.Column,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("unable to create resource '%s' %s", b.Type, err),
+			)
+			return de
 		}
 
 	case resources.TypeLocal:
@@ -1199,8 +1169,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	}
 
 	// if we have an output, get the description
-	// this is only needed when parsing primatives as
-	// this value is normally set during walk
+	// this is needed during parsing as the value may not be set during walk
 	if err == nil && rtMeta.Type == resources.TypeOutput && b.Body.Attributes["description"] != nil {
 		desc, diags := b.Body.Attributes["description"].Expr.Value(ctx)
 		if !diags.HasErrors() {
@@ -1968,8 +1937,13 @@ func (p *Parser) processDestroyPhase(toDestroy []any) error {
 func (p *Parser) process(c *Config, previousState *Config) error {
 	ce := errors.NewConfigError()
 
+	// Ensure rootContext is not nil
+	if rootContext == nil {
+		return fmt.Errorf("rootContext is nil - this should not happen")
+	}
+
 	// walk the dag and process resources (only processes resources from c)
-	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry, &p.options), false)
+	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry, &p.options, rootContext), false)
 
 	for _, e := range errs {
 		ce.AppendError(e)

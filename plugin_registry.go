@@ -46,8 +46,11 @@ func (r *PluginRegistry) CreateResource(resourceType, resourceName string) (any,
 func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName string) (any, error) {
 	// Create type mapping for proper type creation
 	typeMapping := map[string]reflect.Type{
-		"types.Meta":         reflect.TypeOf(types.Meta{}),
-		"types.ResourceBase": reflect.TypeOf(types.ResourceBase{}),
+		"types.Meta":               reflect.TypeOf(types.Meta{}),
+		"types.ResourceBase":       reflect.TypeOf(types.ResourceBase{}),
+		"map[string]interface {}":  reflect.TypeOf(map[string]interface{}{}),
+		"map[string]any":           reflect.TypeOf(map[string]interface{}{}),
+		"cty.Value":                reflect.TypeOf((*interface{})(nil)).Elem(), // Treat cty.Value as interface{}
 	}
 
 	// Iterate through all plugin hosts

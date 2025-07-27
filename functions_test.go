@@ -193,10 +193,9 @@ func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	r, err := c.FindResource("resource.container.default")
+	q := NewQuerier[structs.Container](c)
+	cont, err := q.FindResource("resource.container.default")
 	require.NoError(t, err)
-
-	cont := r.(*structs.Container)
 
 	home, _ := os.UserHomeDir()
 
@@ -232,10 +231,9 @@ func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
 	c, err := p.ParseDirectory(absoluteFolderPath)
 	require.NoError(t, err)
 
-	r, err := c.FindResource("resource.container.default")
+	q := NewQuerier[structs.Container](c)
+	cont, err := q.FindResource("resource.container.default")
 	require.NoError(t, err)
-
-	cont := r.(*structs.Container)
 
 	home, _ := os.UserHomeDir()
 
@@ -267,10 +265,9 @@ func TestParseProcessesCustomFunctions(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	r, err := c.FindResource("resource.container.custom")
+	q := NewQuerier[structs.Container](c)
+	cont, err := q.FindResource("resource.container.custom")
 	require.NoError(t, err)
-
-	cont := r.(*structs.Container)
 
 	require.Equal(t, "42", cont.Env["len"])
 }
