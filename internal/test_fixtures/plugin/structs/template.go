@@ -14,9 +14,16 @@ type Template struct {
 
 	Depends []string `hcl:"depends_on,optional" json:"depends,omitempty"`
 
-	Source       string         `hcl:"source" json:"source"`                // Source template to be processed as string
-	Destination  string         `hcl:"destination" json:"destination"`      // Destination filename to write
-	Vars         cty.Value      `hcl:"vars,optional" json:"vars,omitempty"` // Variables to be processed in the template
-	InternalVars map[string]any // stores a converted go type version of the hcl.Value types
-	AppendFile   bool           `hcl:"append_file,optional" json:"append_file,omitempty"`
+	Source      string    `hcl:"source" json:"source"`                // Source template to be processed as string
+	Destination string    `hcl:"destination" json:"destination"`      // Destination filename to write
+	Vars        cty.Value `hcl:"vars,optional" json:"vars,omitempty"` // Variables to be processed in the template
+	//InternalVars map[string]any // stores a converted go type version of the hcl.Value types
+	AppendFile bool `hcl:"append_file,optional" json:"append_file,omitempty"`
+
+	Inner *Thing `hcl:"inner" json:"inner,omitempty"`
+}
+
+type Thing struct {
+	InnerString string `hcl:"inner_string" json:"inner_string"`
+	InnerInt    int    `hcl:"inner_int" json:"inner_int"`
 }

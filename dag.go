@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/creasty/defaults"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
-	"github.com/kr/pretty"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 
 	"github.com/jumppad-labs/hclconfig/errors"
 	"github.com/jumppad-labs/hclconfig/internal/convert"
@@ -19,9 +17,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/types"
 	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/gocty"
 )
-
 
 // doYaLikeDAGs? dags? yeah dags! oh dogs.
 // https://www.youtube.com/watch?v=ZXILzUpVx7A&t=0s
@@ -409,107 +405,45 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			panic(fmt.Sprintf(`no body found for resource "%s"`, rMeta.ID))
 		}
 
-		// Use the shared context instead of per-resource contexts
-		// This ensures all resources share the same context for resource resolution
-		ctx := sharedContext
-		if ctx == nil {
-			return diags.Append(fmt.Errorf("shared context is nil"))
+		// Use functions and variables from the shared context
+		ctx := &hcl.EvalContext{
+			Variables: sharedContext.Variables,
+			Functions: sharedContext.Functions,
 		}
 
-		// first we need to check if the resource is disabled
-		// this might be set by an interpolated value
-		// if this is disabled we ignore the resource
-		//
-		// This expression could be a reference to another resource or it could be a
-		// function or a conditional statement. We need to evaluate the expression
-		// to determine if the resource should be disabled
-		if attr, ok := bdy.Attributes["disabled"]; ok {
-			expr, err := processExpr(attr.Expr)
-
-			// need to handle this error
-			if err != nil {
-				pe := errors.NewParserErrorFromResource(
-					r,
-					errors.ParserErrorLevelError,
-					fmt.Sprintf(`unable to process disabled expression: %s`, err),
-				)
-				return diags.Append(pe)
-			}
-
-			if len(expr) > 0 {
-				// first we need to build the context for the expression
-				err := setContextVariablesFromList(c, r, expr, ctx)
-				if err != nil {
-					return diags.Append(err)
-				}
-
-				// now we need to evaluate the expression
-				var isDisabled bool
-				expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
-				if expdiags.HasErrors() {
-
-					pe := errors.NewParserErrorFromResource(
-						r,
-						errors.ParserErrorLevelError,
-						fmt.Sprintf(`unable to process disabled expression: %s`, expdiags.Error()),
-					)
-					return diags.Append(pe)
-				}
-
-				types.SetDisabled(r, isDisabled)
-			}
-		}
-
-		// if the resource is disabled we need to skip the resource
-		disabled, err := types.GetDisabled(r)
+		err = setContextVariablesFromList(c, r, rMeta, ctx)
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
 				errors.ParserErrorLevelError,
-				fmt.Sprintf(`unable to get disabled value: %s`, err),
+				err.Error(),
 			)
 			return diags.Append(pe)
 		}
 
-		if disabled {
-			return nil
-		}
-
-		// set the context variables from the linked resources
-		if err := setContextVariablesFromList(c, r, rMeta.Links, ctx); err != nil {
+		// First we need to check if the resource is disabled, this might be set
+		// by an interpolated value
+		isDisabled, err := processDisabled(bdy, ctx, r)
+		if err != nil {
 			return diags.Append(err)
 		}
 
-		// Process the raw resource now we have the context from the linked
-		// resources
-		ul := getContextLock(ctx)
-		defer ul()
+		// If the resource is disabled we need to skip the resource
+		if isDisabled {
+			return nil
+		}
 
-		// if there are defaults defined on the resource set them
+		// If there are defaults defined on the resource set them
 		defaults.Set(r)
 
+		// Decode the body into the resource
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
-			pretty.Println(r)
 			// check the error types and determine if we should set a warning or error
-			level := errors.ParserErrorLevelWarning
 
-			for _, e := range diag.Errs() {
-				err, ok := e.(*hcl.Diagnostic)
-				if !ok {
-					continue
-				}
-
-				if err.Summary == "Error in function call" {
-					level = errors.ParserErrorLevelError
-					break
-				}
-			}
-
-			pe := errors.NewParserError(
-				rMeta.File,
-				rMeta.Line,
-				rMeta.Column,
+			level := checkIfErrorInFunction(diag)
+			pe := errors.NewParserErrorFromResource(
+				r,
 				level,
 				fmt.Sprintf(`unable to decode body: %s`, diag.Error()),
 			)
@@ -517,15 +451,9 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			return diags.Append(pe)
 		}
 
-		// if the type is a module then potentially we only just found out that we should be
-		// disabled
-
-		// as an additional check, set all module resources to disabled if the module is disabled
-		disabled, err = types.GetDisabled(r)
-		if err != nil {
-			disabled = false
-		}
-		if disabled && rMeta.Type == resources.TypeModule {
+		// If the type is a module then potentially we only just found out that we should be
+		// disabled, set resources in the module to disabled if the module is disabled
+		if isDisabled && rMeta.Type == resources.TypeModule {
 			// find all dependent resources
 			dr, err := c.FindModuleResources(rMeta.ID, true)
 			if err != nil {
@@ -544,69 +472,67 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			}
 		}
 
-		// if the type is a module we need to add the variables to the
-		// context
-		if rMeta.Type == resources.TypeModule {
-			mod := r.(*resources.Module)
-
-			var mapVars map[string]cty.Value
-			if att, ok := mod.Variables.(*hcl.Attribute); ok {
-				val, _ := att.Expr.Value(ctx)
-				mapVars = val.AsValueMap()
-
-				for k, v := range mapVars {
-					setContextVariable(mod.SubContext, k, v)
-				}
-			}
-		}
-
-		// if this is an output or local we need to convert the value into
-		// a go type
-		if rMeta.Type == resources.TypeOutput {
-			o := r.(*resources.Output)
-
-			if !o.CtyValue.IsNull() {
-				o.Value = castVar(o.CtyValue)
-			}
-		}
-
-		if rMeta.Type == resources.TypeLocal {
-			o := r.(*resources.Local)
-
-			if !o.CtyValue.IsNull() {
-				o.Value = castVar(o.CtyValue)
-			}
-		}
-
-		// if disabled was set through interpolation, the value has only been set here
-		// we need to handle an additional check
-		disabled, err = types.GetDisabled(r)
-		if err != nil {
-			disabled = false
-		}
-		if !disabled {
-			// Call provider lifecycle methods
-			if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
-				pe := errors.NewParserErrorFromResource(
-					r,
-					errors.ParserErrorLevelError,
-					fmt.Sprintf("provider lifecycle error: %s", err),
-				)
-				return diags.Append(pe)
-			}
-		}
-
-		// Now that the resource has been fully processed, try to add it to the shared context
-		// so that future resources can reference it. If conversion fails (due to unresolved
-		// expressions), we'll skip adding it to the context but continue processing.
-		if err := addResourceToSharedContext(ctx, r); err != nil {
-			// Log the warning but don't fail the entire process
-			// This can happen when resources have unresolved expressions
-			fmt.Printf("Warning: could not add resource %s to context: %s\n", rMeta.ID, err)
+		if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
+			pe := errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("provider lifecycle error: %s", err),
+			)
+			return diags.Append(pe)
 		}
 
 		return nil
 	}
+}
+
+// processDisabled processes any expression for the disabled attribute
+// and sets the disabled state on the resource
+func processDisabled(bdy *hclsyntax.Body, ctx *hcl.EvalContext, r dag.Vertex) (bool, error) {
+	var isDisabled bool
+
+	// This expression could be a reference to another resource or it could be a
+	// function or a conditional statement. We need to evaluate the expression
+	// to determine if the resource should be disabled
+	if attr, ok := bdy.Attributes["disabled"]; ok {
+		// now we need to evaluate the expression
+		expdiags := gohcl.DecodeExpression(attr.Expr, ctx, &isDisabled)
+		if expdiags.HasErrors() {
+			return isDisabled,
+				errors.NewParserErrorFromResource(
+					r,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("unable to decode disabled expression: %s", expdiags.Error()),
+				)
+		}
+
+		err := types.SetDisabled(r, isDisabled)
+		if err != nil {
+			return isDisabled, errors.NewParserErrorFromResource(
+				r,
+				errors.ParserErrorLevelError,
+				fmt.Sprintf("failed to set disabled state: %s", err),
+			)
+		}
+	}
+
+	return isDisabled, nil
+}
+
+func checkIfErrorInFunction(diag hcl.Diagnostics) string {
+	level := errors.ParserErrorLevelWarning
+
+	for _, e := range diag.Errs() {
+		err, ok := e.(*hcl.Diagnostic)
+		if !ok {
+			continue
+		}
+
+		if err.Summary == "Error in function call" {
+			level = errors.ParserErrorLevelError
+			break
+		}
+	}
+	return level
 }
 
 // addResourceToSharedContext adds a fully processed resource to the shared context
@@ -614,12 +540,12 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 func addResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
 	rMeta, err := types.GetMeta(r)
 	if err != nil {
-		return fmt.Errorf("resource does not have ResourceBase embedded: %w", err)
+		panic(err) // This should never happen as we check this earlier
 	}
 
 	// Convert the resource to cty value
 	var ctyRes cty.Value
-	
+
 	switch rMeta.Type {
 	case resources.TypeLocal:
 		loc := r.(*resources.Local)
@@ -632,22 +558,15 @@ func addResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
 		// create a partial cty object with only the convertible fields
 		ctyRes, err = convert.GoToCtyValue(r)
 		if err != nil {
-			// Fall back to selective field conversion
-			ctyRes, err = createPartialCtyValue(r)
-			if err != nil {
-				return fmt.Errorf("unable to convert resource to cty value: %w", err)
-			}
+			return fmt.Errorf("unable to convert resource to cty value: %w", err)
 		}
 	}
 
-	
-	// Add to context (caller already holds the context lock)
-	
 	// Ensure ctx.Variables is not nil
 	if ctx.Variables == nil {
 		ctx.Variables = map[string]cty.Value{}
 	}
-	
+
 	// Get or create the resource map
 	var resourceMap map[string]cty.Value
 	if resourceVar, exists := ctx.Variables["resource"]; exists && !resourceVar.IsNull() {
@@ -655,7 +574,7 @@ func addResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
 	} else {
 		resourceMap = map[string]cty.Value{}
 	}
-	
+
 	// Add the resource type map if it doesn't exist
 	var typeMap map[string]cty.Value
 	if typeVar, exists := resourceMap[rMeta.Type]; exists && !typeVar.IsNull() {
@@ -663,124 +582,23 @@ func addResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
 	} else {
 		typeMap = map[string]cty.Value{}
 	}
-	
+
 	// Add the resource
 	typeMap[rMeta.Name] = ctyRes
-	
+
 	// Double-check resourceMap is not nil
 	if resourceMap == nil {
 		resourceMap = map[string]cty.Value{}
 	}
 	resourceMap[rMeta.Type] = cty.ObjectVal(typeMap)
-	
+
 	// Double-check ctx.Variables is still not nil before assignment
 	if ctx.Variables == nil {
 		ctx.Variables = map[string]cty.Value{}
 	}
 	ctx.Variables["resource"] = cty.ObjectVal(resourceMap)
-	
-	
+
 	return nil
-}
-
-// createPartialCtyValue creates a cty value from a resource by only including
-// fields that can be successfully converted, skipping unresolved expressions
-func createPartialCtyValue(r any) (cty.Value, error) {
-	
-	rValue := reflect.ValueOf(r)
-	if rValue.Kind() == reflect.Ptr {
-		rValue = rValue.Elem()
-	}
-	rType := rValue.Type()
-	
-	// Create a map to hold the convertible fields
-	fieldMap := make(map[string]cty.Value)
-	
-	// Iterate through all fields in the struct
-	for i := 0; i < rType.NumField(); i++ {
-		field := rType.Field(i)
-		fieldValue := rValue.Field(i)
-		
-		// Skip unexported fields
-		if !fieldValue.CanInterface() {
-			continue
-		}
-		
-		// Get the actual field value
-		fieldInterface := fieldValue.Interface()
-		
-		// Skip fields that contain *hcl.Attribute (unresolved expressions)
-		if _, isHclAttr := fieldInterface.(*hcl.Attribute); isHclAttr {
-			continue
-		}
-		
-		// Try to convert this field to cty
-		fieldType, err := gocty.ImpliedType(fieldInterface)
-		if err != nil {
-			// Skip fields that can't be converted
-			continue
-		}
-		
-		fieldCty, err := gocty.ToCtyValue(fieldInterface, fieldType)
-		if err != nil {
-			// Skip fields that can't be converted
-			continue
-		}
-		
-		// Handle embedded structs with ,remain tag specially
-		hclTag := field.Tag.Get("hcl")
-		if field.Anonymous && strings.Contains(hclTag, ",remain") {
-			// Flatten embedded struct fields to parent level
-			if fieldCty.Type().IsObjectType() {
-				embeddedFields := fieldCty.AsValueMap()
-				for embeddedFieldName, embeddedFieldValue := range embeddedFields {
-					fieldMap[embeddedFieldName] = embeddedFieldValue
-				}
-			}
-			continue
-		}
-		
-		// Use HCL field name if available, otherwise use Go field name
-		fieldName := getHCLFieldName(field)
-		if fieldName == "" {
-			fieldName = field.Name
-		}
-		
-		// Add the successfully converted field
-		fieldMap[fieldName] = fieldCty
-	}
-	
-	// Return the partial object
-	if len(fieldMap) == 0 {
-		return cty.EmptyObjectVal, nil
-	}
-	
-	return cty.ObjectVal(fieldMap), nil
-}
-
-// getHCLFieldName extracts the HCL field name from a struct field's tag
-func getHCLFieldName(field reflect.StructField) string {
-	
-	// Get the hcl tag
-	hclTag := field.Tag.Get("hcl")
-	if hclTag == "" {
-		return ""
-	}
-	
-	// Parse the tag - format is like "field_name" or "field_name,optional"
-	parts := strings.Split(hclTag, ",")
-	if len(parts) == 0 {
-		return ""
-	}
-	
-	fieldName := strings.TrimSpace(parts[0])
-	
-	// Handle special cases
-	if fieldName == "-" || fieldName == ",remain" {
-		return ""
-	}
-	
-	return fieldName
 }
 
 // callProviderLifecycle calls the appropriate provider lifecycle methods for a resource
@@ -943,59 +761,28 @@ func callProviderLifecycle(resource any, previousState *Config, registry *Plugin
 // for example: given the values ["module.module1.module2.resource.container.mine.id"]
 // the context variable "module.module1.module2.resource.container.mine.id" will be set to the
 // value defined by the resource of type container with the name mine and the attribute id
-func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.EvalContext) *errors.ParserError {
-	// attempt to set the values in the resource links to the resource attribute
-	// all linked values should now have been processed as the graph
-	// will have handled them first
-	
-	
-	for _, v := range values {
-		rMeta, err := types.GetMeta(r)
-		if err != nil {
-			pe := errors.NewParserError(
-				"",
-				0,
-				0,
-				errors.ParserErrorLevelError,
-				fmt.Sprintf("resource does not have ResourceBase embedded: %s", err),
-			)
-			return pe
-		}
+func setContextVariablesFromList(c *Config, r any, meta *types.Meta, ctx *hcl.EvalContext) error {
+	// Resolve each value in the list and set it in the context
+	for _, v := range meta.Links {
 		fqrn, err := resources.ParseFQRN(v)
 		if err != nil {
-			pe := errors.NewParserErrorFromResource(
-				r,
-				errors.ParserErrorLevelError,
-				fmt.Sprintf("error parsing resource link %s", err),
-			)
-
-			return pe
+			return fmt.Errorf("error parsing resource link %s: %w", v, err)
 		}
 
-		// get the value from the linked resource
-		l, err := c.FindRelativeResource(v, rMeta.Module)
+		// Get the linked resource from the config
+		l, err := c.FindRelativeResource(v, meta.Module)
 		if err != nil {
-			pe := errors.NewParserErrorFromResource(
-				r,
-				errors.ParserErrorLevelError,
-				fmt.Sprintf(`unable to find dependent resource "%s" %s`, v, err),
-			)
-			return pe
+			return fmt.Errorf("unable to find dependent resource %s: %w", v, err)
 		}
 
 		var ctyRes cty.Value
 
-		// once we have found a resource convert it to a cty type and then
-		// set it on the context
+		// Convert it to a cty type and then set it on the context
 		lMeta, err := types.GetMeta(l)
 		if err != nil {
-			pe := errors.NewParserErrorFromResource(
-				r,
-				errors.ParserErrorLevelError,
-				fmt.Sprintf("linked resource does not have ResourceBase embedded: %s", err),
-			)
-			return pe
+			panic(err) // This should never happen as we check this earlier
 		}
+
 		switch lMeta.Type {
 		case resources.TypeLocal:
 			loc := l.(*resources.Local)
@@ -1004,11 +791,9 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 			out := l.(*resources.Output)
 			ctyRes = out.CtyValue
 		default:
-			ctyRes, err = convert.GoToCtyValue(l)
+			ctyRes, err = convert.GoToCtyValue(l) // for some reason metadata is not set on the resource, could be because it is a embedded struct
 			if err != nil {
-				// Skip this resource if it can't be converted (likely has unresolved expressions)
-				fmt.Printf("Warning: skipping context variable for %s: %s\n", v, err)
-				continue
+				return fmt.Errorf("unable to convert resource %s to cty value: %w", lMeta.ID, err)
 			}
 		}
 
@@ -1017,12 +802,7 @@ func setContextVariablesFromList(c *Config, r any, values []string, ctx *hcl.Eva
 
 		err = setContextVariableFromPath(ctx, fqrn.String(), ctyRes)
 		if err != nil {
-			pe := errors.NewParserErrorFromResource(
-				r,
-				errors.ParserErrorLevelError,
-				fmt.Sprintf(`unable to set context variable: %s`, err),
-			)
-			return pe
+			return fmt.Errorf("unable to set context variable %s: %w", fqrn.String(), err)
 		}
 	}
 

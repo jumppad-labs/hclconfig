@@ -10,7 +10,7 @@ import (
 	"github.com/jumppad-labs/hclconfig/logger"
 	"github.com/jumppad-labs/hclconfig/plugins"
 	"github.com/jumppad-labs/hclconfig/types"
-	"github.com/kr/pretty"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // PluginRegistry manages all resource types (builtin and plugin-based) and can create resource instances
@@ -46,11 +46,9 @@ func (r *PluginRegistry) CreateResource(resourceType, resourceName string) (any,
 func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName string) (any, error) {
 	// Create type mapping for proper type creation
 	typeMapping := map[string]reflect.Type{
-		"types.Meta":               reflect.TypeOf(types.Meta{}),
-		"types.ResourceBase":       reflect.TypeOf(types.ResourceBase{}),
-		"map[string]interface {}":  reflect.TypeOf(map[string]interface{}{}),
-		"map[string]any":           reflect.TypeOf(map[string]interface{}{}),
-		"cty.Value":                reflect.TypeOf((*interface{})(nil)).Elem(), // Treat cty.Value as interface{}
+		"types.Meta":         reflect.TypeOf(types.Meta{}),
+		"types.ResourceBase": reflect.TypeOf(types.ResourceBase{}),
+		"cty.Value":          reflect.TypeOf(cty.Value{}), // Treat cty.Value as interface{}
 	}
 
 	// Iterate through all plugin hosts
@@ -68,8 +66,6 @@ func (r *PluginRegistry) createResourceFromPlugins(resourceType, resourceName st
 
 				meta, err := types.GetMeta(rawResource)
 				if err != nil {
-					pretty.Println(rawResource)
-
 					panic(fmt.Sprintf("resource does not have ResourceBase embedded: %T", rawResource))
 				}
 

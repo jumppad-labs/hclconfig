@@ -281,11 +281,3 @@ func extractTypeName(typeStr string) string {
 	}
 	return typeStr // Return as-is if no package qualifier
 }
-
-// getPkgPathForType returns a consistent package path for all unexported fields
-// Go reflection requires all unexported fields in a struct to have the same PkgPath
-func getPkgPathForType(typeStr string) string {
-	// Use a consistent package path for all unexported fields
-	// This is safe because unexported fields can't be set via reflection anyway
-	return "github.com/jumppad-labs/hclconfig/internal/schema"
-}

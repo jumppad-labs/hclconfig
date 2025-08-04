@@ -63,7 +63,6 @@ type ParserOptions struct {
 	// credentials to use with the registries
 	RegistryCredentials map[string]string
 
-
 	// PluginDirectories is a list of directories to search for plugins
 	PluginDirectories []string
 	// AutoDiscoverPlugins enables automatic plugin discovery from configured directories
@@ -1588,7 +1587,7 @@ func getDependentResources(b *hclsyntax.Block, ctx *hcl.EvalContext, c *Config, 
 	return references, nil
 }
 
-// processAttribute extracts the necessary data out of the HCL
+// processAttribute extracts the resources out of the HCL
 // attribute like a function or resource parameter so we can determine
 // which attributes are lazy evaluated due to dependency on another resource.
 // Attributes can be nested, therefore this function needs to return an array of
@@ -1711,9 +1710,6 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 		if len(ref) > 0 {
 			resources = append(resources, ref...)
 		}
-
-		//default:
-		//	pretty.Println(expr)
 	}
 
 	return resources, nil

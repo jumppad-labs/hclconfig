@@ -18,21 +18,7 @@ resource "container" "consul" {
 }
 
 local "test" {
-
-  //value = resource.container.consul.name
   value = resource.container.consul.meta.name == "consul" ? "yes" : "no"
-}
-
-resource "template" "consul_config_update" {
-  disabled = false
-
-  source = resource.container.consul.meta.name == "consul" ? "yes" : "no"
-
-  destination = "./consul.hcl"
-
-  vars = {
-    data_dir = "/tmp"
-  }
 }
 
 resource "template" "consul_config_update2" {

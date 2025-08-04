@@ -407,18 +407,13 @@ func (c *Config) addResource(r any, ctx *hcl.EvalContext, b *hclsyntax.Body) err
 	// set the ID
 	meta, err = types.GetMeta(r)
 	if err != nil {
-		return fmt.Errorf("resource does not have ResourceBase embedded: %w", err)
+		panic(err) // should never happen, all resources should have metadata
 	}
+
 	meta.ID = fqdn.String()
 
 	rf, findErr := c.findResource(fqdn.String())
 	if findErr == nil && rf != nil {
-		for _, res := range c.Resources {
-			resMeta, err := types.GetMeta(res)
-			if err == nil {
-				fmt.Println("Resource already exists:", resMeta.ID)
-			}
-		}
 		return ResourceExistsError{meta.Name}
 	}
 
