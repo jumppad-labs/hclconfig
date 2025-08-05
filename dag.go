@@ -109,10 +109,8 @@ func doYaLikeDAGs(c *Config) (*dag.AcyclicGraph, error) {
 				for _, dep := range deps {
 					dependencies[dep] = true
 				}
-			}
-
-			// when the dependency is a resource, depend on the resource
-			if fqdn.Type != resources.TypeModule {
+			} else {
+				// when the dependency is a resource, depend on the resource
 				// assume that all dependencies references have been written with no
 				// knowledge of their parent module. Therefore if the parent module is
 				// "module1" and the reference is "module.module2.resource.container.mine.id"
@@ -364,22 +362,6 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 	}
 }
 
-// fireParserEvent fires a parser event if the callback is configured
-func fireParserEvent(options *ParserOptions, operation, resourceType, resourceID, phase string, duration time.Duration, err error, data []byte) {
-	if options != nil && options.OnParserEvent != nil {
-		event := ParserEvent{
-			Operation:    operation,
-			ResourceType: resourceType,
-			ResourceID:   resourceID,
-			Phase:        phase,
-			Duration:     duration,
-			Error:        err,
-			Data:         data,
-		}
-		options.OnParserEvent(event)
-	}
-}
-
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values
@@ -409,6 +391,24 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		ctx := &hcl.EvalContext{
 			Variables: sharedContext.Variables,
 			Functions: sharedContext.Functions,
+		}
+
+		// If this resource is part of a module, check if we have a stored context
+		// with module-specific variables and merge it with the shared context
+		if rMeta.Module != "" {
+			storedCtx, err := c.getContext(r)
+			if err == nil && storedCtx != nil && storedCtx.Variables != nil {
+				// Check if the stored context has module variables
+				if variableNS, exists := storedCtx.Variables["variable"]; exists && !variableNS.IsNull() {
+					// Merge the stored context variables into the current context
+					if ctx.Variables == nil {
+						ctx.Variables = make(map[string]cty.Value)
+					}
+
+					// Add the module-specific variable namespace
+					ctx.Variables["variable"] = variableNS
+				}
+			}
 		}
 
 		err = setContextVariablesFromList(c, r, rMeta, ctx)
@@ -472,6 +472,19 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			}
 		}
 
+		// If this is a module, process its variables and update sub-resource contexts
+		// Only do this if the module is not disabled
+		if rMeta.Type == resources.TypeModule && !isDisabled {
+			if err := processModuleVariables(c, r, ctx); err != nil {
+				pe := errors.NewParserErrorFromResource(
+					r,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("failed to process module variables: %s", err),
+				)
+				return diags.Append(pe)
+			}
+		}
+
 		if err := callProviderLifecycle(r, previousState, registry, options); err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
@@ -481,7 +494,62 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 			return diags.Append(pe)
 		}
 
+		// Convert CtyValue to Value for output and local resources
+		switch rMeta.Type {
+		case resources.TypeOutput:
+			out := r.(*resources.Output)
+			if !out.CtyValue.IsNull() {
+				out.Value = convertCtyToGo(out.CtyValue)
+			}
+		case resources.TypeLocal:
+			loc := r.(*resources.Local)
+			if !loc.CtyValue.IsNull() {
+				loc.Value = convertCtyToGo(loc.CtyValue)
+			}
+		}
+
+		// Add the processed resource to the shared context so other resources can reference it
+		// Skip certain resource types that can't be safely converted to cty values
+		if rMeta.Type != resources.TypeModule && rMeta.Type != resources.TypeRoot && rMeta.Type != resources.TypeVariable {
+			if err := addResourceToSharedContext(sharedContext, r); err != nil {
+				pe := errors.NewParserErrorFromResource(
+					r,
+					errors.ParserErrorLevelError,
+					fmt.Sprintf("failed to add resource to shared context: %s", err),
+				)
+				return diags.Append(pe)
+			}
+
+			// If this is a module resource, also make it available in the module namespace
+			if rMeta.Module != "" {
+				if err := addModuleResourceToSharedContext(sharedContext, r); err != nil {
+					pe := errors.NewParserErrorFromResource(
+						r,
+						errors.ParserErrorLevelError,
+						fmt.Sprintf("failed to add module resource to shared context: %s", err),
+					)
+					return diags.Append(pe)
+				}
+			}
+		}
+
 		return nil
+	}
+}
+
+// fireParserEvent fires a parser event if the callback is configured
+func fireParserEvent(options *ParserOptions, operation, resourceType, resourceID, phase string, duration time.Duration, err error, data []byte) {
+	if options != nil && options.OnParserEvent != nil {
+		event := ParserEvent{
+			Operation:    operation,
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			Phase:        phase,
+			Duration:     duration,
+			Error:        err,
+			Data:         data,
+		}
+		options.OnParserEvent(event)
 	}
 }
 
@@ -538,6 +606,9 @@ func checkIfErrorInFunction(diag hcl.Diagnostics) string {
 // addResourceToSharedContext adds a fully processed resource to the shared context
 // so that other resources can reference it
 func addResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
+	// Lock the context to prevent concurrent access
+	unlock := getContextLock(ctx)
+	defer unlock()
 	rMeta, err := types.GetMeta(r)
 	if err != nil {
 		panic(err) // This should never happen as we check this earlier
@@ -597,6 +668,143 @@ func addResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
 		ctx.Variables = map[string]cty.Value{}
 	}
 	ctx.Variables["resource"] = cty.ObjectVal(resourceMap)
+
+	return nil
+}
+
+// addModuleResourceToSharedContext adds a processed resource from a module to the shared context
+// so that it can be referenced as module.module_name.output.resource_name
+func addModuleResourceToSharedContext(ctx *hcl.EvalContext, r any) error {
+	// Lock the context to prevent concurrent access
+	unlock := getContextLock(ctx)
+	defer unlock()
+
+	rMeta, err := types.GetMeta(r)
+	if err != nil {
+		panic(err) // This should never happen as we check this earlier
+	}
+
+	// Convert the resource to cty value
+	var ctyRes cty.Value
+
+	switch rMeta.Type {
+	case resources.TypeLocal:
+		loc := r.(*resources.Local)
+		ctyRes = loc.CtyValue
+	case resources.TypeOutput:
+		out := r.(*resources.Output)
+		ctyRes = out.CtyValue
+	default:
+		// Try to convert the resource, but if it fails due to unresolved expressions,
+		// create a partial cty object with only the convertible fields
+		ctyRes, err = convert.GoToCtyValue(r)
+		if err != nil {
+			return fmt.Errorf("unable to convert resource to cty value: %w", err)
+		}
+	}
+
+	// Ensure ctx.Variables is not nil
+	if ctx.Variables == nil {
+		ctx.Variables = map[string]cty.Value{}
+	}
+
+	// Get or create the module map
+	var moduleMap map[string]cty.Value
+	if moduleVar, exists := ctx.Variables["module"]; exists && !moduleVar.IsNull() {
+		moduleMap = moduleVar.AsValueMap()
+	} else {
+		moduleMap = map[string]cty.Value{}
+	}
+
+	// Get or create the specific module map
+	var specificModuleMap map[string]cty.Value
+	if specificModuleVar, exists := moduleMap[rMeta.Module]; exists && !specificModuleVar.IsNull() {
+		specificModuleMap = specificModuleVar.AsValueMap()
+	} else {
+		specificModuleMap = map[string]cty.Value{}
+	}
+
+	// Get or create the resource type map within the module
+	var typeMap map[string]cty.Value
+	if typeVar, exists := specificModuleMap[rMeta.Type]; exists && !typeVar.IsNull() {
+		typeMap = typeVar.AsValueMap()
+	} else {
+		typeMap = map[string]cty.Value{}
+	}
+
+	// Add the resource
+	typeMap[rMeta.Name] = ctyRes
+
+	// Update the maps
+	specificModuleMap[rMeta.Type] = cty.ObjectVal(typeMap)
+	moduleMap[rMeta.Module] = cty.ObjectVal(specificModuleMap)
+	ctx.Variables["module"] = cty.ObjectVal(moduleMap)
+
+	return nil
+}
+
+// processModuleVariables processes a module's variables and updates the contexts of all sub-resources
+func processModuleVariables(c *Config, moduleResource any, sharedCtx *hcl.EvalContext) error {
+	moduleMeta, err := types.GetMeta(moduleResource)
+	if err != nil {
+		return fmt.Errorf("failed to get module metadata: %w", err)
+	}
+
+	// Get the module's body to access the variables attribute
+	moduleBody, err := c.getBody(moduleResource)
+	if err != nil {
+		return fmt.Errorf("failed to get module body: %w", err)
+	}
+
+	// Check if the module has a variables attribute
+	if moduleBody.Attributes["variables"] == nil {
+		return nil // No variables to process
+	}
+
+	// Evaluate the variables expression using the shared context
+	varsVal, diags := moduleBody.Attributes["variables"].Expr.Value(sharedCtx)
+	if diags.HasErrors() {
+		return fmt.Errorf("failed to evaluate module variables: %s", diags.Error())
+	}
+
+	if varsVal.IsNull() || !varsVal.Type().IsObjectType() {
+		return nil // No variables to process
+	}
+
+	// Get all resources in this module
+	moduleResources, err := c.FindModuleResources(moduleMeta.ID, true)
+	if err != nil {
+		return fmt.Errorf("failed to find module resources: %w", err)
+	}
+
+	// Update the context of each module resource
+	for _, moduleRes := range moduleResources {
+		storedCtx, err := c.getContext(moduleRes)
+		if err != nil || storedCtx == nil {
+			continue // Skip resources without stored contexts
+		}
+
+		// Ensure the stored context has a Variables map
+		if storedCtx.Variables == nil {
+			storedCtx.Variables = make(map[string]cty.Value)
+		}
+
+		// Create or update the variable namespace
+		varMap := make(map[string]cty.Value)
+		if existing, ok := storedCtx.Variables["variable"]; ok && !existing.IsNull() {
+			for k, v := range existing.AsValueMap() {
+				varMap[k] = v
+			}
+		}
+
+		// Add the module variables
+		for k, v := range varsVal.AsValueMap() {
+			varMap[k] = v
+		}
+
+		// Update the variable namespace
+		storedCtx.Variables["variable"] = cty.ObjectVal(varMap)
+	}
 
 	return nil
 }
@@ -807,4 +1015,40 @@ func setContextVariablesFromList(c *Config, r any, meta *types.Meta, ctx *hcl.Ev
 	}
 
 	return nil
+}
+
+// convertCtyToGo recursively converts a cty.Value to a Go value
+func convertCtyToGo(val cty.Value) any {
+	if val.IsNull() {
+		return nil
+	}
+
+	switch {
+	case val.Type() == cty.String:
+		return val.AsString()
+	case val.Type() == cty.Number:
+		f, _ := val.AsBigFloat().Float64()
+		return f
+	case val.Type() == cty.Bool:
+		return val.True()
+	case val.Type().IsListType() || val.Type().IsTupleType():
+		slice := []any{} // Initialize as empty slice, not nil slice
+		for it := val.ElementIterator(); it.Next(); {
+			_, elem := it.Element()
+			slice = append(slice, convertCtyToGo(elem)) // Recursive call
+		}
+		return slice
+	case val.Type().IsObjectType() || val.Type().IsMapType():
+		objMap := make(map[string]any)
+		for it := val.ElementIterator(); it.Next(); {
+			key, elem := it.Element()
+			keyStr := key.AsString()
+			objMap[keyStr] = convertCtyToGo(elem) // Recursive call
+		}
+		return objMap
+	default:
+		// For unknown types, try to get a meaningful representation
+		// This could be further improved based on specific cty types
+		return val.GoString()
+	}
 }

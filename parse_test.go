@@ -285,7 +285,7 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	c, err := p.ParseFile(absoluteFolderPath)
 	require.NoError(t, err)
 
-	//require.Len(t, c.Resources, 5)
+	require.Len(t, c.Resources, 10)
 
 	qc := NewQuerier[structs.Container](c)
 	con, err := qc.FindResource("resource.container.consul")
@@ -293,6 +293,7 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 	_ = con
 
 	qo := NewQuerier[resources.Output](c)
+
 	out, err := qo.FindResource("output.splat")
 	require.NoError(t, err)
 	require.Equal(t, "/cache", out.Value.([]any)[0])
@@ -620,19 +621,17 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 
 	r, err := c.FindResource("module.disabled.resource.container.enabled")
 	require.NoError(t, err)
-	if res, ok := r.(any); ok {
-		disabled, err := types.GetDisabled(res)
-		require.NoError(t, err)
-		require.True(t, disabled)
-	}
+
+	disabled, err := types.GetDisabled(r)
+	require.NoError(t, err)
+	require.True(t, disabled)
 
 	r, err = c.FindResource("module.disabled.sub.resource.container.enabled")
 	require.NoError(t, err)
-	if res, ok := r.(any); ok {
-		disabled, err := types.GetDisabled(res)
-		require.NoError(t, err)
-		require.True(t, disabled)
-	}
+
+	disabled, err = types.GetDisabled(r)
+	require.NoError(t, err)
+	require.True(t, disabled)
 
 	// should only called for the containing module and variables
 	// TODO: re-enable when lifecycle is implemented

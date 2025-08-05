@@ -312,12 +312,14 @@ func (c *Config) Walk(wf WalkCallback, reverse bool) error {
 			// if this is the root module or is disabled skip
 			meta, err := types.GetMeta(r)
 			if err != nil {
-				return nil // Skip resources without ResourceBase
+				panic(err) // should never happen, all resources should have metadata
 			}
+
 			disabled, err := types.GetDisabled(r)
 			if err != nil {
 				disabled = false
 			}
+
 			if (meta.Type == resources.TypeRoot || meta.Type == resources.TypeModule) || disabled {
 				return nil
 			}
@@ -464,7 +466,6 @@ func (q *Querier[T]) FindResource(path string) (*T, error) {
 		}
 
 		if meta.ID == path {
-
 			err := schema.UnmarshalUntyped(r, returnResource)
 			return returnResource, err
 		}

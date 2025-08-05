@@ -974,6 +974,36 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	// modules should have their own context so that variables are not globally scoped
 	subContext := buildContext(moduleSrc, p.registeredFunctions)
 
+	// Process module variables and add them to the subContext
+	if b.Body.Attributes["variables"] != nil {
+		varsVal, diags := b.Body.Attributes["variables"].Expr.Value(ctx)
+		if !diags.HasErrors() && !varsVal.IsNull() {
+			// Add module variables to the subContext
+			if subContext.Variables == nil {
+				subContext.Variables = make(map[string]cty.Value)
+			}
+			
+			// Get the existing variable map or create a new one
+			varMap := make(map[string]cty.Value)
+			if existing, ok := subContext.Variables["variable"]; ok && !existing.IsNull() {
+				// AsValueMap returns a copy, so we need to get all existing values
+				for k, v := range existing.AsValueMap() {
+					varMap[k] = v
+				}
+			}
+			
+			// Add each variable from the module's variables attribute
+			if varsVal.Type().IsObjectType() {
+				for k, v := range varsVal.AsValueMap() {
+					varMap[k] = v
+				}
+			}
+			
+			// Update the variable namespace with the new map
+			subContext.Variables["variable"] = cty.ObjectVal(varMap)
+		}
+	}
+
 	errs := p.parseDirectory(subContext, moduleSrc, moduleConfig)
 	if errs != nil {
 		return errs
