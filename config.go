@@ -232,7 +232,7 @@ func (c *Config) AppendResourcesFromConfig(new *Config) error {
 
 		// we need to add the context and the body from the other resource
 		// so we can use it when parsing
-		c.addResource(r, new.contexts[r], new.bodies[r])
+		c.addResource(r, new.bodies[r])
 	}
 
 	return nil
@@ -244,7 +244,7 @@ func (c *Config) AppendResource(r any) error {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 
-	return c.addResource(r, nil, nil)
+	return c.addResource(r, nil)
 }
 
 func (c *Config) RemoveResource(rf any) error {
@@ -392,7 +392,7 @@ func (c *Config) walk(wf dag.WalkFunc, reverse bool) []error {
 	return nil
 }
 
-func (c *Config) addResource(r any, ctx *hcl.EvalContext, b *hclsyntax.Body) error {
+func (c *Config) addResource(r any, b *hclsyntax.Body) error {
 	// Get metadata using helper function
 	meta, err := types.GetMeta(r)
 	if err != nil {
@@ -421,7 +421,7 @@ func (c *Config) addResource(r any, ctx *hcl.EvalContext, b *hclsyntax.Body) err
 
 	// Now we can store any type of resource (builtin or schema-generated)
 	c.Resources = append(c.Resources, r)
-	c.contexts[r] = ctx
+	c.contexts[r] = nil
 	c.bodies[r] = b
 
 	return nil

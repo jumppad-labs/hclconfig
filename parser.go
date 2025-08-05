@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/hclconfig/errors"
@@ -27,7 +26,6 @@ import (
 	"github.com/zclconf/go-cty/cty/function"
 )
 
-var rootContext *hcl.EvalContext
 
 // ParserEvent represents an event that occurs during parser operations
 type ParserEvent struct {
@@ -228,11 +226,21 @@ func (p *Parser) createBuiltinResource(resourceType, resourceName string) (any, 
 // error can be cast to *ConfigError to get a list of errors
 func (p *Parser) ParseFile(file string) (*Config, error) {
 	c := NewConfig()
-	rootContext = buildContext(file, p.registeredFunctions)
+	
+	// Create minimal context just for parsing phase - only functions, no variables
+	functions := getDefaultFunctions(file)
+	for k, v := range p.registeredFunctions {
+		functions[k] = v
+	}
+	
+	minimalContext := &hcl.EvalContext{
+		Functions: functions,
+		Variables: map[string]cty.Value{},
+	}
 
 	ce := errors.NewConfigError()
 
-	err := p.parseFile(rootContext, file, c, p.options.Variables, p.options.VariablesFiles)
+	err := p.parseFile(minimalContext, file, c, p.options.Variables, p.options.VariablesFiles)
 	if err != nil {
 		for _, e := range err {
 			ce.AppendError(e)
@@ -336,7 +344,7 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 	}
 
 	// process the files and resolve dependency
-	processErr := p.process(c, previousState)
+	processErr := p.process(c, previousState, functions)
 	return workingConfig, processErr
 }
 
@@ -345,11 +353,21 @@ func (p *Parser) ParseFile(file string) (*Config, error) {
 // error can be cast to *ConfigError to get a list of errors
 func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	c := NewConfig()
-	rootContext = buildContext(dir, p.registeredFunctions)
+	
+	// Create minimal context just for parsing phase - only functions, no variables
+	functions := getDefaultFunctions(dir)
+	for k, v := range p.registeredFunctions {
+		functions[k] = v
+	}
+	
+	minimalContext := &hcl.EvalContext{
+		Functions: functions,
+		Variables: map[string]cty.Value{},
+	}
 
 	ce := errors.NewConfigError()
 
-	err := p.parseDirectory(rootContext, dir, c)
+	err := p.parseDirectory(minimalContext, dir, c)
 	if err != nil {
 		for _, e := range err {
 			ce.AppendError(e)
@@ -452,7 +470,7 @@ func (p *Parser) ParseDirectory(dir string) (*Config, error) {
 	}
 
 	// process the files and resolve dependency
-	processErr := p.process(c, previousState)
+	processErr := p.process(c, previousState, functions)
 	return workingConfig, processErr
 }
 
@@ -512,12 +530,6 @@ func (p *Parser) parseFile(
 	variables map[string]string,
 	variablesFile []string) []error {
 
-	// This must be done before any other process as the resources
-	// might reference the variables
-	err := p.parseVariablesInFile(ctx, file, c)
-	if err != nil {
-		return []error{err}
-	}
 
 	// override any variables from files
 	for _, vf := range variablesFile {
@@ -530,7 +542,7 @@ func (p *Parser) parseFile(
 	// override default values for variables from environment or variables map
 	p.setVariables(ctx, variables)
 
-	errs := p.parseResourcesInFile(ctx, file, c, "", []string{})
+	errs := p.parseResourcesInFile(file, c, "", []string{})
 	if errs != nil {
 		return errs
 	}
@@ -593,49 +605,9 @@ func valueFromString(v string) cty.Value {
 	return cty.StringVal(v)
 }
 
-// ParseVariableFile parses a config file for variables
-func (p *Parser) parseVariablesInFile(ctx *hcl.EvalContext, file string, c *Config) error {
-	parser := hclparse.NewParser()
-
-	f, diag := parser.ParseHCLFile(file)
-	if diag.HasErrors() {
-		de := errors.NewParserErrorFromHCLDiag(diag[0], file)
-		return de
-	}
-
-	body, ok := f.Body.(*hclsyntax.Body)
-	if !ok {
-		panic("Error getting body")
-	}
-
-	for _, b := range body.Blocks {
-		switch b.Type {
-		case resources.TypeVariable:
-			r, _ := p.createBuiltinResource(resources.TypeVariable, b.Labels[0])
-			v := r.(*resources.Variable)
-
-			err := decodeBody(ctx, c, b, v, false)
-			if err != nil {
-				return err
-			}
-
-			// add the variable to the context
-			c.AppendResource(v)
-
-			// Fire parser event for variable processing (always succeeds with 0 time)
-			resourceType := fmt.Sprintf("%s.%s", v.Meta.Type, v.Meta.Name)
-			fireParserEvent(&p.options, "create", resourceType, v.Meta.ID, "success", 0, nil, nil)
-
-			val, _ := v.Default.(*hcl.Attribute).Expr.Value(ctx)
-			setContextVariableIfMissing(ctx, v.Meta.Name, val)
-		}
-	}
-
-	return nil
-}
 
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
-func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Config, moduleName string, dependsOn []string) []error {
+func (p *Parser) parseResourcesInFile(file string, c *Config, moduleName string, dependsOn []string) []error {
 	parser := hclparse.NewParser()
 
 	f, diag := parser.ParseHCLFile(file)
@@ -688,18 +660,19 @@ func (p *Parser) parseResourcesInFile(ctx *hcl.EvalContext, file string, c *Conf
 		// variables and outputs are processed in a separate run
 		switch b.Type {
 		case resources.TypeVariable:
-			continue
+			err := p.parseResource(c, file, b, moduleName, dependsOn)
+			if err != nil {
+				return []error{err}
+			}
 		case resources.TypeModule:
-			err := p.parseModule(ctx, c, file, b, moduleName, dependsOn)
+			err := p.parseModule(c, file, b, moduleName, dependsOn)
 			if err != nil {
 				return err
 			}
 		case resources.TypeOutput:
 			fallthrough
-		case resources.TypeLocal:
-			fallthrough
 		case types.TypeResource:
-			err := p.parseResource(ctx, c, file, b, moduleName, dependsOn)
+			err := p.parseResource(c, file, b, moduleName, dependsOn)
 			if err != nil {
 				return []error{err}
 			}
@@ -748,7 +721,7 @@ func setDependsOn(ctx *hcl.EvalContext, r any, b *hclsyntax.Body, dependsOn []st
 	return nil
 }
 
-func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) []error {
+func (p *Parser) parseModule(c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) []error {
 	// check the module has a name
 	if len(b.Labels) != 1 {
 		de := errors.NewParserError(
@@ -791,6 +764,17 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	meta.File = file
 	meta.Line = b.TypeRange.Start.Line
 	meta.Column = b.TypeRange.Start.Column
+
+	// Create minimal context for module parsing phase - only functions, no variables
+	functions := getDefaultFunctions(file)
+	for k, v := range p.registeredFunctions {
+		functions[k] = v
+	}
+	
+	ctx := &hcl.EvalContext{
+		Functions: functions,
+		Variables: map[string]cty.Value{},
+	}
 
 	err = decodeBody(ctx, c, b, rt, false)
 	if err != nil {
@@ -971,8 +955,17 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	// create a new config and add the resources later
 	moduleConfig := NewConfig()
 
-	// modules should have their own context so that variables are not globally scoped
-	subContext := buildContext(moduleSrc, p.registeredFunctions)
+	// Create minimal context for module parsing phase - only functions, no variables
+	// Variables will be handled dynamically during DAG processing
+	subFunctions := getDefaultFunctions(moduleSrc)
+	for k, v := range p.registeredFunctions {
+		subFunctions[k] = v
+	}
+	
+	subContext := &hcl.EvalContext{
+		Functions: subFunctions,
+		Variables: map[string]cty.Value{},
+	}
 
 	// Process module variables and add them to the subContext
 	if b.Body.Attributes["variables"] != nil {
@@ -1012,7 +1005,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	rt.(*resources.Module).SubContext = subContext
 
 	// add the module
-	c.addResource(rt, ctx, b.Body)
+	c.addResource(rt, b.Body)
 
 	// we need to add the module name to all the returned resources
 	for _, r := range moduleConfig.Resources {
@@ -1025,10 +1018,6 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		moduleName = strings.TrimSuffix(moduleName, ".")
 		rMeta.Module = moduleName
 
-		ctx, err := moduleConfig.getContext(r)
-		if err != nil {
-			panic("no body found for resource")
-		}
 
 		bdy, err := moduleConfig.getBody(r)
 		if err != nil {
@@ -1036,12 +1025,12 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 		}
 
 		// depends on is a property of the embedded type we need to set this manually
-		err = setDependsOn(ctx, rt, b.Body, dependsOn)
+		err = setDependsOn(nil, rt, b.Body, dependsOn)
 		if err != nil {
 			return []error{err}
 		}
 
-		err = c.addResource(r, ctx, bdy)
+		err = c.addResource(r, bdy)
 		if err != nil {
 			return []error{err}
 		}
@@ -1050,7 +1039,7 @@ func (p *Parser) parseModule(ctx *hcl.EvalContext, c *Config, file string, b *hc
 	return nil
 }
 
-func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
+func (p *Parser) parseResource(c *Config, file string, b *hclsyntax.Block, moduleName string, dependsOn []string) error {
 	var rt any
 	var err error
 
@@ -1095,43 +1084,6 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 			return de
 		}
 
-	case resources.TypeLocal:
-		// if the type is local check there is one label
-		if len(b.Labels) != 1 {
-			de := &errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
-			de.Message = `invalid formatting for 'local' stanza, resources should have a name and a type, i.e. 'local "name" {}'`
-
-			return de
-		}
-
-		name := b.Labels[0]
-		if err := validateResourceName(name); err != nil {
-			de := &errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
-			de.Message = err.Error()
-
-			return de
-		}
-
-		rt, err = p.createBuiltinResource(resources.TypeLocal, name)
-		if err != nil {
-			de := &errors.ParserError{}
-			de.Line = b.TypeRange.Start.Line
-			de.Column = b.TypeRange.Start.Column
-			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
-			de.Message = fmt.Sprintf(`unable to create local, this error should never happen %s`, err)
-
-			return de
-		}
-
 	case resources.TypeOutput:
 		// if the type is output check there is one label
 		if len(b.Labels) != 1 {
@@ -1168,6 +1120,42 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 
 			return de
 		}
+	case resources.TypeVariable:
+		// if the type is variable check there is one label
+		if len(b.Labels) != 1 {
+			de := &errors.ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Level = errors.ParserErrorLevelError
+			de.Message = `invalid formatting for 'variable' stanza, resources should have a name and a type, i.e. 'variable "name" {}'`
+
+			return de
+		}
+
+		name := b.Labels[0]
+		if err := validateResourceName(name); err != nil {
+			de := &errors.ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Level = errors.ParserErrorLevelError
+			de.Message = err.Error()
+
+			return de
+		}
+
+		rt, err = p.createBuiltinResource(resources.TypeVariable, name)
+		if err != nil {
+			de := &errors.ParserError{}
+			de.Line = b.TypeRange.Start.Line
+			de.Column = b.TypeRange.Start.Column
+			de.Filename = file
+			de.Level = errors.ParserErrorLevelError
+			de.Message = fmt.Sprintf(`unable to create variable, this error should never happen %s`, err)
+
+			return de
+		}
 	}
 
 	rtMeta, err := types.GetMeta(rt)
@@ -1186,7 +1174,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	rtMeta.Line = b.TypeRange.Start.Line
 	rtMeta.Column = b.TypeRange.Start.Column
 
-	err = decodeBody(ctx, c, b, rt, ignoreErrors)
+	err = decodeBody(nil, c, b, rt, ignoreErrors)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -1200,14 +1188,14 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 	// if we have an output, get the description
 	// this is needed during parsing as the value may not be set during walk
 	if err == nil && rtMeta.Type == resources.TypeOutput && b.Body.Attributes["description"] != nil {
-		desc, diags := b.Body.Attributes["description"].Expr.Value(ctx)
+		desc, diags := b.Body.Attributes["description"].Expr.Value(nil)
 		if !diags.HasErrors() {
 			rt.(*resources.Output).Description = desc.AsString()
 		}
 	}
 
 	// depends on is a property of the embedded type we need to set this manually
-	err = setDependsOn(ctx, rt, b.Body, dependsOn)
+	err = setDependsOn(nil, rt, b.Body, dependsOn)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -1219,7 +1207,7 @@ func (p *Parser) parseResource(ctx *hcl.EvalContext, c *Config, file string, b *
 		return de
 	}
 
-	err = c.addResource(rt, ctx, b.Body)
+	err = c.addResource(rt, b.Body)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
@@ -1444,24 +1432,6 @@ func getNameAndIndex(path []string) (name string, index int, remainingPath []str
 	return path[0], -1, path[1:], nil
 }
 
-func buildContext(filePath string, customFunctions map[string]function.Function) *hcl.EvalContext {
-	ctx := &hcl.EvalContext{
-		Functions: map[string]function.Function{},
-		Variables: map[string]cty.Value{},
-	}
-
-	valMap := map[string]cty.Value{}
-	ctx.Variables["resource"] = cty.ObjectVal(valMap)
-
-	ctx.Functions = getDefaultFunctions(filePath)
-
-	// add the custom functions
-	for k, v := range customFunctions {
-		ctx.Functions[k] = v
-	}
-
-	return ctx
-}
 
 func decodeBody(ctx *hcl.EvalContext, config *Config, b *hclsyntax.Block, p any, ignoreErrors bool) error {
 	dr, err := getDependentResources(b, ctx, config, p, "")
@@ -1485,25 +1455,6 @@ func decodeBody(ctx *hcl.EvalContext, config *Config, b *hclsyntax.Block, p any,
 		}
 	}
 
-	// if variable process the body, everything else
-	// lazy process on dag walk
-	if b.Type == string(resources.TypeVariable) {
-		diag := gohcl.DecodeBody(b.Body, ctx, p)
-		if diag.HasErrors() {
-			pe := &errors.ParserError{}
-			pe.Column = b.Body.SrcRange.Start.Column
-			pe.Line = b.Body.SrcRange.Start.Line
-			pe.Filename = b.Body.SrcRange.Filename
-			pe.Message = fmt.Sprintf("unable to decode body, %s", err)
-			pe.Level = errors.ParserErrorLevelError
-
-			// if ignore errors is false return the parsing error, otherwise
-			// swallow it
-			if !ignoreErrors {
-				return pe
-			}
-		}
-	}
 
 	meta, err := types.GetMeta(p)
 	if err != nil {
@@ -1752,7 +1703,7 @@ func processScopeTraversal(expr *hclsyntax.ScopeTraversalExpr) (string, error) {
 			strExpression += t.(hcl.TraverseRoot).Name
 
 			// if this is not a resource reference quit
-			if strExpression != "resource" && strExpression != "module" && strExpression != "local" && strExpression != "output" {
+			if strExpression != "resource" && strExpression != "module" && strExpression != "variable" && strExpression != "output" {
 				return "", nil
 			}
 		} else {
@@ -1960,16 +1911,11 @@ func (p *Parser) processDestroyPhase(toDestroy []any) error {
 	return nil
 }
 
-func (p *Parser) process(c *Config, previousState *Config) error {
+func (p *Parser) process(c *Config, previousState *Config, functions map[string]function.Function) error {
 	ce := errors.NewConfigError()
 
-	// Ensure rootContext is not nil
-	if rootContext == nil {
-		return fmt.Errorf("rootContext is nil - this should not happen")
-	}
-
 	// walk the dag and process resources (only processes resources from c)
-	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry, &p.options, rootContext), false)
+	errs := c.walk(walkCallback(c, previousState, p.pluginRegistry, &p.options, functions), false)
 
 	for _, e := range errs {
 		ce.AppendError(e)

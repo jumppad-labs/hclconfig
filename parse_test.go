@@ -1085,7 +1085,6 @@ func TestParserEventCallback(t *testing.T) {
 		// Builtin types (variables, outputs, locals, modules, root) have 0 duration
 		if strings.Contains(event.ResourceType, "variable.") ||
 			strings.Contains(event.ResourceType, "output.") ||
-			strings.Contains(event.ResourceType, "local.") ||
 			strings.Contains(event.ResourceType, "module.") ||
 			strings.Contains(event.ResourceType, "root.") {
 			require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for builtin types")
@@ -1098,7 +1097,6 @@ func TestParserEventCallback(t *testing.T) {
 		// Builtin types don't have data
 		if !strings.Contains(event.ResourceType, "variable.") &&
 			!strings.Contains(event.ResourceType, "output.") &&
-			!strings.Contains(event.ResourceType, "local.") &&
 			!strings.Contains(event.ResourceType, "module.") &&
 			!strings.Contains(event.ResourceType, "root.") {
 			require.NotEmpty(t, event.Data, "Expected data to be set for provider operations")

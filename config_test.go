@@ -66,38 +66,38 @@ func testSetupConfig(t *testing.T) (*Config, []any) {
 	types.AppendUniqueDependency(out2, "resource.container.test_dev")
 
 	c := NewConfig()
-	err := c.addResource(net1, nil, nil)
+	err := c.addResource(net1, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(var1, nil, nil)
+	err = c.addResource(var1, nil)
 	require.NoError(t, err)
 
 	// add the modules
-	err = c.addResource(mod1, nil, nil)
+	err = c.addResource(mod1, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(var2, nil, nil)
+	err = c.addResource(var2, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(mod2, nil, nil)
+	err = c.addResource(mod2, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(con1, nil, nil)
+	err = c.addResource(con1, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(con2, nil, nil)
+	err = c.addResource(con2, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(con3, nil, nil)
+	err = c.addResource(con3, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(con4, nil, nil)
+	err = c.addResource(con4, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(out1, nil, nil)
+	err = c.addResource(out1, nil)
 	require.NoError(t, err)
 
-	err = c.addResource(out2, nil, nil)
+	err = c.addResource(out2, nil)
 	require.NoError(t, err)
 
 	return c, []any{
@@ -288,7 +288,7 @@ func TestAppendResourcesMerges(t *testing.T) {
 	c2 := NewConfig()
 	net1, err := typs.CreateResource(structs.TypeNetwork, "cloud2")
 	require.NoError(t, err)
-	c2.addResource(net1, nil, nil)
+	c2.addResource(net1, nil)
 
 	err = c.AppendResourcesFromConfig(c2)
 	require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestAppendResourcesWhenExistsReturnsError(t *testing.T) {
 	c2 := NewConfig()
 	net1, err := typs.CreateResource(structs.TypeNetwork, "cloud")
 	require.NoError(t, err)
-	c2.addResource(net1, nil, nil)
+	c2.addResource(net1, nil)
 
 	err = c.AppendResourcesFromConfig(c2)
 	require.Error(t, err)

@@ -7,7 +7,6 @@ func DefaultResources() types.RegisteredTypes {
 	return types.RegisteredTypes{
 		"variable": &Variable{},
 		"output":   &Output{},
-		"local":    &Local{},
 		"module":   &Module{},
 		"root":     &Root{},
 	}

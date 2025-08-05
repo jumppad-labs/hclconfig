@@ -187,7 +187,7 @@ func (f FQRN) String() string {
 		attrPart = fmt.Sprintf(".%s", f.Attribute)
 	}
 
-	if f.Type == TypeOutput || f.Type == TypeLocal || f.Type == TypeVariable {
+	if f.Type == TypeOutput || f.Type == TypeVariable {
 		return fmt.Sprintf("%s%s.%s%s", modulePart, f.Type, f.Resource, attrPart)
 	}
 
@@ -208,7 +208,7 @@ func (f FQRN) StringWithoutAttribute() string {
 		modulePart = fmt.Sprintf("module.%s.", f.Module)
 	}
 
-	if f.Type == TypeOutput || f.Type == TypeLocal || f.Type == TypeVariable {
+	if f.Type == TypeOutput || f.Type == TypeVariable {
 		return fmt.Sprintf("%s%s.%s", modulePart, f.Type, f.Resource)
 	}
 
