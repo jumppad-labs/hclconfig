@@ -492,19 +492,25 @@ func (p *Parser) parseDirectory(ctx *hcl.EvalContext, dir string, c *Config) []e
 		return []error{fmt.Errorf("unable to list files in directory %s, error: %s", dir, err)}
 	}
 
-	variablesFiles := p.options.VariablesFiles
-
-	// first process vars files
+	// Collect .vars files from the directory
+	var dirVarsFiles []string
 	for _, f := range files {
 		fn := filepath.Join(dir, f.Name())
 
 		if !f.IsDir() {
 			if strings.HasSuffix(fn, ".vars") {
 				// add to the collection
-				variablesFiles = append(variablesFiles, fn)
+				dirVarsFiles = append(dirVarsFiles, fn)
 			}
 		}
 	}
+	
+	// Combine directory .vars files with options .vars files
+	// Directory files come first (lower precedence), then options files (higher precedence)
+	variablesFiles := append(dirVarsFiles, p.options.VariablesFiles...)
+	
+	// Update p.options.VariablesFiles so the DAG processing phase has access to all .vars files
+	p.options.VariablesFiles = variablesFiles
 
 	for _, f := range files {
 		fn := filepath.Join(dir, f.Name())
@@ -1239,11 +1245,20 @@ func setContextVariableIfMissing(ctx *hcl.EvalContext, key string, value cty.Val
 }
 
 func setContextVariable(ctx *hcl.EvalContext, key string, value cty.Value) {
+	ul := getContextLock(ctx)
+	defer ul()
+	
 	valMap := map[string]cty.Value{}
 
 	// get the existing map
 	if m, ok := ctx.Variables["variable"]; ok {
-		valMap = m.AsValueMap()
+		// Create a copy of the map to avoid modifying the original
+		existingMap := m.AsValueMap()
+		if existingMap != nil {
+			for k, v := range existingMap {
+				valMap[k] = v
+			}
+		}
 	}
 
 	valMap[key] = value

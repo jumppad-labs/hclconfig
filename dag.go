@@ -353,7 +353,7 @@ func destroyWalkCallback(registry *PluginRegistry, options *ParserOptions) func(
 
 // buildContextForResource creates a fresh context for a specific resource
 // by building variables dynamically from config and module sources
-func buildContextForResource(c *Config, r any, functions map[string]function.Function) (*hcl.EvalContext, error) {
+func buildContextForResource(c *Config, r any, options *ParserOptions, functions map[string]function.Function) (*hcl.EvalContext, error) {
 	rMeta, err := types.GetMeta(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource metadata: %w", err)
@@ -460,6 +460,24 @@ func buildContextForResource(c *Config, r any, functions map[string]function.Fun
 			
 			ctx.Variables["variable"] = cty.ObjectVal(mergedVars)
 		}
+	} else if options != nil {
+		// For root-level resources only, load variables from files and apply precedence
+		// Precedence: variable defaults < .vars files < environment variables < direct variables
+		
+		// Create a parser instance to access the helper methods
+		p := &Parser{options: *options}
+		
+		// Load variables from .vars files (these override variable defaults)
+		for _, vf := range options.VariablesFiles {
+			if err := p.loadVariablesFromFile(ctx, vf); err != nil {
+				// Continue processing other files even if one fails
+				// This matches the behavior in parser.go
+				continue
+			}
+		}
+		
+		// Apply environment variables and direct variables (these override .vars files)
+		p.setVariables(ctx, options.Variables)
 	}
 
 	// Set the resource variables in the context
@@ -565,7 +583,7 @@ func walkCallback(c *Config, previousState *Config, registry *PluginRegistry, op
 		}
 
 		// Build a fresh context for this resource dynamically
-		ctx, err := buildContextForResource(c, r, functions)
+		ctx, err := buildContextForResource(c, r, options, functions)
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
