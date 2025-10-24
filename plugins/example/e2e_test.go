@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/internal/schema"
-	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
-	plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
+	"github.com/jumppad-labs/xcl/internal/schema"
+	"github.com/jumppad-labs/xcl/plugins/example/pkg/person"
+	plugintesting "github.com/jumppad-labs/xcl/plugins/testing"
 	"github.com/stretchr/testify/require"
 )
 

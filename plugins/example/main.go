@@ -2,9 +2,9 @@ package main
 
 import (
 	"github.com/hashicorp/go-plugin"
-	"github.com/jumppad-labs/hclconfig/logger"
-	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
+	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/plugins"
+	"github.com/jumppad-labs/xcl/plugins/example/pkg/person"
 )
 
 // PersonPlugin demonstrates how to create a complete plugin

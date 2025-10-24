@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
-	plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/plugins/example/pkg/person"
+	plugintesting "github.com/jumppad-labs/xcl/plugins/testing"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
 

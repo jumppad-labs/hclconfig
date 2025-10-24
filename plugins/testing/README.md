@@ -16,7 +16,7 @@ The testing package separates testing utilities from production code and provide
 ```go
 import (
     "testing"
-    plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
+    plugintesting "github.com/jumppad-labs/xcl/plugins/testing"
 )
 
 func TestMyPlugin(t *testing.T) {

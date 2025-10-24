@@ -4,21 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/jumppad-labs/xcl/plugins/registry"
 )
 
 type FileStateStore struct {
-	path string
+	path     string
+	registry *registry.PluginRegistry
 }
 
-func NewFileStateStore(path string) (*FileStateStore, error) {
+func NewFileStateStore(path string, registry *registry.PluginRegistry) (*FileStateStore, error) {
 	// Check if the file exists
 	// If not, create an empty state file
 	// Else, load the state from the file
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return createStateAtPath(path)
+		return createStateAtPath(path, registry)
 	}
 
-	fss := &FileStateStore{path: path}
+	fss := &FileStateStore{
+		path:     path,
+		registry: registry,
+	}
 	return fss, nil
 }
 
@@ -33,13 +39,65 @@ func (fs *FileStateStore) Load() (*State, error) {
 		return nil, fmt.Errorf("unable to read state file at %s: %w", fs.path, err)
 	}
 
-	fmt.Println(string(data))
-
-	// Deserialize the state
-	resources := []interface{}{}
-	err = json.Unmarshal(data, &resources)
+	// Phase 1: Unmarshal to raw messages to preserve JSON structure
+	var rawMessages []*json.RawMessage
+	err = json.Unmarshal(data, &rawMessages)
 	if err != nil {
 		return nil, fmt.Errorf("unable to deserialize state file at %s: %w", fs.path, err)
+	}
+
+	// Phase 2: Create typed resources and unmarshal into them
+	resources := []any{}
+	for _, rawMsg := range rawMessages {
+		// Peek at the metadata to get type and name
+		var metadata map[string]any
+		err := json.Unmarshal(*rawMsg, &metadata)
+		if err != nil {
+			// Skip malformed entries
+			continue
+		}
+
+		// Extract meta information
+		metaMap, ok := metadata["meta"].(map[string]any)
+		if !ok {
+			// Skip resources without proper metadata
+			continue
+		}
+
+		resourceType, ok := metaMap["type"].(string)
+		if !ok {
+			// Skip resources without type
+			continue
+		}
+
+		resourceName, ok := metaMap["name"].(string)
+		if !ok {
+			// Skip resources without name
+			continue
+		}
+
+		// Create a typed resource reference using the registry
+		typedResource, err := fs.registry.CreateResource(resourceType, resourceName)
+		if err != nil {
+			// Skip unknown resource types (plugin not loaded)
+			continue
+		}
+
+		// Re-marshal and unmarshal into the typed reference
+		resData, err := json.Marshal(metadata)
+		if err != nil {
+			// Skip if we can't re-marshal
+			continue
+		}
+
+		err = json.Unmarshal(resData, typedResource)
+		if err != nil {
+			// Skip if unmarshal into typed resource fails
+			continue
+		}
+
+		// Append the typed resource pointer
+		resources = append(resources, typedResource)
 	}
 
 	s := NewState()
@@ -85,8 +143,11 @@ func (fs *FileStateStore) Save(state *State) error {
 	return nil
 }
 
-func createStateAtPath(path string) (*FileStateStore, error) {
-	fs := &FileStateStore{path: path}
+func createStateAtPath(path string, registry *registry.PluginRegistry) (*FileStateStore, error) {
+	fs := &FileStateStore{
+		path:     path,
+		registry: registry,
+	}
 	s := NewState()
 	err := fs.Save(s)
 	if err != nil {

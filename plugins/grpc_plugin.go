@@ -6,7 +6,7 @@ import (
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jumppad-labs/hclconfig/plugins/proto"
+	"github.com/jumppad-labs/xcl/plugins/proto"
 	"google.golang.org/grpc"
 )
 
@@ -78,7 +78,7 @@ func (p *GRPCPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, 
 var HandshakeConfig = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "HCLCONFIG_PLUGIN",
-	MagicCookieValue: "hclconfig",
+	MagicCookieValue: "xcl",
 }
 
 // PluginMap for go-plugin

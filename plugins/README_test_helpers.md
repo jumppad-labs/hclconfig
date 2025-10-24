@@ -9,7 +9,7 @@ The `plugins/testing` package provides convenient test helpers for testing HCLCo
 ```go
 import (
     "testing"
-    plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
+    plugintesting "github.com/jumppad-labs/xcl/plugins/testing"
 )
 
 func TestMyPlugin(t *testing.T) {
@@ -107,7 +107,7 @@ func TestMyPluginExternal(t *testing.T) {
 ```go
 import (
     "testing"
-    plugintesting "github.com/jumppad-labs/hclconfig/plugins/testing"
+    plugintesting "github.com/jumppad-labs/xcl/plugins/testing"
 )
 
 // Test schema and basic functionality

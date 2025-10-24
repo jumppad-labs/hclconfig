@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proto;
-option go_package = "github.com/jumppad-labs/hclconfig/plugins/proto";
+option go_package = "github.com/jumppad-labs/xcl/plugins/proto";
 
 // Main plugin service (runs in plugin process)
 service PluginService {

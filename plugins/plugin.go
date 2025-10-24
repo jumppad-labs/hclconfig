@@ -4,14 +4,36 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jumppad-labs/hclconfig/internal/schema"
+	"github.com/jumppad-labs/xcl/internal/schema"
 )
+
+/*
+// last element in labels array is the name
+
+lab {}
+lab "0" {}
+resource lab 0 {}
+
+lab.0.meta.id
+lab.meta.id
+resource.lab.meta.id
+
+container "blah" {
+	plugin = var.cloud
+}
+
+resource "container" "blah" {
+}
+
+container "gcp" "blah" {
+}
+*/
 
 // RegisteredType represents a registered resource type with its metadata
 type RegisteredType struct {
 	// The top level type name, i.e. resource
 	Type string
-	// the sub type, i.e. k8s_config
+	// the optional sub type, i.e. k8s_config
 	SubType string
 	// The json schema for the type
 	Schema []byte
@@ -63,7 +85,7 @@ type PluginBase struct {
 // SetLogger sets the logger for the plugin base and all registered adapters
 func (p *PluginBase) SetLogger(logger Logger) {
 	p.logger = logger
-	
+
 	// Propagate the logger to all registered adapters
 	for i := range p.registeredTypes {
 		if p.registeredTypes[i].Adapter != nil {

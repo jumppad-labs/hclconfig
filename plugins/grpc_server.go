@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jumppad-labs/hclconfig/plugins/proto"
+	"github.com/jumppad-labs/xcl/plugins/proto"
 )
 
 // GRPCServer wraps PluginBase and implements the gRPC PluginService
@@ -98,7 +98,7 @@ func (s *GRPCServer) Create(ctx context.Context, req *proto.CreateRequest) (*pro
 	// Call the adapter's Create method which returns mutated data
 	mutatedData, err := rt.Adapter.Create(ctx, req.EntityData)
 	return &proto.CreateResponse{
-		Error:              errorToString(err),
+		Error:             errorToString(err),
 		MutatedEntityData: mutatedData,
 	}, nil
 }
@@ -138,7 +138,7 @@ func (s *GRPCServer) Refresh(ctx context.Context, req *proto.RefreshRequest) (*p
 	// Call the adapter's Refresh method which returns mutated data
 	refreshedData, err := rt.Adapter.Refresh(ctx, req.EntityData)
 	return &proto.RefreshResponse{
-		Error:                 errorToString(err),
+		Error:               errorToString(err),
 		RefreshedEntityData: refreshedData,
 	}, nil
 }

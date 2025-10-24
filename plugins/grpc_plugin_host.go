@@ -6,17 +6,17 @@ import (
 	"os/exec"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jumppad-labs/hclconfig/plugins/proto"
+	"github.com/jumppad-labs/xcl/plugins/proto"
 )
 
 // GRPCPluginHost manages external plugin processes via gRPC and provides host services
 type GRPCPluginHost struct {
-	logger         Logger
-	state          State
-	client         *plugin.Client
-	plugin         PluginEntityProvider
-	cachedTypes    []RegisteredType // cached types with adapters
-	typesCached    bool             // flag to track if types have been cached
+	logger      Logger
+	state       State
+	client      *plugin.Client
+	plugin      PluginEntityProvider
+	cachedTypes []RegisteredType // cached types with adapters
+	typesCached bool             // flag to track if types have been cached
 }
 
 // NewGRPCPluginHost creates a new gRPC plugin host for external plugin binaries
@@ -221,7 +221,7 @@ func (h *GRPCPluginHost) GetTypes() []RegisteredType {
 	for i, t := range remoteTypes {
 		// Create a resource-specific adapter
 		adapter := NewGRPCResourceProviderAdapter(wrapper, t.Type, t.SubType)
-		
+
 		h.cachedTypes[i] = RegisteredType{
 			Type:    t.Type,
 			SubType: t.SubType,

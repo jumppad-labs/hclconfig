@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/logger"
-	"github.com/jumppad-labs/hclconfig/plugins"
-	"github.com/jumppad-labs/hclconfig/plugins/example/pkg/person"
-	"github.com/jumppad-labs/hclconfig/plugins/mocks"
+	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/plugins"
+	"github.com/jumppad-labs/xcl/plugins/example/pkg/person"
+	"github.com/jumppad-labs/xcl/plugins/mocks"
 	"github.com/stretchr/testify/require"
 )
 

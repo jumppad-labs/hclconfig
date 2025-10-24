@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/jumppad-labs/hclconfig/plugins/proto"
+	"github.com/jumppad-labs/xcl/plugins/proto"
 )
 
 // GRPCHostCallbackServer implements HostCallbackService for the host side

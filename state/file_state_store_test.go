@@ -6,52 +6,56 @@ import (
 	"path"
 	"testing"
 
-	"github.com/jumppad-labs/xcl/types"
+	"github.com/jumppad-labs/xcl/internal/resources"
+	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/stretchr/testify/require"
 )
 
-type testExampleResource struct {
-	types.ResourceBase
-}
-
-func testCreateState(t *testing.T) (StateStore, string) {
+func testCreateState(t *testing.T) (StateStore, string, *registry.PluginRegistry) {
 	p := path.Join(t.TempDir(), "state.json")
+	reg := registry.NewPluginRegistry(logger.NewTestLogger(t))
 
-	ss, err := NewFileStateStore(p)
+	ss, err := NewFileStateStore(p, reg)
 
 	require.NoError(t, err)
 	require.NotNil(t, ss)
 	require.FileExists(t, p)
 
-	return ss, p
+	return ss, p, reg
 }
 
-func testSaveState(t *testing.T) (StateStore, string) {
-	ss, p := testCreateState(t)
+func testSaveState(t *testing.T) (StateStore, string, *registry.PluginRegistry) {
+	ss, p, reg := testCreateState(t)
 	s := NewState()
-	err := s.AppendResource(&testExampleResource{types.ResourceBase{Meta: types.Meta{Type: "test", Name: "example"}}})
+
+	// Create a variable resource using the registry
+	varResource, err := reg.CreateResource(resources.TypeVariable, "example")
+	require.NoError(t, err)
+
+	err = s.AppendResource(varResource)
 	require.NoError(t, err)
 
 	err = ss.Save(s)
 	require.NoError(t, err)
 	require.FileExists(t, p)
 
-	return ss, p
+	return ss, p, reg
 }
 
-func testNewStateAtExistingPath(t *testing.T) (StateStore, string) {
-	_, p := testSaveState(t)
+func testNewStateAtExistingPath(t *testing.T) (StateStore, string, *registry.PluginRegistry) {
+	_, p, reg := testSaveState(t)
 
 	// create the file first
 	err := os.WriteFile(p, []byte("{}"), 0644)
 	require.NoError(t, err)
 
-	ss, err := NewFileStateStore(p)
+	ss, err := NewFileStateStore(p, reg)
 
 	require.NoError(t, err)
 	require.NotNil(t, ss)
 
-	return ss, p
+	return ss, p, reg
 }
 
 func TestCreatesStateAtEmptyPath(t *testing.T) {
@@ -59,17 +63,17 @@ func TestCreatesStateAtEmptyPath(t *testing.T) {
 }
 
 func TestSaveSavesStateToFile(t *testing.T) {
-	_, p := testSaveState(t)
+	_, p, _ := testSaveState(t)
 
 	// load the file and check contents
 	data, err := os.ReadFile(p)
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
 
-	res := []*testExampleResource{}
+	res := []*resources.Variable{}
 	err = json.Unmarshal(data, &res)
 	require.NoError(t, err)
-	require.Equal(t, "resource.test.example", res[0].Meta.ID)
+	require.Equal(t, "variable.example", res[0].Meta.ID)
 }
 
 func TestNewStateAtExistingPath(t *testing.T) {
@@ -77,9 +81,12 @@ func TestNewStateAtExistingPath(t *testing.T) {
 }
 
 func TestLoadStateContainsResources(t *testing.T) {
-	ss, _ := testSaveState(t)
+	ss, _, _ := testSaveState(t)
 
 	s, err := ss.Load()
 	require.NoError(t, err)
 	require.NotNil(t, s)
+
+	_, err = s.FindResource("variable.example")
+	require.NoError(t, err)
 }

@@ -3,8 +3,8 @@ package person
 import (
 	"context"
 
-	"github.com/jumppad-labs/hclconfig/logger"
-	"github.com/jumppad-labs/hclconfig/plugins"
+	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/plugins"
 )
 
 // ExampleProvider is a basic implementation of Provider[*Person]

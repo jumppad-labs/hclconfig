@@ -1,6 +1,6 @@
 package person
 
-import "github.com/jumppad-labs/hclconfig/types"
+import "github.com/jumppad-labs/xcl/types"
 
 // Person is an example resource that implements types.Resource
 type Person struct {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/jumppad-labs/hclconfig/plugins/proto"
+	"github.com/jumppad-labs/xcl/plugins/proto"
 )
 
 // GRPCLogger implements Logger interface using consolidated HostCallbackService client
