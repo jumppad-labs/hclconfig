@@ -1,9 +1,10 @@
-package hclconfig
+package xcl
 
 import (
 	"os"
 	"testing"
 
+	"github.com/jumppad-labs/xcl/internal/utils"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -23,7 +24,7 @@ func TestProcessesTypes(t *testing.T) {
 		"foo": cty.StringVal("abc"),
 	})
 
-	output := ParseVars(vars)
+	output := utils.ParseVars(vars)
 
 	require.Equal(t, "abc", output["string"])
 

@@ -1,0 +1,14 @@
+{
+  "name": "project",
+  "dependencies": {
+    "tessl/golang-github-com-stretchr--testify": {
+      "version": "1.11.0"
+    },
+    "tessl/golang-grpc": {
+      "version": "1.77.1"
+    },
+    "tessl/golang-google-golang-org--protobuf": {
+      "version": "1.36.0"
+    }
+  }
+}

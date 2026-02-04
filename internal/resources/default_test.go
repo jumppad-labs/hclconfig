@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
 

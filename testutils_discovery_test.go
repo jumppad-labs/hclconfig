@@ -1,4 +1,4 @@
-package hclconfig
+package xcl
 
 import (
 	"os"

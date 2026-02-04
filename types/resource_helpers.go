@@ -8,6 +8,10 @@ import (
 // findResourceBase uses reflection to find the embedded ResourceBase field in a resource.
 // It handles nested embedding scenarios (e.g., PostgreSQL -> DBCommon -> ResourceBase).
 func findResourceBase(resource any) (reflect.Value, error) {
+	t := reflect.TypeOf(resource)
+	if t.Kind() != reflect.Ptr {
+		return reflect.Value{}, fmt.Errorf("resource is not a pointer")
+	}
 
 	st := reflect.TypeOf(resource).Elem()
 	_, found := st.FieldByName("ResourceBase")
@@ -68,19 +72,43 @@ func GetDependencies(resource any) ([]string, error) {
 }
 
 func AppendUniqueDependency(resource any, dependency string) error {
+	// Get metadata to update Links
+	meta, err := GetMeta(resource)
+	if err != nil {
+		return fmt.Errorf("failed to get metadata: %w", err)
+	}
+
+	// Check if dependency already exists in Links
+	for _, link := range meta.Links {
+		if link == dependency {
+			return nil // Dependency already exists
+		}
+	}
+
+	// Append to Links
+	meta.Links = append(meta.Links, dependency)
+
+	// Also update DependsOn for backwards compatibility
 	deps, err := GetDependencies(resource)
 	if err != nil {
 		return fmt.Errorf("failed to get dependencies: %w", err)
 	}
 
+	// Check if already in DependsOn
+	alreadyInDeps := false
 	for _, d := range deps {
 		if d == dependency {
-			return nil // Dependency already exists
+			alreadyInDeps = true
+			break
 		}
 	}
 
-	deps = append(deps, dependency)
-	return SetDependencies(resource, deps)
+	if !alreadyInDeps {
+		deps = append(deps, dependency)
+		return SetDependencies(resource, deps)
+	}
+
+	return nil
 }
 
 // SetResourceDependencies sets the entire DependsOn slice in the embedded ResourceBase

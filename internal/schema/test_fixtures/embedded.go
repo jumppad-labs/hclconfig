@@ -1,6 +1,6 @@
 package fixtures
 
-import "github.com/jumppad-labs/hclconfig/types"
+import "github.com/jumppad-labs/xcl/types"
 
 type Embedded struct {
 	types.ResourceBase `hcl:",remain"`

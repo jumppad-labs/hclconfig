@@ -1,7 +1,7 @@
 package structs
 
 import (
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/types"
 )
 
 // TypeContainer is the resource string for a Container resource

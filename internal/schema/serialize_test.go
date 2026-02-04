@@ -3,7 +3,7 @@ package schema
 import (
 	"testing"
 
-	fixtures "github.com/jumppad-labs/hclconfig/internal/schema/test_fixtures"
+	fixtures "github.com/jumppad-labs/xcl/internal/schema/test_fixtures"
 	"github.com/stretchr/testify/require"
 )
 

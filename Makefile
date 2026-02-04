@@ -1,6 +1,6 @@
 protos:
 	mkdir -p plugins/proto
-	protoc --go_out=. --go_opt=module=github.com/jumppad-labs/hclconfig --go-grpc_out=. --go-grpc_opt=module=github.com/jumppad-labs/hclconfig --proto_path=. plugins/plugin.proto
+	protoc --go_out=. --go_opt=module=github.com/jumppad-labs/xcl --go-grpc_out=. --go-grpc_opt=module=github.com/jumppad-labs/xcl --proto_path=. plugins/plugin.proto
 
 # Install mockery for generating mocks
 install-mockery:

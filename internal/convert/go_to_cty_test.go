@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/internal/schema"
-	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/internal/schema"
+	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )

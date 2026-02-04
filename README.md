@@ -1,6 +1,6 @@
 # HCL Configuration Parser
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/jumppad-labs/hclconfig.svg)](https://pkg.go.dev/github.com/jumppad-labs/hclconfig)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jumppad-labs/xcl.svg)](https://pkg.go.dev/github.com/jumppad-labs/xcl)
 
 This package allows you to process configuration files written using the HashiCorp Configuration Language (HCL).
 It has full resource linking where a parameter in one configuration stanza can reference a parameter in another stanza.
@@ -189,7 +189,7 @@ Then you can create the config and parse the file.
 
 ```go
 // define the options for the parser
-opts := hclconfig.DefaultOptions()
+opts := xcl.DefaultOptions()
 
 // Callback is executed when the parser processes a resource
 opts.Callback = func(r *types.Resource) error {
@@ -573,7 +573,7 @@ a module the SHA of the commit can be used.
 
 ```javascript
 module "mymodule_1" {
-  source = "github.com/jumppad-labs/hclconfig?ref=9173050/example/modules//db"
+  source = "github.com/jumppad-labs/xcl?ref=9173050/example/modules//db"
 
   variables = {
     db_username = variable.db_username
@@ -1048,7 +1048,7 @@ Rather than implementing individual resource functions you may prefer to leverag
 callback that can be set on the `ParserOptions`.
 
 ```go
-o := hclconfig.DefaultOptions()
+o := xcl.DefaultOptions()
 
 // set the callback that will be executed when a resource has been created
 // this function can be used to execute any external work required for the
@@ -1078,7 +1078,7 @@ and respects the same call order that is implemented for `Processable`.
 ### Config `Process` function
 
 A final callback is available using the `Process(wf ProcessCallback, reverse bool) error`
-function that is available on the `hclconfig.Config` type.
+function that is available on the `xcl.Config` type.
 
 `Process` builds a Directed Acyclic Graph for your configuration based on
 the dependency and calls the provided `ProcessCallback` for each resource 
@@ -1124,7 +1124,7 @@ with the `Processable` interface on your resource or the `ParseCallback`.
 
 ## Serialization
 
-To save state the `hclconfig.Config` type can be serialized to JSON using the following
+To save state the `xcl.Config` type can be serialized to JSON using the following
 method.
 
 ```go
@@ -1133,7 +1133,7 @@ ioutil.WriteFile("./config.json", d, os.ModePerm)
 ```
 ## Deserialization
 
-To deserialize `hclconfig.Config` that has been serialized with the `ToJSON` method
+To deserialize `xcl.Config` that has been serialized with the `ToJSON` method
 you can use the `UnmarshalJSON` method on the `Parser`.
 
 `UnmarshalJSON` will reconstruct the concrete types based on the configured resources.

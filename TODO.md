@@ -23,7 +23,7 @@ This document tracks the implementation of resource state tracking for the HCLCo
 
 - [x] **Implement FileStateStore** - `file_state_store.go`
   - Created file-based state store as default implementation
-  - JSON file format for persistence in `.hclconfig/state/state.json`
+  - JSON file format for persistence in `.xcl/state/state.json`
   - Handles file locking (mutex) and atomic writes (temp file + rename)
 
 - [x] **Integrate state store into Parser** - `parser.go`

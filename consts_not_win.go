@@ -1,5 +1,5 @@
 //go:build !windows
 
-package hclconfig
+package xcl
 
 const LineEnding = "\n"

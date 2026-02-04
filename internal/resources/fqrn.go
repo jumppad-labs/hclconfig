@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/types"
 )
 
 // FQRN is the fully qualified resource name

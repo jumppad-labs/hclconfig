@@ -8,8 +8,8 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/jumppad-labs/hclconfig/internal/test_fixtures/plugin/structs"
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -46,7 +46,7 @@ func TestTemplateSchemaHCLTagPreservation(t *testing.T) {
 	t.Log("=== Step 2: Verify HCL tags are preserved in schema ===")
 	for _, prop := range schemaAttr.Properties {
 		t.Logf("Property: %s, Type: %s, Tags: %s", prop.Name, prop.Type, prop.Tags)
-		
+
 		// Check specific fields we expect
 		switch prop.Name {
 		case "Source":
@@ -63,11 +63,11 @@ func TestTemplateSchemaHCLTagPreservation(t *testing.T) {
 	// Step 3: Deserialize schema back to struct
 	t.Log("=== Step 3: Deserialize schema back to struct ===")
 	typeMapping := map[string]reflect.Type{
-		"types.Meta":               reflect.TypeOf(types.Meta{}),
-		"types.ResourceBase":       reflect.TypeOf(types.ResourceBase{}),
-		"map[string]interface {}":  reflect.TypeOf(map[string]interface{}{}),
-		"map[string]any":           reflect.TypeOf(map[string]interface{}{}),
-		"cty.Value":                reflect.TypeOf((*interface{})(nil)).Elem(),
+		"types.Meta":              reflect.TypeOf(types.Meta{}),
+		"types.ResourceBase":      reflect.TypeOf(types.ResourceBase{}),
+		"map[string]interface {}": reflect.TypeOf(map[string]interface{}{}),
+		"map[string]any":          reflect.TypeOf(map[string]interface{}{}),
+		"cty.Value":               reflect.TypeOf((*interface{})(nil)).Elem(),
 	}
 
 	dynamicTemplate, deserializeErr := CreateInstanceFromSchema(schemaJSON, typeMapping)
@@ -85,7 +85,7 @@ func TestTemplateSchemaHCLTagPreservation(t *testing.T) {
 	for i := 0; i < dynamicType.NumField(); i++ {
 		field := dynamicType.Field(i)
 		t.Logf("Field: %s, Type: %s, Tag: %s", field.Name, field.Type, field.Tag)
-		
+
 		// Check that HCL tags are preserved
 		switch field.Name {
 		case "Source":

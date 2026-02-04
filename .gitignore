@@ -1,4 +1,6 @@
 .vscode
 .DS_Store
-.hclconfig
+.xcl
 plugins/build
+.claude
+thoughts

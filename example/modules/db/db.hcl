@@ -17,8 +17,22 @@ resource "postgres" "mydb" {
   password = variable.db_password
 }
 
+resource "postgres" "mydb2" {
+  count = 2
+
+  location = "localhost_${count.index + 1}"
+  port     = 5432
+  db_name  = resource.postgres.mydb.db_name
+
+  // Varaibles can be used to set values, the default values for these variables will be overidden
+  // by values set by the environment variables HCL_db_username and HCL_db_password
+  username = variable.db_username
+  password = variable.db_password
+}
+
 // outputs can be specified to allow values to be passed to config
 // utilizing this module
 output "connection_string" {
   value = resource.postgres.mydb.connection_string
 }
+

@@ -1,0 +1,14 @@
+dir: '{{.InterfaceDir}}/mocks'
+filename: 'mock_{{ snakecase .InterfaceName }}.go'
+structname: Mock{{.InterfaceName}}
+pkgname: mocks
+template: testify
+template-data:
+  unroll-variadic: true
+packages:
+  github.com/jumppad-labs/xcl/plugins:
+    interfaces:
+      State: {}
+  github.com/jumppad-labs/xcl/state:
+    interfaces:
+      StateStore: {}

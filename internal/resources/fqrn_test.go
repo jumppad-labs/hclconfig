@@ -3,7 +3,7 @@ package resources
 import (
 	"testing"
 
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -166,7 +166,6 @@ func TestParseFQRNReturnsOutput(t *testing.T) {
 	sfrqn := fqrn.String()
 	require.Equal(t, "output.mine", sfrqn)
 }
-
 
 func TestParseResourceFQRNWithIndexReturnsCorrectData(t *testing.T) {
 	fqrn, err := ParseFQRN("resource.container.mine.property.0")

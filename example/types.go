@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/jumppad-labs/hclconfig/types"
+	"github.com/jumppad-labs/xcl/types"
 )
 
 // Timeouts is not a resource but a block and does not need `ResourceInfo` embedded or the `Resource`

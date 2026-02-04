@@ -1,8 +1,6 @@
-module github.com/jumppad-labs/hclconfig
+module github.com/jumppad-labs/xcl
 
-go 1.23.0
-
-toolchain go1.24.4
+go 1.25.0
 
 require (
 	github.com/charmbracelet/log v0.4.2
@@ -98,3 +96,5 @@ require (
 
 //replace github.com/zclconf/go-cty => /home/nicj/code/github.com/jumppad-labs/go-cty
 replace github.com/zclconf/go-cty => github.com/jumppad-labs/go-cty v0.0.0-20250728194145-c752ef076e5a
+
+replace github.com/silas/dag => github.com/jumppad-labs/dag v0.0.0-20220518035006-a7e85ada93c5
