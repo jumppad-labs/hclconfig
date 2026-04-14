@@ -707,6 +707,37 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 	require.Len(t, calls, 5)
 }
 
+func TestDisabledModuleWithIndexedReferencesDoesNotError(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("./test_fixtures/disabled/disabled_module_with_outputs.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o := DefaultOptions()
+	calls := []string{}
+	callSync := sync.Mutex{}
+	o.Callback = func(r types.Resource) error {
+		callSync.Lock()
+		calls = append(calls, r.Metadata().ID)
+		callSync.Unlock()
+
+		return nil
+	}
+
+	p := setupParser(t, o)
+
+	c, err := p.ParseFile(absoluteFolderPath)
+	require.NoError(t, err)
+
+	m, err := c.FindResource("module.disabled_outputs")
+	require.NoError(t, err)
+	require.True(t, m.GetDisabled())
+
+	r, err := c.FindResource("module.disabled_outputs.resource.container.service")
+	require.NoError(t, err)
+	require.True(t, r.GetDisabled())
+}
+
 func TestGetNameAndIndexReturnsCorrectDetails(t *testing.T) {
 	path := []string{"resource", "foo", "bar"}
 	n, i, rp, err := getNameAndIndex(path)

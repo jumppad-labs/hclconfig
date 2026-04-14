@@ -455,6 +455,12 @@ func validateLinkedResources(c *Config, r types.Resource, values []string) error
 				fmt.Sprintf("unable to find dependent resource '%s': %s", value, err))
 		}
 
+		// skip deep attribute validation for disabled resources as their
+		// structs were never decoded and will have zero-value fields
+		if l.GetDisabled() {
+			continue
+		}
+
 		attr := fqrn.Attribute
 		if fqrn.Type == "output" {
 			if attr == "" {
