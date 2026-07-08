@@ -37,8 +37,8 @@ func (r ResourceTypeNotExistError) Error() string {
 // This is an internal working structure used only within the Parser.
 // After parsing completes, resources are transferred to State (without bodies).
 type parsed struct {
-	resources map[string]any              // FQRN -> resource instance
-	bodies    map[string]*hclsyntax.Body  // FQRN -> HCL body for later decoding
+	resources map[string]any             // FQRN -> resource instance
+	bodies    map[string]*hclsyntax.Body // FQRN -> HCL body for later decoding
 }
 
 type ParserOptions struct {
@@ -197,6 +197,37 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 
 	ce := errors.NewConfigError()
 
+	// Auto-discover .vars files from the root directories of all paths
+	// These have lower precedence than manually specified VariablesFiles
+	discoveredVarsFiles, err := findVarsFiles(paths...)
+	if err != nil {
+		return nil, fmt.Errorf("error finding .vars files: %w", err)
+	}
+
+	// Merge discovered vars files with manually specified ones
+	// Discovered files come first (lower precedence), then manually specified (higher precedence)
+	mergedVarsFiles := []string{}
+
+	// Add discovered files only if not already in manually specified list
+	for _, discovered := range discoveredVarsFiles {
+		found := false
+		for _, manual := range p.options.VariablesFiles {
+			if discovered == manual {
+				found = true
+				break
+			}
+		}
+		if !found {
+			mergedVarsFiles = append(mergedVarsFiles, discovered)
+		}
+	}
+
+	// Add all manually specified files (these have higher precedence)
+	mergedVarsFiles = append(mergedVarsFiles, p.options.VariablesFiles...)
+
+	// Update options with merged list
+	p.options.VariablesFiles = mergedVarsFiles
+
 	// Get all the xcl files from the paths
 	files, err := findXclFiles(paths...)
 	if err != nil {
@@ -206,10 +237,8 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 	// Parse all files
 	for _, file := range files {
 		errs := p.parseResourcesInFile(file, "")
-		if errs != nil {
-			for _, e := range errs {
-				ce.AppendError(e)
-			}
+		for _, e := range errs {
+			ce.AppendError(e)
 		}
 	}
 
@@ -244,7 +273,7 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 func (p *Parser) parseResourcesInFile(file string, module string) []error {
 	parser := hclparse.NewParser()
 
-	f, diag := parser.ParseHCLFile(file)
+	f, diag := parser.ParseXCLFile(file)
 	if diag.HasErrors() {
 		// check the error types and determine if we should set a warning or error
 		level := errors.ParserErrorLevelWarning

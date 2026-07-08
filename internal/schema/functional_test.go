@@ -47,7 +47,7 @@ func TestEnd2EndTestConfigToStruct(t *testing.T) {
 
 	// parse the HCL file
 	parser := hclparse.NewParser()
-	f, diags := parser.ParseHCLFile("./test_fixtures/test.hcl")
+	f, diags := parser.ParseXCLFile("./test_fixtures/test.hcl")
 	require.Empty(t, diags.Errs())
 
 	// Create a new eval context

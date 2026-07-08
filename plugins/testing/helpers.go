@@ -226,7 +226,7 @@ func ParseHCLFile[T any](t *testing.T, hclFilePath string, pluginSchema []byte, 
 
 	// Parse HCL file
 	parser := hclparse.NewParser()
-	f, diags := parser.ParseHCLFile(hclFilePath)
+	f, diags := parser.ParseXCLFile(hclFilePath)
 	require.False(t, diags.HasErrors(), "HCL parsing should succeed: %s", diags.Error())
 
 	// Create eval context with some basic variables

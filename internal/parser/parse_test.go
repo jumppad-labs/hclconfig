@@ -13,9 +13,9 @@ import (
 	"github.com/jumppad-labs/xcl/internal/resources"
 	"github.com/jumppad-labs/xcl/internal/schema"
 	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
-	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
+	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/state/mocks"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/mock"
@@ -78,7 +78,6 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin)
 
 	return p, testPlugin
 }
-
 
 func TestNewParserWithOptions(t *testing.T) {
 	options := ParserOptions{
@@ -207,6 +206,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	ms := &mocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
 	ms.On("Save", mock.Anything).Return(nil)
+	ms.On("Exists").Return(false)
 
 	o := DefaultOptions()
 	o.StateStore = ms

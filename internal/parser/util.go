@@ -52,6 +52,57 @@ func findXclFiles(paths ...string) ([]string, error) {
 	return xclFiles, nil
 }
 
+// findVarsFiles discovers .vars files from the root directories of the given paths.
+// It only searches in the immediate directory (non-recursive) for each path.
+// If a path is a file, it searches in the file's parent directory.
+// Returns a deduplicated list of .vars file paths.
+func findVarsFiles(paths ...string) ([]string, error) {
+	varsFilesMap := make(map[string]bool) // Use map for deduplication
+
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("error accessing path %s: %w", path, err)
+		}
+
+		var searchDir string
+		if info.IsDir() {
+			searchDir = path
+		} else {
+			// If it's a file, search in its parent directory
+			searchDir = filepath.Dir(path)
+		}
+
+		// Read directory contents (non-recursive)
+		entries, err := os.ReadDir(searchDir)
+		if err != nil {
+			return nil, fmt.Errorf("error reading directory %s: %w", searchDir, err)
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				filePath := filepath.Join(searchDir, entry.Name())
+				if strings.ToLower(filepath.Ext(filePath)) == ".vars" {
+					// Use absolute path for deduplication
+					absPath, err := filepath.Abs(filePath)
+					if err != nil {
+						absPath = filePath
+					}
+					varsFilesMap[absPath] = true
+				}
+			}
+		}
+	}
+
+	// Convert map keys to slice
+	varsFiles := make([]string, 0, len(varsFilesMap))
+	for path := range varsFilesMap {
+		varsFiles = append(varsFiles, path)
+	}
+
+	return varsFiles, nil
+}
+
 func validateResourceName(name string) error {
 	if name == "resource" || name == "module" || name == "output" || name == "variable" {
 		return fmt.Errorf("invalid resource name %s, resources can not use the reserved names [resource, module, output, variable]", name)
@@ -75,7 +126,7 @@ func validateResourceName(name string) error {
 func loadVariablesFromFile(ctx *hcl.EvalContext, path string) error {
 	parser := hclparse.NewParser()
 
-	f, diag := parser.ParseHCLFile(path)
+	f, diag := parser.ParseXCLFile(path)
 	if diag.HasErrors() {
 		de := errors.NewParserErrorFromHCLDiag(diag[0], path)
 		return de

@@ -1,0 +1,19 @@
+command: spektacular
+agent: bob
+debug:
+    enabled: true
+spec:
+    provider: file
+    id_method: timestamp
+    config:
+        directory: .spektacular/specs
+plan:
+    provider: file
+    config:
+        directory: .spektacular/plans
+knowledge:
+    sources:
+        - scope: project
+          provider: file
+          config:
+            location: .spektacular/knowledge
