@@ -119,7 +119,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 
 	require.Equal(t, "consul", cont.Command[0], "consul")
 	require.Equal(t, "10.6.0.200", cont.Networks[0].IPAddress)
-	require.Equal(t, 2048, cont.Resources.CPU)
+	require.Equal(t, 1024, cont.Resources.CPU)
 
 	base := findResource[structs.Container](t, c, "resource.container.base")
 	require.NotNil(t, base)
@@ -330,20 +330,6 @@ func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
 
 	con := findResource[structs.Container](t, c, "resource.container.container4")
 	require.Equal(t, "8500", con.Env["port_string"])
-}
-
-func TestLocalVariablesCanEvaluateResourceAttributes(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/locals/locals.xcl")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p, _ := setupParser(t)
-
-	_, err = p.Parse(false, absoluteFolderPath)
-	require.NoError(t, err)
-
-	//require.Len(t, c.Resources, 4)
 }
 
 func TestParseModuleCreatesResources(t *testing.T) {

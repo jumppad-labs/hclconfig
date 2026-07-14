@@ -74,7 +74,7 @@ func (l *TestLogger) flushIfFailed() {
 	defer l.mu.Unlock()
 
 	// Check if test failed
-	if l.t.Failed() {
+	if l.t.Failed() && len(l.buffer) > 0 {
 		l.t.Log("=== Buffered Logs (test failed) ===")
 		for _, entry := range l.buffer {
 			timestamp := entry.timestamp.Format("15:04:05.000")
