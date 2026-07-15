@@ -7,19 +7,21 @@ import (
 	"time"
 
 	"github.com/creasty/defaults"
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/resources"
 	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/silas/dag"
+	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
 
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values. The executePlugins parameter controls whether provider lifecycle methods are called.
-func walkCallback(parsedData *parsed, previousParsed *parsed, registry *registry.PluginRegistry, options *ParserOptions, functions map[string]function.Function, executePlugins bool) func(v dag.Vertex) (diags dag.Diagnostics) {
+func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvider, registry *registry.PluginRegistry, options *ParserOptions, functions map[string]function.Function, executePlugins bool) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		// v should be a resource (either builtin or schema-generated)
@@ -74,20 +76,17 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, registry *registry
 
 		// If the type is a module and the module is disabled, we need to
 		// set all the resources in the module to disabled.
-		//if isDisabled && rMeta.Type == resources.TypeModule {
-		//	// Find all dependent resources for this module
-		//	dr, err := c.FindModuleResources(rMeta.ID, true)
-		//	if err != nil {
-		//		// Should not be here unless an internal error so hard fail
-		//		panic(err)
-		//	}
+		if isDisabled && rMeta.Type == resources.TypeModule {
+			// Find all dependent resources for this module. Ignore the error:
+			// a module with no remaining resources returns a not-found error,
+			// which is not a failure here.
+			dr, _ := rp.FindModuleResources(rMeta.ID, true)
 
-		//	// Set all the dependents to disabled
-		//	for _, d := range dr {
-		//		types.SetDisabled(d, true)
-		//		fmt.Println("DEBUG: Setting resource", d, "to disabled")
-		//	}
-		//}
+			// Set all the dependents to disabled
+			for _, d := range dr {
+				types.SetDisabled(d, true)
+			}
+		}
 
 		// If the resource is disabled we need to skip the resource
 		if isDisabled {
@@ -111,31 +110,40 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, registry *registry
 			return diags.Append(pe)
 		}
 
-		// Special handling for variables in modules:
-		// If this is a variable resource in a module, and the module passed a value for this variable,
-		// override the decoded default with the module-passed value
-		//if rMeta.Type == resources.TypeVariable && rMeta.Module != "" {
-		//	if variable, ok := r.(*resources.Variable); ok {
-		//		modulePassedVars, err := getModuleVariables(c, rMeta.Module, functions)
-		//		if err == nil && !modulePassedVars.IsNull() && modulePassedVars.Type().IsObjectType() {
-		//			varsMap := modulePassedVars.AsValueMap()
-		//			if passedValue, exists := varsMap[rMeta.Name]; exists {
-		//				variable.Default = passedValue
-		//			}
-		//		}
-		//	}
-		//}
-		//// If this is a module, process its variables and update sub-resource contexts
-		//if rMeta.Type == resources.TypeModule {
-		//	if err := processModuleVariables(c, r, ctx); err != nil {
-		//		pe := errors.NewParserErrorFromResource(
-		//			r,
-		//			errors.ParserErrorLevelError,
-		//			fmt.Sprintf("failed to process module variables: %s", err),
-		//		)
-		//		return diags.Append(pe)
-		//	}
-		//}
+		// If this is a module, evaluate its "variables" attribute (not HCL-tag
+		// decoded - gocty's implied-type decode can't represent a heterogeneous
+		// object as a single Go type) and store the result on SubContext, where
+		// buildContextForResource will find and merge it over each child's own
+		// variable defaults. The module's children haven't decoded yet at this
+		// point (DAG order runs the module vertex itself first), so SubContext
+		// can only hold the module's own supplied overrides here, not a full
+		// defaults+overrides merge - each child's own defaults are already
+		// resolved independently by buildContextForResource from that child's
+		// own dependency links.
+		if rMeta.Type == resources.TypeModule {
+			mod := r.(*resources.Module)
+
+			suppliedVars := cty.EmptyObjectVal
+			if mod.Variables != nil {
+				val, valDiags := mod.Variables.Value(ctx)
+				if valDiags.HasErrors() {
+					pe := errors.NewParserErrorFromResource(
+						r,
+						errors.ParserErrorLevelError,
+						fmt.Sprintf(`unable to evaluate 'variables' for module: %s`, valDiags.Error()),
+					)
+					return diags.Append(pe)
+				}
+				suppliedVars = val
+			}
+
+			mod.SubContext = &hcl.EvalContext{
+				Functions: functions,
+				Variables: map[string]cty.Value{
+					"variable": suppliedVars,
+				},
+			}
+		}
 
 		// Call provider lifecycle methods if executePlugins is true
 		if executePlugins {

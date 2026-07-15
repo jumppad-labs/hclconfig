@@ -330,13 +330,10 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 		// variables and outputs are processed in a separate run
 		switch b.Type {
 		case resources.TypeModule:
-			// Module support is not yet implemented in v2
-			// Skip module blocks for now
-			continue
-			//err := p.parseModule(file, b)
-			//if err != nil {
-			//	return err
-			//}
+			errs := p.parseModule(file, b, module)
+			if len(errs) > 0 {
+				return errs
+			}
 		case resources.TypeVariable:
 			fallthrough
 		case resources.TypeOutput:
@@ -543,6 +540,142 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 	// add the resource to the cache
 	p.parsedResources.bodies[rtMeta.ID] = b.Body
 	p.parsedResources.resources[rtMeta.ID] = rt
+
+	return nil
+}
+
+// parseModule creates a shell for a module block, mirroring the non-eager
+// shell-creation path parseResource uses for other block types. It does not
+// decode the module's body at parse time; Variables and Disabled remain
+// zero-valued on the shell until the Phase-2 DAG walk decodes them. The
+// module's source directory is resolved and recursed into here (Phase 1.2)
+// so that the module's child resources are discovered and scoped under the
+// module's own instance name.
+func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule string) []error {
+	// If the type is module there should be one label for the instance name
+	if len(b.Labels) != 1 {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = `invalid formatting for 'module' stanza, resources should have a name and a type, i.e. 'module "name" {}'`
+
+		return []error{de}
+	}
+
+	name := b.Labels[0]
+	if err := validateResourceName(name); err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = err.Error()
+
+		return []error{de}
+	}
+
+	rt, err := p.createBuiltinResource(resources.TypeModule, name)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf(`unable to create module, this error should never happen %s`, err)
+
+		return []error{de}
+	}
+
+	// We now have an entity, get the meta
+	rtMeta, err := types.GetMeta(rt)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf("unable to get resource meta for resource %s: %s", b.Labels[0], err)
+		return []error{de}
+	}
+
+	rtMeta.Module = parentModule
+	rtMeta.File = file
+	rtMeta.Line = b.TypeRange.Start.Line
+	rtMeta.Column = b.TypeRange.Start.Column
+
+	// Set the ID from the FQRN
+	fqrn := resources.FQRNFromResource(rt)
+	rtMeta.ID = fqrn.String()
+
+	// We now need to get all the dependent resources for this module so that
+	// we can build the dependency graph; this walks the module's source,
+	// variables, and disabled attributes the same way it does for any other
+	// resource type
+	err = p.getUniqueResourceLinks(rt, b)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
+		return []error{de}
+	}
+
+	// add the module to the cache
+	p.parsedResources.bodies[rtMeta.ID] = b.Body
+	p.parsedResources.resources[rtMeta.ID] = rt
+
+	// Resolve the module's source as a local directory relative to the file
+	// that declared it, and recurse into that directory's .xcl files, scoping
+	// every resource discovered there under this module's own instance name.
+	sourceAttr, ok := b.Body.Attributes["source"]
+	if !ok {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf(`module '%s' has no 'source' attribute`, name)
+		return []error{de}
+	}
+
+	sourceVal, diags := sourceAttr.Expr.Value(nil)
+	if diags.HasErrors() {
+		de := &errors.ParserError{}
+		de.Line = sourceAttr.SrcRange.Start.Line
+		de.Column = sourceAttr.SrcRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf(`unable to resolve 'source' for module '%s': %s`, name, diags.Error())
+		return []error{de}
+	}
+
+	sourceDir := filepath.Join(filepath.Dir(file), sourceVal.AsString())
+
+	moduleInstanceName := name
+	if parentModule != "" {
+		moduleInstanceName = parentModule + "." + name
+	}
+
+	childFiles, err := findXclFiles(sourceDir)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Level = errors.ParserErrorLevelError
+		de.Message = fmt.Sprintf(`unable to discover files for module '%s' source '%s': %s`, name, sourceDir, err)
+		return []error{de}
+	}
+
+	for _, childFile := range childFiles {
+		if errs := p.parseResourcesInFile(childFile, moduleInstanceName); len(errs) > 0 {
+			return errs
+		}
+	}
 
 	return nil
 }
@@ -759,7 +892,7 @@ func (p *Parser) walk(currentState, previousState *state.State, functions map[st
 	// TODO: Load previousState from StateStore when implementing state persistence
 	var previousParsed *parsed = nil
 
-	w.Callback = walkCallback(p.parsedResources, previousParsed, p.pluginRegistry, &p.options, functions, executePlugins)
+	w.Callback = walkCallback(p.parsedResources, previousParsed, currentState, p.pluginRegistry, &p.options, functions, executePlugins)
 	w.Reverse = false
 
 	// Update the dag and process the nodes

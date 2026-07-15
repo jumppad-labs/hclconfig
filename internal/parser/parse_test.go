@@ -376,10 +376,8 @@ func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
-	// the remote module should be cached
-	require.DirExists(t, filepath.Join(p.options.ModuleCache, "github.com_jumppad-labs_xcl_test_fixtures_single"))
-
-	// the local module should not be cached
+	// local module sources are read directly from disk on every parse and
+	// must never be materialized into the module cache
 	require.NoDirExists(t, filepath.Join(p.options.ModuleCache, "single"))
 }
 

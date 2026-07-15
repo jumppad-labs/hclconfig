@@ -30,6 +30,11 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 	// Get variables and resources that this resource actually depends on (from its links)
 	variableVars := map[string]cty.Value{}
 	resourceVars := map[string]cty.Value{}
+	// moduleVars holds resources reached via a "module.<name>...." reference,
+	// nested as moduleVars[moduleName][resourceType][resourceName] so that an
+	// expression like module.consul_1.output.foo resolves against
+	// ctx.Variables["module"]["consul_1"]["output"]["foo"].
+	moduleVars := map[string]map[string]cty.Value{}
 
 	for _, link := range rMeta.Links {
 		// Parse the link into an FQDN
@@ -38,8 +43,14 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 			continue // Skip invalid links
 		}
 
+		// Links are written with no knowledge of their parent module, so a
+		// reference from inside a module (e.g. "variable.cpu_resources") must
+		// be resolved relative to that module's own scope, matching how
+		// getResourceDependencies resolves the same links when building the DAG.
+		relFQDN := fqdn.AppendParentModule(rMeta.Module)
+
 		// Find the resource using findResource
-		resource, ok := res.resources[fqdn.StringWithoutAttribute()]
+		resource, ok := res.resources[relFQDN.StringWithoutAttribute()]
 		if !ok {
 			continue // Skip if resource not found
 		}
@@ -49,7 +60,7 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 			panic(fmt.Sprintf("resource does not have ResourceBase: %v", err))
 		}
 
-		if fqdn.Type == resources.TypeVariable {
+		if fqdn.Type == resources.TypeVariable && fqdn.Module == "" {
 			// Handle variable
 			if variable, ok := resource.(*resources.Variable); ok {
 				// Default is already a cty.Value
@@ -68,6 +79,9 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 			case resources.TypeOutput:
 				out := resource.(*resources.Output)
 				ctyRes = out.CtyValue
+			case resources.TypeVariable:
+				variable := resource.(*resources.Variable)
+				ctyRes = variable.Default
 			default:
 				// For other resource types, convert the entire resource to cty
 				ctyRes, err = convert.GoToCtyValue(resource)
@@ -79,6 +93,32 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 
 			// Skip null values - these resources haven't been processed yet
 			if ctyRes.IsNull() {
+				continue
+			}
+
+			// A reference written with a "module." prefix (fqdn.Module != "")
+			// is nested under the module namespace instead of the flat
+			// resource namespace, keyed by that reference's own module name.
+			if fqdn.Module != "" {
+				typeMap, ok := moduleVars[fqdn.Module]
+				if !ok {
+					typeMap = map[string]cty.Value{}
+				}
+
+				var innerMap map[string]cty.Value
+				if existing, exists := typeMap[resourceMeta.Type]; exists && !existing.IsNull() {
+					innerMap = make(map[string]cty.Value)
+					for k, v := range existing.AsValueMap() {
+						innerMap[k] = v
+					}
+				} else {
+					innerMap = make(map[string]cty.Value)
+				}
+
+				innerMap[resourceMeta.Name] = ctyRes
+				typeMap[resourceMeta.Type] = cty.ObjectVal(innerMap)
+				moduleVars[fqdn.Module] = typeMap
+
 				continue
 			}
 
@@ -98,29 +138,24 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 		}
 	}
 
+	// If this resource is in a module, merge in the module's passed variables
+	// (module-supplied values override this resource's own variable defaults)
+	if rMeta.Module != "" {
+		owningModule, ok := res.resources["module."+rMeta.Module]
+		if ok {
+			if mod, ok := owningModule.(*resources.Module); ok && mod.SubContext != nil {
+				if modVars, ok := mod.SubContext.Variables["variable"]; ok && !modVars.IsNull() {
+					for k, v := range modVars.AsValueMap() {
+						variableVars[k] = v
+					}
+				}
+			}
+		}
+	}
+
 	ctx.Variables["variable"] = cty.ObjectVal(variableVars)
 
-	// If this resource is in a module, also get the module's passed variables
-	if rMeta.Module != "" {
-		//modulePassedVars, err := getModuleVariables(c, rMeta.Module, functions)
-		//if err == nil && !modulePassedVars.IsNull() {
-		//	// Merge module passed variables with variable resources
-		//	// Module passed variables override variable resource defaults
-		//	mergedVars := make(map[string]cty.Value)
-
-		//	// Start with variable resources
-		//	for k, v := range variableVars {
-		//		mergedVars[k] = v
-		//	}
-
-		//	// Override with module passed variables
-		//	for k, v := range modulePassedVars.AsValueMap() {
-		//		mergedVars[k] = v
-		//	}
-
-		//	ctx.Variables["variable"] = cty.ObjectVal(mergedVars)
-		//}
-	} else if options != nil {
+	if rMeta.Module == "" && options != nil {
 		// For root-level resources only, load variables from files and apply precedence
 		// Precedence: variable defaults < .vars files < environment variables < direct variables
 
@@ -139,6 +174,14 @@ func buildContextForResource(res *parsed, r any, options *ParserOptions, functio
 
 	// Set the resource variables in the context
 	ctx.Variables["resource"] = cty.ObjectVal(resourceVars)
+
+	// Set the module namespace, so references like
+	// module.consul_1.output.foo resolve for resources outside that module
+	moduleNamespace := map[string]cty.Value{}
+	for moduleName, typeMap := range moduleVars {
+		moduleNamespace[moduleName] = cty.ObjectVal(typeMap)
+	}
+	ctx.Variables["module"] = cty.ObjectVal(moduleNamespace)
 
 	return ctx, nil
 }

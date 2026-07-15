@@ -129,6 +129,14 @@ func processExpr(expr hclsyntax.Expression) ([]string, error) {
 		if len(ref) > 0 {
 			resources = append(resources, ref...)
 		}
+	// unary expressions are single operand operations
+	// disabled = !variable.enabled
+	case *hclsyntax.UnaryOpExpr:
+		val, err := processExpr(ex.Val)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, val...)
 	}
 
 	return resources, nil

@@ -1,20 +1,23 @@
 {
-  "kind": "spec",
+  "kind": "implement",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "overview",
-    "requirements",
-    "acceptance_criteria",
-    "constraints",
-    "technical_approach",
-    "success_metrics",
-    "non_goals",
-    "verification",
+    "read_plan",
+    "analyze",
+    "implement",
+    "test",
+    "verify",
+    "update_plan",
+    "update_changelog",
+    "update_repo_changelog",
+    "test_plan",
+    "update_feature_changelog",
+    "reconcile_spec",
     "finished"
   ],
-  "created_at": "2026-07-14T08:00:36.32774465Z",
-  "updated_at": "2026-07-14T08:16:57.913162493Z",
+  "created_at": "2026-07-15T08:00:07.737004324Z",
+  "updated_at": "2026-07-15T10:56:22.882221918Z",
   "data": {
     "name": "20260714080036-restore-module-support"
   }
