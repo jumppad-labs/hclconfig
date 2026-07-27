@@ -9,6 +9,10 @@ packages:
   github.com/jumppad-labs/xcl/plugins:
     interfaces:
       State: {}
+      ProviderAdapter: {}
   github.com/jumppad-labs/xcl/state:
     interfaces:
       StateStore: {}
+  github.com/jumppad-labs/xcl/internal/parser:
+    interfaces:
+      ProviderResolver: {}

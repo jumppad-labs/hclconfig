@@ -67,6 +67,11 @@ type ParserOptions struct {
 	// For standalone Parser usage, create and configure the PluginRegistry yourself.
 	PluginRegistry *registry.PluginRegistry
 
+	// ProviderResolver overrides how provider adapters are looked up during the resource
+	// lifecycle walk (Create/Refresh/Changed/Update/Destroy). Defaults to PluginRegistry.
+	// Primarily useful for testing lifecycle/ordering behavior without a real plugin registry.
+	ProviderResolver ProviderResolver
+
 	// StateStore is the state store to use for loading previous state.
 	// and saving new state.
 	StateStore state.StateStore
@@ -112,11 +117,12 @@ func DefaultOptions() *ParserOptions {
 
 // Parser can parse HCL configuration files
 type Parser struct {
-	options         ParserOptions
-	customFunctions map[string]function.Function
-	stateStore      state.StateStore
-	pluginRegistry  *registry.PluginRegistry
-	parsedResources *parsed // Working storage during parsing
+	options          ParserOptions
+	customFunctions  map[string]function.Function
+	stateStore       state.StateStore
+	pluginRegistry   *registry.PluginRegistry
+	providerResolver ProviderResolver
+	parsedResources  *parsed // Working storage during parsing
 }
 
 // NewParser creates a new parser with the given options
@@ -142,6 +148,11 @@ func NewParser(options *ParserOptions) *Parser {
 	// plugin/state functionality.
 	p.pluginRegistry = o.PluginRegistry
 	p.stateStore = o.StateStore
+
+	p.providerResolver = o.ProviderResolver
+	if p.providerResolver == nil {
+		p.providerResolver = p.pluginRegistry
+	}
 
 	if o.CustomFunctions != nil {
 		p.customFunctions = o.CustomFunctions
@@ -892,7 +903,7 @@ func (p *Parser) walk(currentState, previousState *state.State, functions map[st
 	// TODO: Load previousState from StateStore when implementing state persistence
 	var previousParsed *parsed = nil
 
-	w.Callback = walkCallback(p.parsedResources, previousParsed, currentState, p.pluginRegistry, &p.options, functions, executePlugins)
+	w.Callback = walkCallback(p.parsedResources, previousParsed, currentState, p.providerResolver, &p.options, functions, executePlugins)
 	w.Reverse = false
 
 	// Update the dag and process the nodes

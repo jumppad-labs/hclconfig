@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,13 +11,15 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/xcl/errors"
+	"github.com/jumppad-labs/xcl/internal/parser/mocks"
 	"github.com/jumppad-labs/xcl/internal/resources"
 	"github.com/jumppad-labs/xcl/internal/schema"
 	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
+	pluginmocks "github.com/jumppad-labs/xcl/plugins/mocks"
 	"github.com/jumppad-labs/xcl/state"
-	"github.com/jumppad-labs/xcl/state/mocks"
+	statemocks "github.com/jumppad-labs/xcl/state/mocks"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -50,7 +53,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin)
 	if len(options) > 0 {
 		o = options[0]
 	} else {
-		ms := &mocks.MockStateStore{}
+		ms := &statemocks.MockStateStore{}
 		ms.On("Exists").Return(false)
 		ms.On("Load").Return(nil, nil)
 		ms.On("Save", mock.Anything).Return(nil)
@@ -203,7 +206,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/simple")
 	require.NoError(t, err)
 
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 	ms.On("Exists").Return(false)
@@ -686,12 +689,24 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
 	ms.On("Save", mock.Anything).Return(nil)
+	ms.On("Exists").Return(false)
+
+	// Every resource in this fixture is new, so the lifecycle walk only ever calls Create.
+	// A single mock adapter that echoes its input stands in for every resource type/provider -
+	// this test only cares that a provider was invoked in the correct order, not what it does.
+	adapter := pluginmocks.NewMockProviderAdapter(t)
+	adapter.EXPECT().Create(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, entityData []byte) ([]byte, error) { return entityData, nil })
+
+	resolver := mocks.NewMockProviderResolver(t)
+	resolver.EXPECT().GetProviderForResource(mock.Anything).Return(adapter)
 
 	o := DefaultOptions()
 	o.StateStore = ms
+	o.ProviderResolver = resolver
 
 	calls := []string{}
 
@@ -703,7 +718,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	p, _ := setupParser(t, o)
 
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Parse(true, absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check the order, should be ...
@@ -1175,7 +1190,7 @@ func TestParserEventForVariablesOutputsLocals(t *testing.T) {
 
 func TestDestroyLifecycle(t *testing.T) {
 	// Setup parser with file state store
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 
@@ -1239,7 +1254,7 @@ func TestDestroyDependencyValidation(t *testing.T) {
 
 func TestDestroyWithNoState(t *testing.T) {
 	// Test Destroy when there's no existing state
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
 
 	o := DefaultOptions()
@@ -1260,7 +1275,7 @@ func TestDestroyWithEmptyState(t *testing.T) {
 	// Test Destroy when state exists but has no resources
 	existingState := NewConfig()
 
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
 
 	o := DefaultOptions()
@@ -1310,7 +1325,7 @@ func TestDestroyWithResources(t *testing.T) {
 
 	existingState.Resources = append(existingState.Resources, container1, container2)
 
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 
@@ -1355,7 +1370,7 @@ func TestDestroyWithFailedDestroy(t *testing.T) {
 
 	existingState.Resources = append(existingState.Resources, container)
 
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 
@@ -1384,7 +1399,7 @@ func TestDestroyWithInvalidStateType(t *testing.T) {
 	// Test Destroy when state has wrong type
 	invalidState := "not a config"
 
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(invalidState, nil)
 
 	o := DefaultOptions()
@@ -1401,7 +1416,7 @@ func TestDestroyWithInvalidStateType(t *testing.T) {
 
 func TestDestroyWithStateLoadError(t *testing.T) {
 	// Test Destroy when state load fails
-	ms := &mocks.MockStateStore{}
+	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, fmt.Errorf("failed to load state"))
 
 	o := DefaultOptions()

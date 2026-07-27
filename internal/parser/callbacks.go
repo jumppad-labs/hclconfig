@@ -11,17 +11,24 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/resources"
-	"github.com/jumppad-labs/xcl/plugins/registry"
+	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
 
+// ProviderResolver resolves the provider adapter responsible for a given resource.
+// Satisfied by *registry.PluginRegistry; exists so the walk callbacks can be tested
+// against a mock instead of a real plugin registry.
+type ProviderResolver interface {
+	GetProviderForResource(resource any) plugins.ProviderAdapter
+}
+
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values. The executePlugins parameter controls whether provider lifecycle methods are called.
-func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvider, registry *registry.PluginRegistry, options *ParserOptions, functions map[string]function.Function, executePlugins bool) func(v dag.Vertex) (diags dag.Diagnostics) {
+func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvider, registry ProviderResolver, options *ParserOptions, functions map[string]function.Function, executePlugins bool) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		// v should be a resource (either builtin or schema-generated)
@@ -172,7 +179,7 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 
 // destroyWalkCallback creates a simplified callback for destroying resources
 // Skips complex processing since resources are already fully processed
-func destroyWalkCallback(registry *registry.PluginRegistry, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
+func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 		// v should be a resource (either builtin or schema-generated)
 		r := v
@@ -258,7 +265,7 @@ func destroyWalkCallback(registry *registry.PluginRegistry, options *ParserOptio
 }
 
 // callProviderLifecycle calls the appropriate provider lifecycle method based on resource state
-func callProviderLifecycle(r any, previousParsed *parsed, registry *registry.PluginRegistry, options *ParserOptions) error {
+func callProviderLifecycle(r any, previousParsed *parsed, registry ProviderResolver, options *ParserOptions) error {
 	rMeta, err := types.GetMeta(r)
 	if err != nil {
 		return err
@@ -269,6 +276,11 @@ func callProviderLifecycle(r any, previousParsed *parsed, registry *registry.Plu
 		rMeta.Type == resources.TypeOutput ||
 		rMeta.Type == resources.TypeModule ||
 		rMeta.Type == resources.TypeRoot {
+
+		// Fire create events for builtin types (always succeed with 0 time)
+		resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
+		fireParserEvent(options, "create", resourceType, rMeta.ID, "success", 0, nil, nil)
+
 		return nil
 	}
 
