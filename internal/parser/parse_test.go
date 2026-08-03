@@ -16,8 +16,8 @@ import (
 	"github.com/jumppad-labs/xcl/internal/schema"
 	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/xcl/logger"
-	"github.com/jumppad-labs/xcl/plugins/registry"
 	pluginmocks "github.com/jumppad-labs/xcl/plugins/mocks"
+	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/state"
 	statemocks "github.com/jumppad-labs/xcl/state/mocks"
 	"github.com/jumppad-labs/xcl/types"
@@ -770,7 +770,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	requireBefore(t, "module.consul_1.resource.cotnainer.consul", "module.consul_1.output.container_resources_cpu", calls)
 }
 
-func TestParserStopsParseOnCreateError(t *testing.T) {
+func TestParserErrorsOnPluginCreateError(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/modules/modules.xcl")
 	if err != nil {
 		t.Fatal(err)
@@ -781,7 +781,7 @@ func TestParserStopsParseOnCreateError(t *testing.T) {
 	// ensure an error is returned when creating a resource
 	tp.SetCreateError("resource.container.base", fmt.Errorf("test error"))
 
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Parse(true, absoluteFolderPath)
 	require.Error(t, err)
 
 	cr := tp.GetCreatedResources()
@@ -791,24 +791,6 @@ func TestParserStopsParseOnCreateError(t *testing.T) {
 	require.Contains(t, cr, "resource.container.base")
 	require.Contains(t, cr, "module.consul_2.resource.container.consul")
 	require.NotContains(t, cr, "module.consul_1.resource.container.consul")
-}
-
-func requireBefore(t *testing.T, first, second string, list []string) {
-	// get the positions
-	pos1 := -1
-	pos2 := -1
-
-	for i, el := range list {
-		if first == el {
-			pos1 = i
-		}
-
-		if second == el {
-			pos2 = i
-		}
-	}
-
-	require.Greater(t, pos2, pos1, fmt.Sprintf("expected %s to be created before %s. calls: %v", first, second, list))
 }
 
 func TestParserRejectsInvalidResourceName(t *testing.T) {
@@ -881,11 +863,11 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Parse(true, f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
-	require.Len(t, ce.Errors, 1)
+	require.Len(t, ce.Errors, 3)
 }
 
 func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) {
@@ -1235,6 +1217,24 @@ func TestDestroyLifecycle(t *testing.T) {
 	// Resources from config1 that are not in config2 should be destroyed
 	// This will depend on what's actually in the test fixtures
 	require.NotEmpty(t, destroyedResources, "Expected some resources to be destroyed")
+}
+
+func requireBefore(t *testing.T, first, second string, list []string) {
+	// get the positions
+	pos1 := -1
+	pos2 := -1
+
+	for i, el := range list {
+		if first == el {
+			pos1 = i
+		}
+
+		if second == el {
+			pos2 = i
+		}
+	}
+
+	require.Greater(t, pos2, pos1, fmt.Sprintf("expected %s to be created before %s. calls: %v", first, second, list))
 }
 
 // TODO: The tests below test Destroy functionality that has moved from Parser to Config.

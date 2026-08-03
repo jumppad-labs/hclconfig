@@ -50,3 +50,69 @@ spektacular spec new --data '{"name":"..."}'
 Then drive its existing steps — the "ask the user..." prompts in `templates/steps/spec/*.md` are unchanged and still apply — but answer each one from the conversation you already had instead of asking cold. For every step where the discussion already established an answer (e.g. the overview step's "describe this feature in 2-3 sentences"), propose a draft based on what was said and ask the user to confirm or refine it, rather than posing the question as if from scratch. Only ask a step's question directly when the conversation genuinely didn't cover it. The user's confirmation or correction is still the final word — never silently record your own draft as accepted without it.
 
 This behavior is scoped to the current, single conversation: it does not persist across sessions, and it does not apply outside a Spektacular-initialized repository.
+
+## Presenting Drafts and Confirmations
+
+> Managed by `spektacular init` — edit `templates/agents/draft-presentation.md`
+> in the Spektacular source, not this section in place. Hand edits will not
+> survive the next init.
+
+When you have drafted substantial content for the user to review — an architecture write-up, a set of options, a written section, a summary, a plan or spec excerpt — always present that draft as normal, readable chat text first, in full. Never embed the draft itself inside a structured yes/no or multiple-choice dialog element: that kind of UI truncates or compresses long text, making it hard for the user to actually read what you're proposing.
+
+Once the draft has been shown in full as plain text, you may then ask a short, direct confirmation question — e.g. "does this look right, or should anything change?" — using a structured yes/no or multiple-choice element if one is available. That confirmation step comes strictly after the content has already been presented as text, and is never a substitute for showing it.
+
+This rule applies across every workflow step that follows a draft-then-confirm pattern — spec, plan, and implement workflows alike — not just one. If a specific step's own instructions don't repeat this explicitly, this standing rule still applies.
+
+## Historical Artifacts: Specs and Plans as Archaeology
+
+> Managed by `spektacular init` — edit `templates/agents/historical-artifacts.md`
+> in the Spektacular source, not this section in place. Hand edits will not
+> survive the next init.
+
+In this repository, treat every file under `.spektacular/specs/` and
+`.spektacular/plans/` as a historical, archaeological record. Each one
+describes the intent behind a past change — *why* something was proposed,
+what was in scope at that moment, and how the author framed the problem.
+None of them are a description of what the codebase does today. Intent
+recorded in a spec or plan may have been reshaped during implementation,
+descoped, or abandoned entirely; only the shipped code, its tests, and its
+configuration authoritatively describe current behavior.
+
+Because of that, when you are exploring the codebase, summarizing a
+feature, tracing how something works, or answering any question about
+current-state behavior, do not read files under `.spektacular/specs/` or
+`.spektacular/plans/` — through the `Read` tool, through `spektacular spec
+file read`, through `spektacular plan file read`, or through any other
+channel. Ground your answer in source files, tests, and configuration
+instead, and cite paths under those directories rather than under the
+spec or plan stores.
+
+You may read a historical spec or plan only when the user is genuinely
+investigating past intent — questions like "why was X built this way?",
+"what was the original plan for Y?", or "which spec introduced Z?". In
+that case, read the relevant document, and cite it explicitly as
+historical context for a past decision rather than as a description of
+current behavior. Archaeology is the only allowed reason to open these
+files outside an active workflow.
+
+There is one further exception: while a spec, plan, or implement
+workflow is actively running, the workflow that owns its artifact may
+read and update that artifact freely. That is what the workflow is for,
+and it uses the dedicated CLI (`spektacular spec file read/write`,
+`spektacular plan file read/write`) to do so. Once the workflow closes —
+or for any agent that is not the workflow currently driving the
+artifact — the artifact is historical again and subject to the same
+rules as every other spec or plan on disk.
+
+This rule applies everywhere you operate in the repository, not only
+inside spec, plan, or implement workflow steps. It binds ad-hoc
+questions, unrelated skills, and general exploration alike. Users
+should not have to restate it in each session.
+
+More broadly, the rest of `.spektacular/` — knowledge entries,
+`context.md`, changelog records — is generated output *about* the
+codebase, not the codebase itself. A broad grep or file scan run to
+understand current-state behavior should treat all of `.spektacular/`
+as out of scope, the same way it treats `.spektacular/specs/` and
+`.spektacular/plans/` above, unless the task explicitly concerns specs,
+plans, or knowledge.
