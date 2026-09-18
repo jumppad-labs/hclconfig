@@ -1,0 +1,42 @@
+resource "network" "one" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "container" "base" {
+  command = ["consul"]
+
+  env = {
+    "MY_VAR" = "a value"
+  }
+
+  network {
+    id         = 1
+    name       = resource.network.one.meta.name
+    ip_address = "10.0.0.2"
+  }
+
+  volume {
+    source      = "."
+    destination = "/cache"
+  }
+
+  created_network_map = {
+    "one" = resource.network.one
+  }
+}
+
+output "map_key_then_property" {
+  value = resource.container.base.created_network_map.one.subnet
+}
+
+output "map_key_then_nested_property" {
+  value = resource.container.base.created_network_map.one.meta.name
+}
+
+output "position_then_property" {
+  value = resource.container.base.volume.0.destination
+}
+
+output "scalar_map_member" {
+  value = resource.container.base.env.MY_VAR
+}

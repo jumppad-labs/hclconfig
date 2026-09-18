@@ -27,8 +27,8 @@ type ProviderResolver interface {
 
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
-// any linked values. The executePlugins parameter controls whether provider lifecycle methods are called.
-func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvider, registry ProviderResolver, options *ParserOptions, functions map[string]function.Function, executePlugins bool) func(v dag.Vertex) (diags dag.Diagnostics) {
+// any linked values.
+func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvider, registry ProviderResolver, options *ParserOptions, functions map[string]function.Function) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		// v should be a resource (either builtin or schema-generated)
@@ -66,7 +66,6 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("failed to build resource context: %s", err),
 			)
 			return diags.Append(pe)
@@ -106,11 +105,8 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 		// Decode the body into the resource
 		diag := gohcl.DecodeBody(bdy, ctx, r)
 		if diag.HasErrors() {
-			// Check the error types and determine if we should set a warning or error
-			level := checkIfErrorInFunction(diag)
 			pe := errors.NewParserErrorFromResource(
 				r,
-				level,
 				fmt.Sprintf(`unable to decode body: %s`, diag.Error()),
 			)
 
@@ -136,7 +132,6 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 				if valDiags.HasErrors() {
 					pe := errors.NewParserErrorFromResource(
 						r,
-						errors.ParserErrorLevelError,
 						fmt.Sprintf(`unable to evaluate 'variables' for module: %s`, valDiags.Error()),
 					)
 					return diags.Append(pe)
@@ -152,16 +147,13 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 			}
 		}
 
-		// Call provider lifecycle methods if executePlugins is true
-		if executePlugins {
-			if err := callProviderLifecycle(r, previousParsed, registry, options); err != nil {
-				pe := errors.NewParserErrorFromResource(
-					r,
-					errors.ParserErrorLevelError,
-					fmt.Sprintf("provider lifecycle error: %s", err),
-				)
-				return diags.Append(pe)
-			}
+		// Call provider lifecycle methods
+		if err := callProviderLifecycle(r, previousParsed, registry, options); err != nil {
+			pe := errors.NewParserErrorFromResource(
+				r,
+				fmt.Sprintf("provider lifecycle error: %s", err),
+			)
+			return diags.Append(pe)
 		}
 
 		// Convert CtyValue to Value for output and local resources
@@ -216,7 +208,6 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("no provider found for resource type %s", rMeta.Type),
 			)
 			return diags.Append(pe)
@@ -233,7 +224,6 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("failed to serialize resource for destroy: %s", err),
 			)
 			return diags.Append(pe)
@@ -251,7 +241,6 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("destroy failed: %s", err),
 			)
 			return diags.Append(pe)

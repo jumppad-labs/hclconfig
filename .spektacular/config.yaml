@@ -1,8 +1,9 @@
+name: xclconfig
 command: spektacular
 agent: claude
 spec_trigger_threshold: moderate
 debug:
-    enabled: true
+    enabled: false
 spec:
     provider: file
     id_method: timestamp
@@ -16,9 +17,6 @@ changelog:
     provider: file
     config:
         directory: .spektacular/changelog
-knowledge:
-    sources:
-        - scope: project
-          provider: file
-          config:
-            location: .spektacular/knowledge
+repos:
+    - name: xclconfig
+      location: .

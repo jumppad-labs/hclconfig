@@ -51,19 +51,45 @@ resources, err := q.FindResourcesByType()
 
 ### 4. Validate Without Applying
 
-Preview changes without executing plugins:
+Check whether a configuration is valid, without acting on it. Validation
+creates, changes and removes nothing, decodes no resource bodies and reaches
+no provider:
 
 ```go
-diff, err := config.Validate("./config/main.xcl")
+err := config.Validate("./config/main.xcl")
 if err != nil {
     log.Fatal(err)
 }
+```
 
-// Inspect what would change
-for _, create := range diff.Creates {
-    fmt.Printf("Would create: %s\n", create.ID)
+A nil error means the configuration is valid. Otherwise the returned error is
+an `*errors.ConfigError` collecting **every** problem found, each naming what
+is wrong and the file and position it occurs at:
+
+```go
+var ce *errors.ConfigError
+if errors.As(err, &ce) {
+    for _, problem := range ce.Errors {
+        fmt.Println(problem)
+    }
 }
 ```
+
+Validation runs three stages in order, and each reports everything it finds
+before the next is considered:
+
+1. **Structure** — configuration too malformed to check any further.
+2. **References** — anything a resource refers to must be defined somewhere
+   in the configuration. Resolution spans files and reaches into modules.
+3. **Properties** — a reference's trailing property path must name properties
+   the referenced type actually has.
+
+A later stage is skipped when an earlier one found problems, since checking
+properties on a reference that resolves nowhere would only report consequences
+of a problem already reported.
+
+`Apply` runs the same validation first and refuses to proceed if it fails, so
+nothing is created, changed or removed unless the configuration is valid.
 
 ### 5. Destroy Resources
 
@@ -95,7 +121,7 @@ err := config.Destroy()
 │  Config          - Main orchestrator                         │
 │  Querier[T]      - Type-safe resource queries               │
 │  ConfigOption    - Functional options for Config            │
-│  Diff            - Represents changes between states        │
+│  ConfigError     - Collects every problem found by validation │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
                               │

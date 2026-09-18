@@ -1,0 +1,15 @@
+resource "container" "second" {
+  command = ["consul"]
+
+  resources {
+    memory = 1024
+  }
+}
+
+output "meta_typo" {
+  value = resource.container.second.meta.nam
+}
+
+output "nested_typo" {
+  value = resource.container.second.resources.nosuch
+}

@@ -4,13 +4,13 @@ import "time"
 
 // ParserEvent represents an event that occurs during parser operations
 type ParserEvent struct {
-	Operation    string        // "create", "destroy", "update", "refresh", "changed", "validate"
-	ResourceType string        // "resource.container"
+	Operation    string        // "create", "refresh", "changed", "update", "destroy"
+	ResourceType string        // "<type>.<name>", e.g. "container.web"
 	ResourceID   string        // "resource.container.web"
 	Phase        string        // "start", "success", "error"
 	Duration     time.Duration // only for success/error phases
 	Error        error         // only for error phase
-	Data         []byte        // serialized resource data
+	Data         []byte        // serialized resource data, nil for builtin types
 }
 
 // fireParserEvent fires a parser event if the callback is configured

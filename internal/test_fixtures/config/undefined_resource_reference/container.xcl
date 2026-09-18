@@ -1,0 +1,12 @@
+resource "network" "onprem" {
+  subnet = "10.6.0.0/16"
+}
+
+resource "container" "consul" {
+  command = ["consul"]
+
+  network {
+    name       = resource.network.nosuch.meta.name
+    ip_address = "10.6.0.200"
+  }
+}

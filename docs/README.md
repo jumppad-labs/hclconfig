@@ -24,7 +24,7 @@ not at end users writing `.xcl` config.
 
 | Path | Purpose |
 |---|---|
-| `config.go`, `options.go`, `diff.go` | Public facade: `Config`, functional options, `Diff`/`buildDiff` |
+| `config.go`, `options.go` | Public facade: `Config` and functional options |
 | `types/` | Shared resource metadata: `types.Meta`, `types.ResourceBase`, reflection helpers |
 | `plugins/` | Provider contract (`ProviderAdapter`) and hosting (in-process / gRPC) |
 | `plugins/registry/` | `PluginRegistry` — aggregates plugin hosts, resolves types to adapters |

@@ -10,17 +10,12 @@ import (
 	"github.com/mitchellh/go-wordwrap"
 )
 
-const ParserErrorLevelError = "error"
-const ParserErrorLevelWarning = "warning"
-
 // ParserError is a detailed error that is returned from the parser
 type ParserError struct {
 	Filename string
 	Line     int
 	Column   int
-	Details  string
 	Message  string
-	Level    string
 }
 
 // Error pretty prints the error message as a string
@@ -74,20 +69,18 @@ func (p *ParserError) Error() string {
 }
 
 // NewParserError creates a new ParserError with basic parameters
-func NewParserError(filename string, line, column int, level, message string) *ParserError {
+func NewParserError(filename string, line, column int, message string) *ParserError {
 	return &ParserError{
 		Filename: filename,
 		Line:     line,
 		Column:   column,
-		Level:    level,
 		Message:  message,
 	}
 }
 
 // NewParserErrorFromResource creates a ParserError using metadata from a resource
-func NewParserErrorFromResource(resource any, level, message string) *ParserError {
+func NewParserErrorFromResource(resource any, message string) *ParserError {
 	pe := &ParserError{
-		Level:   level,
 		Message: message,
 	}
 
@@ -122,7 +115,7 @@ func extractMetaFromResource(resource any) *ResourceMeta {
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-	
+
 	if v.Kind() != reflect.Struct {
 		return nil
 	}
@@ -171,7 +164,6 @@ func NewParserErrorFromHCLDiag(diag *hcl.Diagnostic, filename string) *ParserErr
 		Filename: filename,
 		Line:     line,
 		Column:   column,
-		Level:    ParserErrorLevelError,
 		Message:  fmt.Sprintf("unable to parse file: %s", diag.Detail),
 	}
 }

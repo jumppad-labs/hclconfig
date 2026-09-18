@@ -1,0 +1,15 @@
+module "missing" {
+  source = "../no_such_module_directory"
+}
+
+output "first_thing" {
+  value = module.missing.output.cmd
+}
+
+output "second_thing" {
+  value = module.missing.output.first
+}
+
+output "third_thing" {
+  value = module.missing.output.second
+}

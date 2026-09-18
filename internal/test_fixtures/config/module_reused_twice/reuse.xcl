@@ -1,0 +1,7 @@
+module "first" {
+  source = "../module_leaf"
+}
+
+module "second" {
+  source = "../module_leaf"
+}

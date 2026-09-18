@@ -106,7 +106,7 @@ func TestParseFileProcessesResources(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -136,7 +136,7 @@ func TestParseFileSetsLinks(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -168,7 +168,7 @@ func TestParseResolvesArrayReferences(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -193,7 +193,7 @@ func TestParseSetsDefaultValues(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	cont := findResource[structs.Container](t, c, "resource.container.default")
@@ -217,7 +217,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 
 	p, _ := setupParser(t, o)
 
-	c, err := p.Parse(false, filepath.Join(absoluteFolderPath, "container.xcl"))
+	c, err := p.Apply(filepath.Join(absoluteFolderPath, "container.xcl"))
 	require.NoError(t, err)
 
 	cont := findResource[structs.Container](t, c, "resource.container.consul")
@@ -238,7 +238,7 @@ func TestLoadsVariablesInEnvVarOverridingVariableDefaults(t *testing.T) {
 		os.Unsetenv("HCL_VAR_cpu_resources")
 	})
 
-	c, err := p.Parse(false, filepath.Join(absoluteFolderPath, "container.xcl"))
+	c, err := p.Apply(filepath.Join(absoluteFolderPath, "container.xcl"))
 	require.NoError(t, err)
 
 	cont := findResource[structs.Container](t, c, "resource.container.consul")
@@ -253,7 +253,7 @@ func TestLoadsVariableFilesInDirectoryOverridingVariableDefaults(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	cont := findResource[structs.Container](t, c, "resource.container.consul")
@@ -268,7 +268,7 @@ func TestLoadsVariablesFilesOverridingVariableDefaults(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	cont := findResource[structs.Container](t, c, "resource.container.consul")
@@ -285,7 +285,7 @@ func TestResourceReferencesInExpressionsAreEvaluated(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	require.Len(t, c.GetResources(), 10)
@@ -328,7 +328,7 @@ func TestResourceReferencesInExpressionStringsAreEvaluated(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	con := findResource[structs.Container](t, c, "resource.container.container4")
@@ -343,7 +343,7 @@ func TestParseModuleCreatesResources(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	require.Len(t, c.GetResources(), 41)
@@ -375,7 +375,7 @@ func TestParseModuleDoesNotCacheLocalFiles(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
@@ -392,7 +392,7 @@ func TestParseModuleCreatesOutputs(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	require.Len(t, c.GetResources(), 41)
@@ -450,7 +450,7 @@ func TestDoesNotLoadsVariablesFilesFromInsideModules(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check variable has been interpolated
@@ -466,7 +466,7 @@ func TestModuleDisabledCanBeOverriden(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// test disabled overrides are set
@@ -498,7 +498,7 @@ func TestParseContainerWithNoNameReturnsError(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.Error(t, err)
 }
 
@@ -510,7 +510,7 @@ func TestParseContainerWithNoTypeReturnsError(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.Error(t, err)
 }
 
@@ -522,7 +522,7 @@ func TestParseContainerWithNoTLDReturnsError(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.Error(t, err)
 }
 
@@ -534,7 +534,7 @@ func TestParseDoesNotProcessDisabledResources(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 	require.Equal(t, 5, c.ResourceCount())
 
@@ -563,7 +563,7 @@ func TestParseDoesNotProcessDisabledResourcesWhenModuleDisabled(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	c, err := p.Parse(false, absoluteFolderPath)
+	c, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	r, err := c.FindResource("module.disabled.resource.container.enabled")
@@ -718,7 +718,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 
 	p, _ := setupParser(t, o)
 
-	_, err = p.Parse(true, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// check the order, should be ...
@@ -781,7 +781,7 @@ func TestParserErrorsOnPluginCreateError(t *testing.T) {
 	// ensure an error is returned when creating a resource
 	tp.SetCreateError("resource.container.base", fmt.Errorf("test error"))
 
-	_, err = p.Parse(true, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.Error(t, err)
 
 	cr := tp.GetCreatedResources()
@@ -837,7 +837,7 @@ func TestParserCyclicalReferenceReturnsError(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.Error(t, err)
 
 	require.ErrorContains(t, err, "'resource.container.one' depends on 'resource.network.two'")
@@ -851,7 +851,7 @@ func TestParserNoCyclicalReferenceReturns(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.NoError(t, err)
 }
 
@@ -863,7 +863,7 @@ func TestParseDirectoryReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(true, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
@@ -878,11 +878,21 @@ func TestParseDirectoryReturnsConfigErrorWhenResourceProcessError(t *testing.T) 
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
+
+	// of the files in this directory only bad_format.xcl is malformed at parse
+	// time, so that is the problem that must be reported and it must be
+	// reported as a failure, located in that file
 	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, filepath.Join(f, "bad_format.xcl"), pe.Filename)
+	require.Equal(t, 7, pe.Line)
+	require.Equal(t, 30, pe.Column)
+	require.Contains(t, pe.Message, "unable to parse file")
 }
 
 func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
@@ -893,7 +903,7 @@ func TestParseFileReturnsConfigErrorWhenParseDirectoryFails(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
@@ -908,16 +918,16 @@ func TestParseFileReturnsConfigErrorWhenResourceBadlyFormed(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
 
-	require.True(t, ce.ContainsErrors())
-
 	pe := ce.Errors[0].(*errors.ParserError)
-	require.Equal(t, pe.Level, errors.ParserErrorLevelError)
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 7, pe.Line)
+	require.Equal(t, 30, pe.Column)
 }
 
 func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
@@ -928,16 +938,12 @@ func TestParseFileReturnsConfigErrorWhenFunctionError(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
-
-	require.True(t, ce.ContainsErrors())
-
-	pe := ce.Errors[0].(*errors.ParserError)
-	require.Equal(t, pe.Level, errors.ParserErrorLevelError)
+	require.IsType(t, &errors.ParserError{}, ce.Errors[0])
 }
 
 func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T) {
@@ -948,16 +954,21 @@ func TestParseFileReturnsConfigErrorWhenResourceInterpolationError(t *testing.T)
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
 	require.Len(t, ce.Errors, 1)
 
-	require.False(t, ce.ContainsErrors())
+	// the fixture refers to 'resource.network.test.nam', a misspelling of the
+	// 'name' property. This was previously reported as an advisory warning and
+	// the configuration was treated as usable; it is now a failure naming the
+	// property that does not exist.
+	require.NotEmpty(t, ce.Errors)
 
 	pe := ce.Errors[0].(*errors.ParserError)
-	require.Equal(t, pe.Level, errors.ParserErrorLevelWarning)
+	require.Contains(t, pe.Message, "nam")
+	require.Contains(t, pe.Message, "does not exist")
 }
 
 func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
@@ -968,7 +979,7 @@ func TestParseFileReturnsConfigErrorWhenInvalidFileFails(t *testing.T) {
 
 	p, _ := setupParser(t)
 
-	_, err := p.Parse(false, f)
+	_, err := p.Apply(f)
 	require.IsType(t, &errors.ConfigError{}, err)
 
 	ce := err.(*errors.ConfigError)
@@ -994,7 +1005,7 @@ func TestParserEventCallback(t *testing.T) {
 	p, _ := setupParser(t, options)
 
 	// Parse the file - this should trigger create events
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// Verify events were fired
@@ -1045,61 +1056,78 @@ func TestParserEventCallback(t *testing.T) {
 	}
 }
 
-func TestParserEventErrorCallback(t *testing.T) {
+func TestParserCreateEventErrorCallback(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/modules/modules.xcl")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	// Track all events
 	var events []ParserEvent
 
-	// Setup parser with event callback
 	options := DefaultOptions()
-	options.Logger = logger.NewTestLogger(t)
 	options.OnParserEvent = func(event ParserEvent) {
 		events = append(events, event)
 	}
 
 	p, tp := setupParser(t, options)
 
-	// Configure the plugin to return an error for refresh operations (since resources exist in state)
+	// nothing exists in state, so the resource is created
+	tp.SetCreateError("resource.container.base", fmt.Errorf("test create error"))
+
+	_, err = p.Apply(absoluteFolderPath)
+	require.Error(t, err)
+
+	// create event with start phase is fired before the plugins Create method is called
+	requireEvent(t, events, "create", "start", "resource.container.base")
+
+	// create event with error phase is fired when an error is returned during the
+	// plugin Create method
+	event := requireEvent(t, events, "create", "error", "resource.container.base")
+	require.ErrorContains(t, event.Error, "test create error")
+	require.Greater(t, event.Duration, time.Duration(0))
+	require.NotEmpty(t, event.Data)
+}
+
+func TestParserRefreshEventErrorCallback(t *testing.T) {
+	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/modules/modules.xcl")
+	require.NoError(t, err)
+
+	// first apply creates the resources that the second apply finds in state
+	firstStore := &statemocks.MockStateStore{}
+	firstStore.On("Exists").Return(false)
+
+	firstOptions := DefaultOptions()
+	firstOptions.StateStore = firstStore
+
+	firstParser, _ := setupParser(t, firstOptions)
+
+	previousState, err := firstParser.Apply(absoluteFolderPath)
+	require.NoError(t, err)
+
+	var events []ParserEvent
+
+	secondStore := &statemocks.MockStateStore{}
+	secondStore.On("Exists").Return(true)
+	secondStore.On("Load").Return(previousState, nil)
+
+	secondOptions := DefaultOptions()
+	secondOptions.StateStore = secondStore
+	secondOptions.OnParserEvent = func(event ParserEvent) {
+		events = append(events, event)
+	}
+
+	secondParser, tp := setupParser(t, secondOptions)
+
+	// the resource exists in state, so it is refreshed rather than created
 	tp.SetRefreshError("resource.container.base", fmt.Errorf("test refresh error"))
 
-	// Parse the file - this should trigger error events
-	_, err = p.Parse(false, absoluteFolderPath)
-	require.Error(t, err, "Expected parsing to fail due to refresh error")
+	_, err = secondParser.Apply(absoluteFolderPath)
+	require.Error(t, err)
 
-	// Verify events were fired
-	require.NotEmpty(t, events, "Expected parser events to be fired")
+	requireEvent(t, events, "refresh", "start", "resource.container.base")
 
-	// Check that we have start and error events for the operation
-	var startEvents []ParserEvent
-	var errorEvents []ParserEvent
-
-	for _, event := range events {
-		if event.Phase == "start" {
-			startEvents = append(startEvents, event)
-		}
-		if event.Phase == "error" {
-			errorEvents = append(errorEvents, event)
-		}
-	}
-
-	require.NotEmpty(t, startEvents, "Expected operation start events")
-	require.NotEmpty(t, errorEvents, "Expected operation error events")
-
-	// Verify error event structure
-	for _, event := range errorEvents {
-		require.Contains(t, []string{"create", "refresh", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
-		require.Equal(t, "error", event.Phase)
-		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
-		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
-		require.Greater(t, event.Duration, time.Duration(0), "Expected duration to be greater than 0")
-		require.Error(t, event.Error, "Expected error for error events")
-		require.Contains(t, event.Error.Error(), "test refresh error", "Expected error message to contain test error")
-		require.NotEmpty(t, event.Data, "Expected data to be set")
-	}
+	event := requireEvent(t, events, "refresh", "error", "resource.container.base")
+	require.ErrorContains(t, event.Error, "test refresh error")
+	require.Greater(t, event.Duration, time.Duration(0))
+	require.NotEmpty(t, event.Data)
 }
 
 func TestParserEventForVariablesOutputsLocals(t *testing.T) {
@@ -1121,7 +1149,7 @@ func TestParserEventForVariablesOutputsLocals(t *testing.T) {
 	p, _ := setupParser(t, options)
 
 	// Parse the file - this should trigger events for variables, outputs, and locals
-	_, err = p.Parse(false, absoluteFolderPath)
+	_, err = p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 
 	// Verify events were fired
@@ -1186,7 +1214,7 @@ func TestDestroyLifecycle(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/simple/container.xcl")
 	require.NoError(t, err)
 
-	config1, err := p.Parse(false, absoluteFolderPath)
+	config1, err := p.Apply(absoluteFolderPath)
 	require.NoError(t, err)
 	require.NotNil(t, config1)
 
@@ -1207,7 +1235,7 @@ func TestDestroyLifecycle(t *testing.T) {
 	absoluteFolderPath2, err := filepath.Abs("../test_fixtures/config/defaults/container.xcl")
 	require.NoError(t, err)
 
-	config2, err := p2.Parse(false, absoluteFolderPath2)
+	config2, err := p2.Apply(absoluteFolderPath2)
 	require.NoError(t, err)
 	require.NotNil(t, config2)
 
@@ -1217,6 +1245,24 @@ func TestDestroyLifecycle(t *testing.T) {
 	// Resources from config1 that are not in config2 should be destroyed
 	// This will depend on what's actually in the test fixtures
 	require.NotEmpty(t, destroyedResources, "Expected some resources to be destroyed")
+}
+
+// requireEvent fails the test unless events contains an event with the given
+// operation, phase and resource ID, and returns the first one that matches.
+func requireEvent(t *testing.T, events []ParserEvent, operation, phase, resourceID string) ParserEvent {
+	t.Helper()
+
+	fired := []string{}
+	for _, event := range events {
+		if event.Operation == operation && event.Phase == phase && event.ResourceID == resourceID {
+			return event
+		}
+
+		fired = append(fired, fmt.Sprintf("%s %s %s", event.Operation, event.Phase, event.ResourceID))
+	}
+
+	require.FailNow(t, fmt.Sprintf("expected %s %s event for %s. events: %v", operation, phase, resourceID, fired))
+	return ParserEvent{}
 }
 
 func requireBefore(t *testing.T, first, second string, list []string) {
@@ -1431,3 +1477,360 @@ func TestDestroyWithStateLoadError(t *testing.T) {
 	require.Nil(t, config)
 }
 */
+
+func TestParseFileReportsEveryMalformedBlockInFile(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/multiple_errors/two_blocks_missing_names.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+
+	// the fixture contains two separate malformations, a nameless resource block
+	// starting at line 3 and another starting at line 7. Both must be reported,
+	// parsing must not stop at the first.
+	require.Len(t, ce.Errors, 2)
+
+	first := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, first.Filename)
+	require.Equal(t, 3, first.Line)
+	require.Equal(t, 1, first.Column)
+	require.Contains(t, first.Message, "has no name")
+
+	second := ce.Errors[1].(*errors.ParserError)
+	require.Equal(t, f, second.Filename)
+	require.Equal(t, 7, second.Line)
+	require.Equal(t, 1, second.Column)
+	require.Contains(t, second.Message, "has no name")
+}
+
+func TestParseFileReportsEveryDiagnosticForSingleMalformation(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/multiple_errors/unterminated_string.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+
+	// the unterminated quoted string on line 4 makes the HCL parser raise three
+	// related complaints, every one of them must be surfaced rather than only
+	// the first.
+	require.Len(t, ce.Errors, 3)
+
+	for _, e := range ce.Errors {
+		pe := e.(*errors.ParserError)
+		require.Equal(t, f, pe.Filename)
+		require.Greater(t, pe.Line, 0)
+		require.Greater(t, pe.Column, 0)
+	}
+
+	// the unterminated string itself starts on line 4 of the fixture
+	require.Equal(t, 4, ce.Errors[0].(*errors.ParserError).Line)
+}
+
+func TestParseFileReportsMalformedBlockAsErrorNotWarning(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/multiple_errors/unterminated_string.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+
+	// a file that is not well formed is a failure, and every problem in it is
+	// reported as a parser error
+	require.NotEmpty(t, ce.Errors)
+
+	for _, e := range ce.Errors {
+		require.IsType(t, &errors.ParserError{}, e)
+	}
+}
+
+func TestParseFileReportsFileAndPositionForMalformedBlock(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/process_error/bad_format.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+
+	// the missing opening brace is on line 7 of the fixture, the parser reports
+	// it at the point the block body should have started
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 7, pe.Line)
+	require.Equal(t, 30, pe.Column)
+}
+
+func TestParseFileToleratesUninterpolatableValue(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/process_error/bad_interpolation.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+
+	// this file is well formed, its only fault is a value that cannot yet be
+	// interpolated. The parse stage must not report it as a malformed file, so
+	// none of the reported problems may be a parse diagnostic.
+	for _, e := range ce.Errors {
+		pe := e.(*errors.ParserError)
+		require.NotContains(t, pe.Message, "unable to parse file")
+	}
+}
+
+func TestParseCreatesNothingWhenConfigurationIsRejected(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/multiple_errors/two_blocks_missing_names.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, testPlugin := setupParser(t)
+
+	// the provider lifecycle always runs, so the only thing that can stop the
+	// walk is the gate that runs before resources reach state
+	s, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+	require.Nil(t, s)
+
+	// nothing in a rejected configuration may reach a provider
+	require.Empty(t, testPlugin.GetCreatedResources())
+	require.Empty(t, testPlugin.GetUpdatedResources())
+	require.Empty(t, testPlugin.GetDestroyedResources())
+}
+
+func TestParseCreatesNothingWhenOneFileInDirectoryIsRejected(t *testing.T) {
+	dir := t.TempDir()
+
+	// a wholly valid file, which would be created were files judged one at a time
+	writeErr := os.WriteFile(filepath.Join(dir, "network.xcl"), []byte(`
+resource "network" "onprem" {
+  subnet = "10.6.0.0/16"
+}
+`), 0644)
+	require.NoError(t, writeErr)
+
+	// a sibling whose block is missing its name label
+	writeErr = os.WriteFile(filepath.Join(dir, "container.xcl"), []byte(`
+resource "container" {
+  command = ["consul", "agent", "-dev"]
+}
+`), 0644)
+	require.NoError(t, writeErr)
+
+	p, testPlugin := setupParser(t)
+
+	s, err := p.Apply(dir)
+	require.IsType(t, &errors.ConfigError{}, err)
+	require.Nil(t, s)
+
+	// the valid network in the sibling file must not have been created, the
+	// configuration is judged as one unit
+	require.Empty(t, testPlugin.GetCreatedResources())
+}
+
+func TestParseResourceReturnsConfigErrorWhenTypeIsNotRegistered(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/unregistered_type/unknown.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+
+	// only the 'nosuchtype' block is unknown, the network beside it is a
+	// registered type and must not be reported
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+
+	// the report must name both the resource and the type that could not be
+	// checked, not the literal block keyword 'resource'
+	require.Equal(
+		t,
+		"unable to create resource 'example' of type 'nosuchtype': resource type nosuchtype not found in any registered plugin",
+		pe.Message,
+	)
+}
+
+func TestParseResourceWithUnregisteredTypeReportsWhereItAppears(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/unregistered_type/unknown.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+
+	// the offending block starts on line 5 of the fixture, at column 1
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 5, pe.Line)
+	require.Equal(t, 1, pe.Column)
+}
+
+func TestParseModuleReturnsConfigErrorWhenModuleSourcesItself(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/self_including_module/self.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	// the guard must make this terminate; without it the parse recurses until
+	// the stack is exhausted, so fail rather than hang the suite
+	type parseResult struct {
+		err error
+	}
+
+	done := make(chan parseResult, 1)
+	go func() {
+		_, err := p.Apply(f)
+		done <- parseResult{err: err}
+	}()
+
+	var result parseResult
+	select {
+	case result = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("parsing a self-including module did not terminate within 30s, the recursion guard has regressed")
+	}
+
+	require.IsType(t, &errors.ConfigError{}, result.err)
+
+	ce := result.err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Contains(t, pe.Message, "module 'inner' source")
+	require.Contains(t, pe.Message, "includes itself")
+
+	// the failure is reported against the module block that re-entered, which
+	// is the one declared on line 1 of the module's own source file
+	require.Equal(t, 1, pe.Line)
+	require.Equal(t, 1, pe.Column)
+}
+
+func TestParseModuleReturnsConfigErrorWhenModulesIncludeEachOther(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/mutual_modules/a/a.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	// a includes b and b includes a; indirect recursion must terminate too
+	type parseResult struct {
+		err error
+	}
+
+	done := make(chan parseResult, 1)
+	go func() {
+		_, err := p.Apply(f)
+		done <- parseResult{err: err}
+	}()
+
+	var result parseResult
+	select {
+	case result = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("parsing mutually including modules did not terminate within 30s, the recursion guard has regressed")
+	}
+
+	require.IsType(t, &errors.ConfigError{}, result.err)
+
+	ce := result.err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+
+	// parsing starts at a/a.xcl, which enters b, whose module block re-enters
+	// a, whose module block then sources b a second time. The re-entry is
+	// detected there, on the 'b_module' block declared in directory a.
+	require.Contains(t, pe.Message, "module 'b_module' source")
+	require.Contains(t, pe.Message, "includes itself")
+}
+
+func TestParseModuleReturnsConfigErrorWhenSourceDoesNotExist(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/missing_module_source/missing.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+
+	// reported against the module block itself, naming the module whose
+	// contents could not be obtained
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 1, pe.Line)
+	require.Equal(t, 1, pe.Column)
+	require.Contains(t, pe.Message, "unable to obtain contents for module 'gone' source")
+}
+
+func TestParseModuleParsesSameSourceUsedTwiceAsSiblings(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/module_reused_twice/reuse.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	c, err := p.Apply(f)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+
+	// two module blocks share one source but are siblings, not nested, so the
+	// recursion guard must not reject the second one. Each module instance and
+	// its single network resource must be present: 2 modules + 2 networks.
+	require.Len(t, c.GetResources(), 4)
+
+	first := findResource[structs.Network](t, c, "module.first.resource.network.leafnet")
+	require.Equal(t, "10.7.0.0/16", first.Subnet)
+
+	second := findResource[structs.Network](t, c, "module.second.resource.network.leafnet")
+	require.Equal(t, "10.7.0.0/16", second.Subnet)
+}

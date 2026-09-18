@@ -11,7 +11,7 @@ import (
 )
 
 // callPluginLifecycle calls the appropriate plugin lifecycle method for a resource
-// This is only called when executePlugins=true (during Apply)
+// This is called during Apply
 func (p *Parser) callPluginLifecycle(resource any, previousState *state.State) error {
 	resourceMeta, err := types.GetMeta(resource)
 	if err != nil {

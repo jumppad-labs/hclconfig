@@ -1,0 +1,12 @@
+resource "container" "consul" {
+  command = ["consul"]
+
+  volume {
+    source      = "."
+    destination = "/cache"
+  }
+}
+
+output "destination" {
+  value = resource.container.consul.volume.0.destnation
+}

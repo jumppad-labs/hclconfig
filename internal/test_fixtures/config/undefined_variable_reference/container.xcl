@@ -1,0 +1,7 @@
+resource "container" "consul" {
+  command = ["consul"]
+
+  resources {
+    cpu = variable.missing_var
+  }
+}

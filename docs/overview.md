@@ -14,8 +14,8 @@ Config            (repo root, package xcl)
   entry point: NewConfig(opts...), then Apply()/Validate()/Destroy()
 
 Parser            (internal/parser)
-  does one Parse() call: load previous state -> parse HCL -> build DAG
-  -> walk DAG, decoding each resource and (if requested) calling its provider
+  does one Apply() call: load previous state -> parse HCL -> build DAG
+  -> walk DAG, decoding each resource and calling its provider
 
 PluginRegistry    (plugins/registry)
   aggregates PluginHosts, answers "what Go type is resource X" and
@@ -37,7 +37,7 @@ cfg := xcl.NewConfig(
     xcl.WithVariables(vars),
 )
 
-diff, err := cfg.Validate("./infra")   // dry-run, no provider calls
+err := cfg.Validate("./infra")         // checks only, acts on nothing
 err := cfg.Apply("./infra")            // parses + executes provider lifecycle
 ```
 
@@ -52,16 +52,23 @@ touches a real provider or disk — useful for testing.
 
 1. Construct a `parser.Parser` for this call only, handing it `Config`'s
    `StateStore`, `PluginRegistry`, and variables via `ParserOptions`.
-2. Call `p.Parse(true, paths...)` — the `true` is `executePlugins`, see
+2. Call `p.Apply(paths...)`, see
    [Parser & Resource Lifecycle](parser-lifecycle.md).
 3. Adopt the returned `*state.State` as `c.currentState`.
 4. If a `StateStore` is configured, `Save` the new state.
 
-`Config.Validate` ([`config.go:67`](../config.go#L67)) is almost identical
-but calls `p.Parse(false, ...)` — decode and DAG-validate the HCL, skip
-every provider call — then diffs the result against `c.currentState` via
-`buildDiff` ([`diff.go`](../diff.go)) to produce a `*Diff{ToCreate, ToUpdate,
-ToDestroy}`.
+`Config.Validate` ([`config.go`](../config.go)) answers only whether a
+configuration is valid, returning `error` alone. It calls `p.Validate(paths...)`,
+which parses every file and then runs validation to completion — **without**
+decoding bodies, walking the DAG or reaching a provider. A nil error means the
+configuration is valid; otherwise the returned `*errors.ConfigError` collects
+every problem found.
+
+Validation runs three stages in order — structure, then references, then
+properties — and each gathers all of its own findings before the next is
+considered. A later stage is skipped when an earlier one found anything, because
+checking properties on a reference that resolves nowhere would only report
+consequences of a problem already reported.
 
 `Config.Destroy` ([`config.go:128`](../config.go#L128)) is currently a stub
 (`// TODO: Implement destroy logic`) — the destroy DAG-walk machinery exists

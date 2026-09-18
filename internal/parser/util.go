@@ -17,6 +17,24 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+// canonicalPath resolves a path to an absolute form with any symlinks
+// evaluated, so that two spellings of the same directory compare equal. It
+// returns an error when the path cannot be resolved, which for a module source
+// means its contents cannot be obtained.
+func canonicalPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", err
+	}
+
+	return resolved, nil
+}
+
 func findXclFiles(paths ...string) ([]string, error) {
 	var xclFiles []string
 
@@ -218,7 +236,6 @@ func setContextVariablesFromList(s ResourceProvider, r any, values []string, ctx
 				"",
 				0,
 				0,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("resource does not have ResourceBase embedded: %s", err),
 			)
 			return pe
@@ -228,7 +245,6 @@ func setContextVariablesFromList(s ResourceProvider, r any, values []string, ctx
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("error parsing resource link %s", err),
 			)
 			return pe
@@ -239,7 +255,6 @@ func setContextVariablesFromList(s ResourceProvider, r any, values []string, ctx
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("unable to find dependent resource \"%s\" %s", v, err),
 			)
 			return pe
@@ -252,7 +267,6 @@ func setContextVariablesFromList(s ResourceProvider, r any, values []string, ctx
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("linked resource does not have ResourceBase embedded: %s", err),
 			)
 			return pe
@@ -286,7 +300,6 @@ func setContextVariablesFromList(s ResourceProvider, r any, values []string, ctx
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("unable to convert reference %s to context variable: %s", v, err),
 			)
 			return pe
@@ -299,7 +312,6 @@ func setContextVariablesFromList(s ResourceProvider, r any, values []string, ctx
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("unable to set context variable: %s", err),
 			)
 			return pe
@@ -508,7 +520,6 @@ func getResourceDependencies(rp ResourceProvider, resource any, resourceMeta *ty
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				resource,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("invalid dependency: %s, error: %s", d, err),
 			)
 			return nil, pe
@@ -555,7 +566,6 @@ func getResourceDependencies(rp ResourceProvider, resource any, resourceMeta *ty
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				resource,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("unable to find parent module: '%s', error: %s", fqdnString, err),
 			)
 			return nil, pe

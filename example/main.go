@@ -65,17 +65,13 @@ func demonstrateQuerying(config *xcl.Config) {
 		fmt.Printf("No PostgreSQL resources found or error: %s\n", err)
 	}
 
-	// Demonstrate diff with Validate
-	fmt.Println("## Demonstrating Validate (dry-run)")
-	diff, err := config.Validate("./config.hcl")
-	if err != nil {
+	// Demonstrate checking a configuration without acting on it
+	fmt.Println("## Demonstrating Validate")
+	if err := config.Validate("./config.hcl"); err != nil {
 		fmt.Printf("Validation error: %s\n", err)
 		return
 	}
 
-	fmt.Printf("Changes that would be applied:\n")
-	fmt.Printf("  - To Create: %d resources\n", len(diff.ToCreate))
-	fmt.Printf("  - To Update: %d resources\n", len(diff.ToUpdate))
-	fmt.Printf("  - To Destroy: %d resources\n", len(diff.ToDestroy))
+	fmt.Println("Configuration is valid")
 	fmt.Println("")
 }

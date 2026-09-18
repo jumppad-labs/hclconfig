@@ -1,0 +1,7 @@
+resource "network" "onprem" {
+  subnet = "10.6.0.0/16"
+}
+
+output "network_name" {
+  value = output.no_such_output
+}

@@ -1,0 +1,12 @@
+resource "container" "first" {
+  command = ["consul"]
+
+  volume {
+    source      = "."
+    destination = "/cache"
+  }
+}
+
+output "collection_typo" {
+  value = resource.container.first.volume.0.destnation
+}

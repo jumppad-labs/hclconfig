@@ -1,0 +1,7 @@
+module "consul" {
+  source = "../single"
+}
+
+output "module_thing" {
+  value = module.consul.output.nosuch_output
+}

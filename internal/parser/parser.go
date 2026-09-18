@@ -39,6 +39,13 @@ func (r ResourceTypeNotExistError) Error() string {
 type parsed struct {
 	resources map[string]any             // FQRN -> resource instance
 	bodies    map[string]*hclsyntax.Body // FQRN -> HCL body for later decoding
+
+	// moduleSources records the module source directories already entered,
+	// resolved to an absolute path with symlinks evaluated. A module whose
+	// source directly or indirectly includes itself would otherwise recurse
+	// until the stack is exhausted, which is a crash rather than a reportable
+	// problem.
+	moduleSources map[string]bool
 }
 
 type ParserOptions struct {
@@ -161,12 +168,11 @@ func NewParser(options *ParserOptions) *Parser {
 	return p
 }
 
-// Parse parses HCL configuration from multiple paths and returns State with decoded resources.
-// This is the main entry point for parsing configuration.
+// Apply parses HCL configuration from multiple paths, calls the provider
+// lifecycle for every resource and returns State with decoded resources.
+// This is the main entry point for applying configuration.
 //
 // Parameters:
-//   - executePlugins: if true, calls plugin lifecycle methods during DAG walk
-//     if false, skips plugins and tolerates interpolation errors
 //   - paths: one or more file or directory paths to parse
 //
 // The parsing process:
@@ -175,13 +181,52 @@ func NewParser(options *ParserOptions) *Parser {
 //  3. Build a DAG based on resource dependencies
 //  4. Walk the DAG in dependency order
 //  5. Decode each resource body (HCL → Go structs)
-//  6. If executePlugins=true: compare with previousState and call Create/Update on plugins
-//     If executePlugins=false: tolerate missing interpolated values
+//  6. Compare with previousState and call Create/Update on plugins
 //
 // Returns the new State containing all parsed resources.
-func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, error) {
+func (p *Parser) Apply(paths ...string) (*state.State, error) {
+	currentState, previousState, err := p.parseAndValidate(paths...)
+	if err != nil {
+		return nil, err
+	}
+
+	ce := errors.NewConfigError()
+
+	// Get functions for HCL context
+	functions := p.getFunctions()
+
+	// Always walk the DAG to decode resources (fills in their fields from HCL)
+	// This decodes interpolations and resolves dependencies regardless of plugin execution
+	errs := p.walk(currentState, previousState, functions)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			ce.AppendError(e)
+		}
+		return nil, ce
+	}
+
+	return currentState, nil
+}
+
+// Validate parses and validates the configuration discovered from paths without
+// resolving it: no body is decoded, no dependency graph is walked and no provider
+// is reached. A nil error means the configuration is valid.
+func (p *Parser) Validate(paths ...string) error {
+	_, _, err := p.parseAndValidate(paths...)
+	return err
+}
+
+// parseAndValidate reads every file discovered from paths, then validates the
+// result as a whole before any of it is acted upon. It performs no resolution:
+// no body is decoded, no dependency graph is walked and no provider is reached.
+//
+// It returns the state holding the parsed resources along with the previously
+// stored state, or every problem found. A configuration that does not parse is
+// never validated, and a configuration that does not validate is never returned,
+// so a caller that receives no error holds a configuration worth acting on.
+func (p *Parser) parseAndValidate(paths ...string) (*state.State, *state.State, error) {
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("at least one path is required")
+		return nil, nil, fmt.Errorf("at least one path is required")
 	}
 
 	// Load previous state from store (for comparison during Create/Update)
@@ -190,7 +235,7 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 		var err error
 		previousState, err = p.stateStore.Load()
 		if err != nil {
-			return nil, fmt.Errorf("failed to load previous state: %w", err)
+			return nil, nil, fmt.Errorf("failed to load previous state: %w", err)
 		}
 	}
 	if previousState == nil {
@@ -202,8 +247,9 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 
 	// Initialize parsed resources container
 	p.parsedResources = &parsed{
-		resources: map[string]any{},
-		bodies:    map[string]*hclsyntax.Body{},
+		resources:     map[string]any{},
+		bodies:        map[string]*hclsyntax.Body{},
+		moduleSources: map[string]bool{},
 	}
 
 	ce := errors.NewConfigError()
@@ -212,7 +258,9 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 	// These have lower precedence than manually specified VariablesFiles
 	discoveredVarsFiles, err := findVarsFiles(paths...)
 	if err != nil {
-		return nil, fmt.Errorf("error finding .vars files: %w", err)
+		ce.AppendError(errors.NewParserError("", 0, 0,
+			fmt.Sprintf("error finding .vars files: %s", err)))
+		return nil, nil, ce
 	}
 
 	// Merge discovered vars files with manually specified ones
@@ -242,7 +290,9 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 	// Get all the xcl files from the paths
 	files, err := findXclFiles(paths...)
 	if err != nil {
-		return nil, fmt.Errorf("error finding .xcl files: %w", err)
+		ce.AppendError(errors.NewParserError("", 0, 0,
+			fmt.Sprintf("error finding .xcl files: %s", err)))
+		return nil, nil, ce
 	}
 
 	// Parse all files
@@ -254,30 +304,29 @@ func (p *Parser) Parse(executePlugins bool, paths ...string) (*state.State, erro
 	}
 
 	if len(ce.Errors) > 0 {
-		return nil, ce
+		return nil, nil, ce
+	}
+
+	// Validate the configuration as a whole before any of it is acted upon.
+	// Every resource from every file is parsed by this point and no body has
+	// been decoded, which is what lets validation judge the configuration
+	// without resolving it.
+	for _, e := range p.validate() {
+		ce.AppendError(e)
+	}
+
+	if len(ce.Errors) > 0 {
+		return nil, nil, ce
 	}
 
 	// Move parsed resources into currentState
 	for _, resource := range p.parsedResources.resources {
 		if err := currentState.AppendResource(resource); err != nil {
-			return nil, fmt.Errorf("failed to add resource to state: %w", err)
+			return nil, nil, fmt.Errorf("failed to add resource to state: %w", err)
 		}
 	}
 
-	// Get functions for HCL context
-	functions := p.getFunctions()
-
-	// Always walk the DAG to decode resources (fills in their fields from HCL)
-	// This decodes interpolations and resolves dependencies regardless of plugin execution
-	errs := p.walk(currentState, previousState, functions, executePlugins)
-	if len(errs) > 0 {
-		for _, e := range errs {
-			ce.AppendError(e)
-		}
-		return nil, ce
-	}
-
-	return currentState, nil
+	return currentState, previousState, nil
 }
 
 // parseResourcesInFile parses a hcl file and adds any found resources to the config
@@ -286,35 +335,14 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 
 	f, diag := parser.ParseXCLFile(file)
 	if diag.HasErrors() {
-		// check the error types and determine if we should set a warning or error
-		level := errors.ParserErrorLevelWarning
-
-		for _, e := range diag.Errs() {
-			err, ok := e.(*hcl.Diagnostic)
-			if !ok {
-				continue
-			}
-
-			if err.Summary == "Error in function call" {
-				level = errors.ParserErrorLevelError
-				break
-			}
+		// a single malformed input can produce several diagnostics, report every
+		// one of them rather than only the first
+		errs := []error{}
+		for _, d := range diag {
+			errs = append(errs, errors.NewParserErrorFromHCLDiag(d, file))
 		}
 
-		var line, column int
-		if diag[0].Subject != nil {
-			line = diag[0].Subject.Start.Line
-			column = diag[0].Subject.Start.Column
-		}
-
-		de := errors.NewParserError(
-			file,
-			line,
-			column,
-			level,
-			fmt.Sprintf("unable to parse file: %s", diag[0].Detail),
-		)
-		return []error{de}
+		return errs
 	}
 
 	body, ok := f.Body.(*hclsyntax.Body)
@@ -322,6 +350,10 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 		// this should never happen, body should always be a hclsyntax.Body
 		panic("Error getting body")
 	}
+
+	// gather every problem in the file rather than returning at the first, so an
+	// author sees all of them at once
+	blockErrors := []error{}
 
 	for _, b := range body.Blocks {
 
@@ -331,10 +363,11 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 				file,
 				b.TypeRange.Start.Line,
 				b.TypeRange.Start.Column,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type),
 			)
-			return []error{de}
+
+			blockErrors = append(blockErrors, de)
+			continue
 		}
 
 		// create the registered type if not a variable or output
@@ -342,9 +375,7 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 		switch b.Type {
 		case resources.TypeModule:
 			errs := p.parseModule(file, b, module)
-			if len(errs) > 0 {
-				return errs
-			}
+			blockErrors = append(blockErrors, errs...)
 		case resources.TypeVariable:
 			fallthrough
 		case resources.TypeOutput:
@@ -352,18 +383,22 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 		case types.TypeResource:
 			err := p.parseResource(file, b, module)
 			if err != nil {
-				return []error{err}
+				blockErrors = append(blockErrors, err)
 			}
 		default:
 			de := errors.NewParserError(
 				file,
 				b.TypeRange.Start.Line,
 				b.TypeRange.Start.Column,
-				errors.ParserErrorLevelWarning,
 				fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column),
 			)
-			return []error{de}
+
+			blockErrors = append(blockErrors, de)
 		}
+	}
+
+	if len(blockErrors) > 0 {
+		return blockErrors
 	}
 
 	return nil
@@ -382,7 +417,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
 			de.Message = `"invalid format for 'resource', resources should have a name and a type, i.e. 'resource "type" "name" {}'`
-			de.Level = errors.ParserErrorLevelError
 
 			return de
 		}
@@ -395,7 +429,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
 			de.Message = de.Error()
-			de.Level = errors.ParserErrorLevelError
 
 			return de
 		}
@@ -407,8 +440,7 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 				file,
 				b.TypeRange.Start.Line,
 				b.TypeRange.Start.Column,
-				errors.ParserErrorLevelError,
-				fmt.Sprintf("unable to create resource '%s' %s", b.Type, err),
+				fmt.Sprintf("unable to create resource '%s' of type '%s': %s", name, b.Labels[0], err),
 			)
 			return de
 		}
@@ -420,7 +452,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
 			de.Message = `invalid formatting for 'output' stanza, resources should have a name and a type, i.e. 'output "name" {}'`
 
 			return de
@@ -432,7 +463,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
 			de.Message = err.Error()
 
 			return de
@@ -444,7 +474,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
 			de.Message = fmt.Sprintf(`unable to create output, this error should never happen %s`, err)
 
 			return de
@@ -456,7 +485,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
 			de.Message = `invalid formatting for 'variable' stanza, resources should have a name and a type, i.e. 'variable "name" {}'`
 
 			return de
@@ -468,7 +496,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
 			de.Message = err.Error()
 
 			return de
@@ -480,7 +507,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 			de.Line = b.TypeRange.Start.Line
 			de.Column = b.TypeRange.Start.Column
 			de.Filename = file
-			de.Level = errors.ParserErrorLevelError
 			de.Message = fmt.Sprintf(`unable to create variable, this error should never happen %s`, err)
 
 			return de
@@ -494,7 +520,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("unable to get resource meta for resource %s: %s", b.Labels[0], err)
 		return de
 	}
@@ -516,7 +541,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
 		return de
 	}
@@ -542,7 +566,6 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 	//	de.Line = b.TypeRange.Start.Line
 	//	de.Column = b.TypeRange.Start.Column
 	//	de.Filename = file
-	//	de.Level = errors.ParserErrorLevelError
 	//	de.Message = fmt.Sprintf(`unable to set depends_on, %s`, err)
 
 	//	return de
@@ -569,7 +592,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = `invalid formatting for 'module' stanza, resources should have a name and a type, i.e. 'module "name" {}'`
 
 		return []error{de}
@@ -581,7 +603,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = err.Error()
 
 		return []error{de}
@@ -593,7 +614,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf(`unable to create module, this error should never happen %s`, err)
 
 		return []error{de}
@@ -606,7 +626,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("unable to get resource meta for resource %s: %s", b.Labels[0], err)
 		return []error{de}
 	}
@@ -630,7 +649,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
 		return []error{de}
 	}
@@ -648,7 +666,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf(`module '%s' has no 'source' attribute`, name)
 		return []error{de}
 	}
@@ -659,7 +676,6 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Line = sourceAttr.SrcRange.Start.Line
 		de.Column = sourceAttr.SrcRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf(`unable to resolve 'source' for module '%s': %s`, name, diags.Error())
 		return []error{de}
 	}
@@ -671,21 +687,51 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		moduleInstanceName = parentModule + "." + name
 	}
 
+	// Resolve the source to a canonical path so that a module reached by two
+	// different spellings of the same directory is recognised as the same
+	// source. A source that cannot be resolved is reported against the module,
+	// like any other module whose contents cannot be obtained.
+	canonicalSource, err := canonicalPath(sourceDir)
+	if err != nil {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf(`unable to obtain contents for module '%s' source '%s': %s`, name, sourceDir, err)
+		return []error{de}
+	}
+
+	// A module whose source transitively includes itself would recurse until
+	// the stack is exhausted. Report it against the module instead.
+	if p.parsedResources.moduleSources[canonicalSource] {
+		de := &errors.ParserError{}
+		de.Line = b.TypeRange.Start.Line
+		de.Column = b.TypeRange.Start.Column
+		de.Filename = file
+		de.Message = fmt.Sprintf(`module '%s' source '%s' includes itself`, name, sourceDir)
+		return []error{de}
+	}
+
+	p.parsedResources.moduleSources[canonicalSource] = true
+	defer delete(p.parsedResources.moduleSources, canonicalSource)
+
 	childFiles, err := findXclFiles(sourceDir)
 	if err != nil {
 		de := &errors.ParserError{}
 		de.Line = b.TypeRange.Start.Line
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
-		de.Level = errors.ParserErrorLevelError
 		de.Message = fmt.Sprintf(`unable to discover files for module '%s' source '%s': %s`, name, sourceDir, err)
 		return []error{de}
 	}
 
+	moduleErrors := []error{}
 	for _, childFile := range childFiles {
-		if errs := p.parseResourcesInFile(childFile, moduleInstanceName); len(errs) > 0 {
-			return errs
-		}
+		moduleErrors = append(moduleErrors, p.parseResourcesInFile(childFile, moduleInstanceName)...)
+	}
+
+	if len(moduleErrors) > 0 {
+		return moduleErrors
 	}
 
 	return nil
@@ -701,7 +747,9 @@ func (p *Parser) getUniqueResourceLinks(resource any, b *hclsyntax.Block) error 
 	}
 
 	for _, d := range dr {
-		types.AppendUniqueDependency(resource, d)
+		if err := types.AppendUniqueDependency(resource, d); err != nil {
+			return fmt.Errorf("failed to add dependency %s: %w", d, err)
+		}
 	}
 
 	body := b.Body
@@ -749,7 +797,6 @@ func (p *Parser) getDependentResources(resource any, b *hclsyntax.Block) ([]stri
 				b.Body.SrcRange.Filename,
 				b.Body.SrcRange.Start.Line,
 				b.Body.SrcRange.Start.Column,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("unable to process attribute %s: %s", a.Name, err),
 			)
 		}
@@ -807,7 +854,6 @@ func (p *Parser) getDependentResources(resource any, b *hclsyntax.Block) ([]stri
 							b.Body.SrcRange.Filename,
 							b.Body.SrcRange.Start.Line,
 							b.Body.SrcRange.Start.Column,
-							errors.ParserErrorLevelError,
 							fmt.Sprintf("'%s' depends on '%s' which creates a cyclical dependency", rMeta.ID, depMeta.ID),
 						)
 					}
@@ -859,7 +905,6 @@ func processDisabled(bdy *hclsyntax.Body, ctx *hcl.EvalContext, r dag.Vertex) (b
 			return isDisabled,
 				errors.NewParserErrorFromResource(
 					r,
-					errors.ParserErrorLevelError,
 					fmt.Sprintf("unable to decode disabled expression: %s", expdiags.Error()),
 				)
 		}
@@ -868,7 +913,6 @@ func processDisabled(bdy *hclsyntax.Body, ctx *hcl.EvalContext, r dag.Vertex) (b
 		if err != nil {
 			return isDisabled, errors.NewParserErrorFromResource(
 				r,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("failed to set disabled state: %s", err),
 			)
 		}
@@ -879,8 +923,8 @@ func processDisabled(bdy *hclsyntax.Body, ctx *hcl.EvalContext, r dag.Vertex) (b
 
 // walk builds a DAG from the state and walks it with the given callback
 // This is the core parsing logic that processes resources in dependency order
-// The executePlugins parameter controls whether provider lifecycle methods are called
-func (p *Parser) walk(currentState, previousState *state.State, functions map[string]function.Function, executePlugins bool) []error {
+// and calls the provider lifecycle for each resource
+func (p *Parser) walk(currentState, previousState *state.State, functions map[string]function.Function) []error {
 	// Build the DAG using currentState (implements ResourceProvider)
 	d, err := DoYouLikeDags(currentState, false)
 	if err != nil {
@@ -903,7 +947,7 @@ func (p *Parser) walk(currentState, previousState *state.State, functions map[st
 	// TODO: Load previousState from StateStore when implementing state persistence
 	var previousParsed *parsed = nil
 
-	w.Callback = walkCallback(p.parsedResources, previousParsed, currentState, p.providerResolver, &p.options, functions, executePlugins)
+	w.Callback = walkCallback(p.parsedResources, previousParsed, currentState, p.providerResolver, &p.options, functions)
 	w.Reverse = false
 
 	// Update the dag and process the nodes
@@ -918,23 +962,6 @@ func (p *Parser) walk(currentState, previousState *state.State, functions map[st
 	}
 
 	return nil
-}
-
-func checkIfErrorInFunction(diag hcl.Diagnostics) string {
-	level := errors.ParserErrorLevelWarning
-
-	for _, e := range diag.Errs() {
-		err, ok := e.(*hcl.Diagnostic)
-		if !ok {
-			continue
-		}
-
-		if err.Summary == "Error in function call" {
-			level = errors.ParserErrorLevelError
-			break
-		}
-	}
-	return level
 }
 
 // createBuiltinResource creates built-in resource types (local, output, variable, module)

@@ -1,0 +1,3 @@
+module "gone" {
+  source = "./does_not_exist"
+}

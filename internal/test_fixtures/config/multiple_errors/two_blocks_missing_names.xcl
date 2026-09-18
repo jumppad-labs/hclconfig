@@ -1,0 +1,9 @@
+// Two separate malformations in a single file, both blocks are missing their
+// name label. Both must be reported, not just the first.
+resource {
+  subnet = "10.6.0.0/16"
+}
+
+resource {
+  subnet = "10.7.0.0/16"
+}

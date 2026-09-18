@@ -58,15 +58,17 @@ func (c *Config) ResourceCount() int {
 	return c.currentState.ResourceCount()
 }
 
-// Validate parses config from the given paths and compares against existing state
-// Returns a Diff showing what would change, without executing plugins
+// Validate parses config from the given paths and reports whether it is valid,
+// without executing plugins and without creating, changing or removing anything.
+// A nil error means the configuration is valid; otherwise the returned error
+// collects every problem found.
 // Validates:
 //   - HCL syntax and schema
 //   - DAG has no cycles
 //   - Resource dependencies are valid
-func (c *Config) Validate(paths ...string) (*Diff, error) {
+func (c *Config) Validate(paths ...string) error {
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("at least one path is required")
+		return fmt.Errorf("at least one path is required")
 	}
 
 	// Create parser with StateStore
@@ -76,15 +78,12 @@ func (c *Config) Validate(paths ...string) (*Diff, error) {
 		Variables:      convertVariablesToStringMap(c.variables),
 	})
 
-	// Parse without executing plugins
-	newState, err := p.Parse(false, paths...)
-	if err != nil {
-		return nil, err
+	// Validate without resolving: no decode, no DAG walk, no plugins
+	if err := p.Validate(paths...); err != nil {
+		return err
 	}
 
-	// Build diff between current and new state
-	diff := buildDiff(newState, c.currentState)
-	return diff, nil
+	return nil
 }
 
 // Apply parses config from paths, loads existing state, and applies changes
@@ -104,7 +103,7 @@ func (c *Config) Apply(paths ...string) error {
 	})
 
 	// Parser manages State independently (loads from store, parses, returns new state)
-	newState, err := p.Parse(true, paths...)
+	newState, err := p.Apply(paths...)
 	if err != nil {
 		return err
 	}

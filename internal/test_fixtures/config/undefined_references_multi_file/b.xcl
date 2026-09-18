@@ -1,0 +1,11 @@
+resource "container" "second" {
+  command = ["consul"]
+
+  resources {
+    cpu = variable.missing_var
+  }
+}
+
+output "bad" {
+  value = resource.container.ghost.meta.name
+}

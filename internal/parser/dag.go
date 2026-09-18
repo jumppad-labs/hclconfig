@@ -67,7 +67,6 @@ func buildCreateDAG(rp ResourceProvider) (*dagpkg.AcyclicGraph, error) {
 			if err != nil {
 				pe := errors.NewParserErrorFromResource(
 					resource,
-					errors.ParserErrorLevelError,
 					fmt.Sprintf("unable to append dependency: %s, error: %s", d, err),
 				)
 				return nil, pe
@@ -78,7 +77,6 @@ func buildCreateDAG(rp ResourceProvider) (*dagpkg.AcyclicGraph, error) {
 		if err != nil {
 			pe := errors.NewParserErrorFromResource(
 				resource,
-				errors.ParserErrorLevelError,
 				fmt.Sprintf("unable to get dependencies: %s", err),
 			)
 			return nil, pe

@@ -1,0 +1,5 @@
+// A single malformation, the unterminated quoted string, which causes the HCL
+// parser to raise several related complaints.
+resource "network" "test" {
+  subnet = "10.6.0.0/16
+}
