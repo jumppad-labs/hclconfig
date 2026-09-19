@@ -1,0 +1,9 @@
+resource "database" "kept" {
+  location = "us-east"
+  port     = 5432
+}
+
+resource "database" "removed" {
+  location = "eu-west"
+  port     = 5433
+}

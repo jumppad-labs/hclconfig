@@ -1,0 +1,16 @@
+# A module holding one database, its location is exposed as an output
+variable "db_username" {
+  default = "analytics"
+}
+
+resource "postgres" "analytics" {
+  location = "analytics.localhost"
+  port     = 5432
+  db_name  = "analytics"
+  username = variable.db_username
+  password = "analytics"
+}
+
+output "location" {
+  value = resource.postgres.analytics.location
+}

@@ -711,3 +711,93 @@ func TestValidateRejectsNonOptionalComputedField(t *testing.T) {
 	require.Contains(t, pe.Message, "secret")
 	require.Equal(t, "resource 'resource.bad_computed.x' field 'secret' is computed and must be optional", pe.Message)
 }
+
+func TestValidateRejectsUnknownAttributeOnRegisteredType(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/registered/invalid_attribute/main.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	h := setupRegisteredTypes(t)
+	p := h.newParser(t, nil, nil)
+
+	err := p.Validate(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 5, pe.Line)
+	require.Contains(t, pe.Message, "resource 'resource.database.main'")
+	require.Contains(t, pe.Message, `"colour"`)
+}
+
+func TestValidateRejectsUnknownAttributeOnPluginType(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/unknown_attribute/network.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	err := p.Validate(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 4, pe.Line)
+	require.Contains(t, pe.Message, "resource 'resource.network.main'")
+	require.Contains(t, pe.Message, `"bogus"`)
+}
+
+func TestValidateRejectsUndefinedReferenceFromRegisteredType(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/registered/invalid_reference/main.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	h := setupRegisteredTypes(t)
+	p := h.newParser(t, nil, nil)
+
+	err := p.Validate(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, pe.Filename)
+	require.Contains(t, pe.Message, "resource 'resource.database.main'")
+	require.Contains(t, pe.Message, "resource.database.missing")
+}
+
+func TestValidateAcceptsValidRegisteredTypeConfiguration(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/registered/basic/main.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	h := setupRegisteredTypes(t)
+	p := h.newParser(t, nil, nil)
+
+	err := p.Validate(f)
+	require.NoError(t, err)
+}
+
+func TestValidateAcceptsDisabledRegisteredTypeMissingRequiredAttribute(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/registered/disabled_missing_required/main.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	h := setupRegisteredTypes(t)
+	p := h.newParser(t, nil, nil)
+
+	err := p.Validate(f)
+	require.NoError(t, err)
+}

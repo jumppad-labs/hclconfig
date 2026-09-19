@@ -1,0 +1,6 @@
+# colour is not an attribute of the registered database type
+resource "database" "main" {
+  location = "us-east"
+  port     = 5432
+  colour   = "red"
+}

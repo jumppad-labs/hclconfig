@@ -1,6 +1,7 @@
 ---
 created_date: "2026-09-19"
-document_status: draft
+document_status: final
+closed_date: "2026-09-19"
 ---
 
 # Context: 20260919120639-config-only-types-and-examples

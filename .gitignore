@@ -4,3 +4,7 @@
 plugins/build
 .claude
 .bob
+# build output and test binaries are never committed
+plugins/example/build/
+*.test
+__debug_bin*

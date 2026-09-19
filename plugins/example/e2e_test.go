@@ -3,14 +3,81 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/jumppad-labs/xcl/internal/schema"
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/plugins/example/pkg/person"
 	plugintesting "github.com/jumppad-labs/xcl/plugins/testing"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
+
+// loggedMessage is one call to a recordingLogger
+type loggedMessage struct {
+	level string
+	msg   string
+	args  []any
+}
+
+// recordingLogger records every message logged to it, so a test can assert
+// what a plugin logged. An external plugin logs from gRPC handler goroutines,
+// so recording is guarded by a mutex.
+type recordingLogger struct {
+	mu       sync.Mutex
+	messages []loggedMessage
+}
+
+func (l *recordingLogger) record(level, msg string, args []any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.messages = append(l.messages, loggedMessage{level: level, msg: msg, args: args})
+}
+
+func (l *recordingLogger) Info(msg string, args ...any)  { l.record("info", msg, args) }
+func (l *recordingLogger) Debug(msg string, args ...any) { l.record("debug", msg, args) }
+func (l *recordingLogger) Warn(msg string, args ...any)  { l.record("warn", msg, args) }
+func (l *recordingLogger) Error(msg string, args ...any) { l.record("error", msg, args) }
+
+// withMessage returns every recorded message with the given level and text
+func (l *recordingLogger) withMessage(level, msg string) []loggedMessage {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	found := []loggedMessage{}
+	for _, m := range l.messages {
+		if m.level == level && m.msg == msg {
+			found = append(found, m)
+		}
+	}
+
+	return found
+}
+
+// loggingTestPerson is the person created by the logging tests
+func loggingTestPerson(t *testing.T) []byte {
+	t.Helper()
+
+	p := &person.Person{
+		ResourceBase: types.ResourceBase{
+			Meta: types.Meta{
+				ID:   "test-person",
+				Type: "resource",
+				Name: "person",
+			},
+		},
+		FirstName: "John",
+		LastName:  "Doe",
+		Age:       30,
+	}
+
+	personJSON, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	return personJSON
+}
 
 // setupInProcessPlugin creates an in-process plugin host for testing
 func setupInProcessPlugin(t *testing.T) *plugintesting.TestPluginHost {
@@ -438,4 +505,37 @@ func TestExternalPluginChangedReportsNoChangeForIdenticalData(t *testing.T) {
 	changed, err := ph.Changed("resource", "person", oldData, newData)
 	require.NoError(t, err, "Should check changed status")
 	require.False(t, changed, "Identical data should not be reported as changed")
+}
+
+// TestInProcessPluginLogsToHostLogger tests that a provider running in process
+// logs to the logger the host was set up with
+func TestInProcessPluginLogsToHostLogger(t *testing.T) {
+	log := &recordingLogger{}
+	ph := plugintesting.InProcessPluginSetupWithLogger(t, &PersonPlugin{}, log)
+
+	_, err := ph.Create("resource", "person", loggingTestPerson(t))
+	require.NoError(t, err)
+
+	created := log.withMessage("info", "Creating person")
+	require.Len(t, created, 1, "Provider should log the create once")
+	require.Equal(t, []any{"id", "test-person", "name", "John Doe"}, created[0].args)
+}
+
+// TestExternalPluginLogsToHostLogger tests that a provider running in an
+// external plugin process logs across the process boundary to the logger the
+// host was set up with
+func TestExternalPluginLogsToHostLogger(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	log := &recordingLogger{}
+	ph := plugintesting.ExternalPluginSetupWithLogger(t, "./build/example", log)
+
+	_, err := ph.Create("resource", "person", loggingTestPerson(t))
+	require.NoError(t, err)
+
+	created := log.withMessage("info", "Creating person")
+	require.Len(t, created, 1, "Provider should log the create once")
+	require.Equal(t, []any{"id", "test-person", "name", "John Doe"}, created[0].args)
 }

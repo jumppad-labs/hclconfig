@@ -30,46 +30,46 @@ Developers embedding XCL can currently only use their own configuration types by
 -->
 ## Requirements
 
-- [ ] **Register a configuration type without a plugin**
+- [x] **Register a configuration type without a plugin**
   Developers can register a plain Go type under a block type name without writing a plugin or a provider.
 
-- [ ] **Registered types are parsed from configuration**
+- [x] **Registered types are parsed from configuration**
   The system must parse resource blocks whose type name matches a registered type, decoding their attributes and nested blocks into that type.
 
-- [ ] **Registered types take part in references**
+- [x] **Registered types take part in references**
   Blocks of a registered type can reference variables, other resources and module outputs, and other blocks can reference their fields. Dependency ordering applies to them as it does to any other resource.
 
-- [ ] **No lifecycle calls for registered types**
+- [x] **No lifecycle calls for registered types**
   The system must not attempt to create, read, update, detect changes on or destroy resources of a registered type, and applying configuration that contains them must succeed without any provider.
 
-- [ ] **Registered types are returned as the developer's own type**
+- [x] **Registered types are returned as the developer's own type**
   After applying, resources of a registered type are held and returned as instances of the Go type the developer registered, not a generated look-alike.
 
-- [ ] **Registered types are included in state and queries**
+- [x] **Registered types are included in state and queries**
   Resources of a registered type appear in the resulting state and can be found by querying on their path, the same way as plugin resources.
 
-- [ ] **Registered types work with the other existing features**
+- [x] **Registered types work with the other existing features**
   Features that work for plugin resources, such as disabled blocks, modules and validating without applying, work the same way for registered types.
 
-- [ ] **Type name clashes are rejected when a type is registered**
+- [x] **Type name clashes are rejected when a type is registered**
   Registering a type must fail with an error that names the clash if the name is already registered as a type, is provided by a registered plugin, or is a builtin block name.
 
-- [ ] **Type name clashes are rejected when a plugin is registered**
+- [x] **Type name clashes are rejected when a plugin is registered**
   Registering or discovering a plugin must fail with an error that names the clash if the plugin provides a type name that is already registered as a type or provided by another plugin.
 
-- [ ] **Computed fields on registered types are accepted**
+- [x] **Computed fields on registered types are accepted**
   Developers can register a type that has fields marked as computed. The system must neither warn about nor reject such a type.
 
-- [ ] **The example shows configuration-only use**
+- [x] **The example shows configuration-only use**
   The repository includes a runnable example that parses a configuration using only registered types, then prints and queries the resulting resources.
 
-- [ ] **The example shows full plugin use**
+- [x] **The example shows full plugin use**
   The repository includes a runnable example that uses the same configuration and the same Go types with an in-process plugin, and shows lifecycle behaviour the configuration-only mode does not have, such as a field filled in by the provider.
 
-- [ ] **The examples are checked by tests**
+- [x] **The examples are checked by tests**
   Automated tests run both examples and fail if either finds no resources or produces the wrong resources.
 
-- [ ] **Querying by type returns every resource of that type**
+- [x] **Querying by type returns every resource of that type**
   Developers can list every resource of a given type through the query API, for registered types and plugin types alike. Listing by type does not return any resources today, and the examples rely on it.
 
 <!--
@@ -102,76 +102,76 @@ Developers embedding XCL can currently only use their own configuration types by
 -->
 ## Acceptance Criteria
 
-- [ ] **A type registers without a plugin**
+- [x] **A type registers without a plugin**
   Given a plain Go type and an otherwise empty registry, with no plugins registered, registering the type under a name succeeds without an error.
 
-- [ ] **Registered blocks decode into their type**
+- [x] **Registered blocks decode into their type**
   Given a configuration with a block of a registered type that sets attributes and a nested block, applying it succeeds, and the resulting resource holds every configured value, nested block included.
 
-- [ ] **References resolve in both directions**
+- [x] **References resolve in both directions**
   Given a configuration where a registered-type block reads a variable and a field of another resource, and a third block reads a field of the registered-type block, applying it succeeds and each referencing field holds the referenced value.
 
-- [ ] **Registered blocks can read module outputs**
+- [x] **Registered blocks can read module outputs**
   Given a registered-type block that reads an output of a module, applying succeeds and the field holds the module's output value.
 
-- [ ] **Dependents are processed after registered blocks**
+- [x] **Dependents are processed after registered blocks**
   Given a block that depends on a registered-type block, the dependent block is processed after the registered-type block it depends on.
 
-- [ ] **Apply succeeds with no provider**
+- [x] **Apply succeeds with no provider**
   Applying a configuration that contains only builtin blocks and registered-type blocks succeeds with no plugins registered. No "no provider found" error is returned, and each registered-type resource reports the same status that builtin resources get after an apply.
 
-- [ ] **Re-applying unchanged configuration succeeds without a provider**
+- [x] **Re-applying unchanged configuration succeeds without a provider**
   Applying the same configuration a second time, with the state from the first apply, succeeds with no plugins registered and no provider error.
 
-- [ ] **Removing a registered block succeeds without a provider**
+- [x] **Removing a registered block succeeds without a provider**
   Re-applying after a registered-type block has been removed from the configuration succeeds with no plugins registered and no provider error.
 
-- [ ] **Resources come back as the registered type**
+- [x] **Resources come back as the registered type**
   After applying, looking a registered-type resource up in the state returns a value whose Go type is exactly the registered type, and a type assertion to it succeeds without any conversion.
 
-- [ ] **Registered resources are in state and queryable**
+- [x] **Registered resources are in state and queryable**
   After applying, the state contains every registered-type resource from the configuration. Finding one by its path returns it, and listing by its type returns all of them.
 
-- [ ] **Disabled blocks are skipped**
+- [x] **Disabled blocks are skipped**
   Given a registered-type block marked disabled, applying succeeds and the resource is reported as disabled, the same as a disabled plugin resource.
 
-- [ ] **Registered types work inside modules**
+- [x] **Registered types work inside modules**
   Given a module that contains a registered-type block and is used by the root configuration, applying succeeds and the module's resource is in state under the module's path.
 
-- [ ] **Valid configuration with registered types validates**
+- [x] **Valid configuration with registered types validates**
   Validating a correct configuration with registered-type blocks succeeds.
 
-- [ ] **Invalid registered-type block fails validation**
+- [x] **Invalid registered-type block fails validation**
   Validating a configuration where a registered-type block references something undefined, or sets an attribute its type does not have, fails with an error naming the block.
 
-- [ ] **Duplicate type registration is rejected**
+- [x] **Duplicate type registration is rejected**
   Registering a second type under a name that is already registered returns an error that includes the name, and the first registration is unaffected.
 
-- [ ] **Registering a builtin name is rejected**
+- [x] **Registering a builtin name is rejected**
   Registering a type named `variable`, `output`, `module` or `root` returns an error that includes the name.
 
-- [ ] **Registering a type a plugin provides is rejected**
+- [x] **Registering a type a plugin provides is rejected**
   With a plugin registered that provides type `X`, registering a plain type named `X` returns an error that includes `X`.
 
-- [ ] **Registering a plugin that clashes with a type is rejected**
+- [x] **Registering a plugin that clashes with a type is rejected**
   With a plain type registered as `X`, registering or discovering a plugin that provides `X` returns an error that includes `X`.
 
-- [ ] **Two plugins providing the same type name are rejected**
+- [x] **Two plugins providing the same type name are rejected**
   With a plugin registered that provides type `X`, registering or discovering a second plugin that also provides `X` returns an error that includes `X`.
 
-- [ ] **A type with computed fields registers silently**
+- [x] **A type with computed fields registers silently**
   Registering a type with a field marked computed succeeds. Applying a configuration that uses it succeeds with no warning logged, and the computed field stays at its zero value.
 
-- [ ] **The configuration-only example runs**
+- [x] **The configuration-only example runs**
   Running the configuration-only example exits successfully, and its output lists every resource declared in its configuration along with the result of at least one query.
 
-- [ ] **The plugin example runs**
+- [x] **The plugin example runs**
   Running the plugin example on the same configuration exits successfully. Its output lists the same resources, and the field the provider fills in has a value, where in the configuration-only output it is empty.
 
-- [ ] **Example tests catch a broken example**
+- [x] **Example tests catch a broken example**
   The test suite includes tests for both examples, and they fail if an example returns no resources or a different set of resources than its configuration declares.
 
-- [ ] **Querying by type lists all matching resources**
+- [x] **Querying by type lists all matching resources**
   Given a configuration with several resources of one registered type and one plugin type, listing by each type returns exactly the resources of that type and no others.
 
 <!--

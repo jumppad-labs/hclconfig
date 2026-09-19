@@ -1,0 +1,5 @@
+# database.main references a database that is not defined anywhere
+resource "database" "main" {
+  location = resource.database.missing.location
+  port     = 5432
+}

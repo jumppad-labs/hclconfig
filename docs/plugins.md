@@ -176,9 +176,11 @@ different places in the parser:
 
 - **`CreateResource(resourceType, resourceName) (any, error)`** — instantiate
   a new (empty) resource instance for an HCL block. Tries builtins first,
-  then walks plugin hosts' `GetTypes()` looking for a schema match, and
-  builds a dynamic instance via `schema.CreateInstanceFromSchema` if found.
-  Used while *parsing* HCL, before any dependency graph exists.
+  then [configuration-only types](#configuration-only-types) (a real
+  instance of the registered Go type), then walks plugin hosts' `GetTypes()`
+  looking for a schema match, and builds a dynamic instance via
+  `schema.CreateInstanceFromSchema` if found. Used while *parsing* HCL,
+  before any dependency graph exists.
 - **`GetProviderForResource(resource any) plugins.ProviderAdapter`** —
   given an already-decoded resource, find the `ProviderAdapter` that
   handles its type (matches `types.GetMeta(resource).Type` against each
@@ -191,6 +193,37 @@ only needs the second one can depend on the narrower
 `parser.ProviderResolver` interface instead of the concrete
 `*PluginRegistry` (see the "testing" note in [Parser & Resource
 Lifecycle](parser-lifecycle.md)).
+
+## Configuration-only types
+
+Not every block type needs a plugin. `PluginRegistry.RegisterType(name,
+&MyType{})` registers a plain Go type (a pointer to a struct embedding
+`types.ResourceBase`) under a block type name, with no plugin and no
+provider:
+
+```go
+r := registry.NewPluginRegistry(log)
+err := r.RegisterType("postgres", &PostgreSQL{})
+```
+
+`CreateResource` builds registered types with `reflect.New`, like builtins, so
+blocks decode into the developer's own type and state reload returns that
+type. The parser learns about them through the one-method
+`parser.TypeRegistry` interface (`IsRegisteredType`), which `*PluginRegistry`
+satisfies. The lifecycle and the destroy walk treat a registered type like a
+builtin: it gets a success event, its status is left unchanged, and no
+provider is ever called for it.
+
+Type names are unique across the registry. `RegisterType`, `RegisterPlugin`,
+`RegisterPluginWithPath` and `DiscoverAndLoadPlugins` all check each incoming
+name against builtins, registered types and every loaded plugin's resource
+types, and fail with a `*registry.TypeNameClashError` naming the type. A
+clashing plugin is stopped and not added, and discovery always returns clash
+errors, even when other plugins load.
+
+[`example/configonly`](../example/configonly) and
+[`example/plugin`](../example/plugin) apply the same configuration and Go
+types, first as registered types, then through an in-process plugin.
 
 ## Mocks
 

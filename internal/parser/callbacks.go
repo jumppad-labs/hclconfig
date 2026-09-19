@@ -24,6 +24,13 @@ type ProviderResolver interface {
 	GetProviderForResource(resource any) plugins.ProviderAdapter
 }
 
+// TypeRegistry reports which resource types are plain Go types registered
+// without a plugin. Resources of these types are handled like builtins, no
+// provider is ever called for them. Satisfied by *registry.PluginRegistry.
+type TypeRegistry interface {
+	IsRegisteredType(name string) bool
+}
+
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values.
@@ -173,7 +180,7 @@ func walkCallback(parsedData *parsed, rp ResourceProvider, lifecycle *resourceLi
 
 // destroyWalkCallback creates a simplified callback for destroying resources
 // Skips complex processing since resources are already fully processed
-func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
+func destroyWalkCallback(registry ProviderResolver, typeRegistry TypeRegistry, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 		// v should be a resource (either builtin or schema-generated)
 		r := v
@@ -187,13 +194,10 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 			return nil
 		}
 
-		// Skip builtin resource types that don't have providers
-		if rMeta.Type == resources.TypeVariable ||
-			rMeta.Type == resources.TypeOutput ||
-			rMeta.Type == resources.TypeModule ||
-			rMeta.Type == resources.TypeRoot {
+		// Skip builtin and registered resource types, they don't have providers
+		if handledWithoutProvider(typeRegistry, rMeta.Type) {
 
-			// Fire destroy events for builtin types (always succeed with 0 time)
+			// Fire destroy events for provider-less types (always succeed with 0 time)
 			resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
 			fireParserEvent(options, "destroy", resourceType, rMeta.ID, "success", 0, nil, nil)
 

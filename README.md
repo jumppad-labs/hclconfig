@@ -62,160 +62,86 @@ node in graph.
 
 ## Example
 
-Resources to be parsed are defined as Go structs that implement the Resource interface and annotated with the `hcl` tag
+The [`example`](./example) directory holds one configuration,
+[`example/config`](./example/config), and one set of Go types,
+[`example/resources`](./example/resources), used by two small programs:
+
+- [`example/configonly`](./example/configonly) uses XCL for configuration
+  only. The block types are plain Go types registered on the plugin registry,
+  with no plugin and no provider.
+- [`example/plugin`](./example/plugin) applies the same configuration through
+  an in-process plugin, whose provider fills in the computed
+  `connection_string` that the configuration only example leaves empty.
+
+Run either one from its directory with `go run .`, their tests run as part of
+`go test ./...`.
+
+Block types are defined as Go structs that embed `types.ResourceBase` and map
+configuration to fields with `xcl` tags.
 
 ```go
-// Config defines the type `config`
-type Config struct {
-	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
-	// add the methods from the `Resource` interface
-	types.ResourceBase `xcl:",remain"`
-
-	ID string `xcl:"id"`
-
-	DBConnectionString string `xcl:"db_connection_string"`
-
-	// Fields that are of `struct` type must be marked using the `block`
-	// parameter in the tags. To make a `block` Field, types marked as block must be
-	// a reference i.e. *Timeouts
-	Timeouts *Timeouts `xcl:"timeouts,block"`
-}
-
-// Parse is called when the resource is read from the file
-// you can use this method to fail the config parsing early
-// if the resource has validation problems.
-// 
-// Any references to other resources will not have been processed at this
-// point and will only have the default type value.
-func (t *Config) Parse() error {
-	// override default values
-	if t.Timeouts.TLSHandshake == 0 {
-		t.Timeouts.TLSHandshake = 5
-	}
-	
-  if t.Timeouts.TLSHandshake > 300 {
-    return fmt.Errorf("TLSHandshake timeout must be less than 300")
-	}
-
-	return nil
-}
-
-// PostgreSQL defines the Resource `postgres`
+// PostgreSQL defines the block type `postgres`
 type PostgreSQL struct {
-	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
-	// add the methods from the `Resource` interface
 	types.ResourceBase `xcl:",remain"`
 
-	Location string `xcl:"location"`
-	Port     int    `xcl:"port"`
-	DBName   string `xcl:"name"`
-	Username string `xcl:"username"`
-	Password string `xcl:"password"`
+	Location string `xcl:"location" json:"location"`
+	Port     int    `xcl:"port" json:"port"`
+	Username string `xcl:"username" json:"username"`
+	Password string `xcl:"password" json:"password"`
 
-	// ConnectionString is a computed field and must be marked optional
-	ConnectionString string `xcl:"connection_string,optional"`
-}
+	// Fields that are of `struct` type must be marked as a `block`, and be a
+	// pointer
+	Timeouts *Timeouts `xcl:"timeouts,block" json:"timeouts,omitempty"`
 
-// Process is called using an order calculated from the dependency graph
-// any interpolation references to other resources will have been resolved
-// at this point. 
-func (t *PostgreSQL) Process() error {
-	t.ConnectionString = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", t.Username, t.Password, t.Location, t.Port, t.DBName)
-	return nil
+	// A computed field is set by a provider, never by configuration, and must
+	// be optional
+	ConnectionString string `xcl:"connection_string,optional,computed" json:"connection_string,omitempty"`
 }
 ```
 
-You can then create a parser and register these resources with it:
+### Configuration only types
+
+When a block only holds configuration and nothing needs to be created, read or
+destroyed, register its Go type on the plugin registry with `RegisterType`.
+No plugin or provider is needed.
 
 ```go
-p := NewParser(DefaultOptions())
-p.RegisterType("container", &structs.Container{})
-p.RegisterType("network", &structs.Network{})
+r := registry.NewPluginRegistry(logger.NewStdOutLogger())
+
+// the name is the block type used in configuration: resource "postgres" "main" {}
+err := r.RegisterType("postgres", &PostgreSQL{})
+
+c := xcl.NewConfig(xcl.WithPluginRegistry(r))
+err = c.Apply("./config")
 ```
 
-The following configuration reflects the previously defined structs. `config` refers to `postgres` through the link
-`resource.postgres.mydb.connection_string`. The parser understands these links and will process `postgres` first allowing
-you to set any calculated fields in the `Process` callback.  `config` also leverages a custom function `random_number`,
-custom functions allow you to set values at parse time using go functions.
+Registered blocks are decoded into your own Go type, take part in references
+and dependency ordering, work in modules and when disabled, and are saved to
+state. They are never passed to a provider. `RegisterType` takes a pointer to
+a struct that embeds `types.ResourceBase`.
 
-```javascript
-variable "db_username" {
-  default = "admin"
-}
+Every type name must be unique across builtin blocks (`variable`, `output`,
+`module`, `root`), registered types and plugin types. Registering a type or a
+plugin whose type name is already taken fails with a
+`*registry.TypeNameClashError` that names the type.
 
-variable "db_password" {
-  default = "admin"
-}
+### Querying resources
 
-resource "config" "myapp" {
-  // Custom functions can be created to enable functionality like generating random numbers
-  id = "myapp_${random_number()}"
-
-  // resource.postgres.mydb.connection_string will be available after the `Process` has
-  // been called on the `postgres` resource. HCLConfig understands dependency and will
-  // call Process in a strict order
-  db_connection_string = resource.postgres.mydb.connection_string
-
-  timeouts {
-    connection = 10
-    keep_alive = 60
-    // optional parameter tls_handshake not specified
-    // TLSHandshake = 10
-  }
-}
-
-resource "postgres" "mydb" {
-  location = "localhost"
-  port = 5432
-  name = "mydatabase"
-
-  // Variables can be used to set values, the default values for these variables will be overridden
-  // by values set by the environment variables HCL_db_username and HCL_db_password
-  username = variable.db_username
-  password = variable.db_password
-}
-```
-
-To process the above config, first you need to register the custom `random_number` function.
+`NewQuerier` returns resources as your Go type, found by path or listed by
+block type.
 
 ```go
-// register a custom function
-p.RegisterFunction("random_number", func() (int, error) {
-	return rand.Intn(100), nil
-})
+q := xcl.NewQuerier[PostgreSQL](c)
+
+// every resource "postgres" block
+databases, err := q.FindResourcesByType("postgres")
+
+// one block, by its path
+db, err := q.FindResource("resource.postgres.main")
 ```
 
-Then you can create the config and parse the file. 
-
-```go
-// define the options for the parser
-opts := xcl.DefaultOptions()
-
-// Callback is executed when the parser processes a resource
-opts.Callback = func(r *types.Resource) error {
-  fmt.Println("Parser has processed", r.Info().Name)
-}
-
-// parse a single hcl file.
-// config passed to this function is not mutated but a copy with the new resources parsed is returned
-//
-// when configuration is parsed it's dependencies on other resources are evaluated and this order added
-// to a acyclic graph ensuring that any resources are processed before resources that depend on them.
-c, err := p.ParseFile("myfile.hcl")
-```
-
-You can then access the properties from your types by retrieving them from the returned config.
-
-
-```go
-// find a resource based on it's type and name
-r, err := c.FindResource("resource.config.myapp")
-
-// cast it back to the original type and access the paramters
-c := r.(*Config)
-fmt.Println("id", c.ID) // = myapp_81, where 81 is a random number between 0 and 100
-fmt.Println("db_connection_string", c.db_connection_string) // = postgresql://admin:admin@localhost:5432/mydatabase
-```
+A registered type is returned as the value held in state, so changing it
+changes state. A plugin type is returned as a copy.
 
 ## Struct Tags
 

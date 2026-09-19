@@ -64,3 +64,6 @@ Import paths were rewritten from `github.com/hashicorp/hcl/v2/...` to
 - `hclsyntax/token_type_string.go`, `json/tokentype_string.go`: added the
   missing MPL-2.0 header to these generated files. Re-running `go generate`
   (stringer) will drop it; re-add it afterwards.
+- `gohcl/check.go`: new `CheckBody`, which checks a body against a Go value's
+  implied schema the way `DecodeBody` would (remain fields, nested and
+  repeated blocks) without decoding or evaluating any expression.

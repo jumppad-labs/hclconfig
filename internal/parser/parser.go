@@ -79,6 +79,11 @@ type ParserOptions struct {
 	// Primarily useful for testing lifecycle/ordering behavior without a real plugin registry.
 	ProviderResolver ProviderResolver
 
+	// TypeRegistry overrides how the lifecycle walk recognises plain Go types registered
+	// without a plugin, which like builtins are never passed to a provider. Defaults to
+	// PluginRegistry. Primarily useful for testing lifecycle behavior without a real registry.
+	TypeRegistry TypeRegistry
+
 	// StateStore is the state store to use for loading previous state.
 	// and saving new state.
 	StateStore state.StateStore
@@ -128,6 +133,7 @@ type Parser struct {
 	stateStore       state.StateStore
 	pluginRegistry   *registry.PluginRegistry
 	providerResolver ProviderResolver
+	typeRegistry     TypeRegistry
 	parsedResources  *parsed // Working storage during parsing
 }
 
@@ -158,6 +164,11 @@ func NewParser(options *ParserOptions) *Parser {
 	p.providerResolver = o.ProviderResolver
 	if p.providerResolver == nil {
 		p.providerResolver = p.pluginRegistry
+	}
+
+	p.typeRegistry = o.TypeRegistry
+	if p.typeRegistry == nil && p.pluginRegistry != nil {
+		p.typeRegistry = p.pluginRegistry
 	}
 
 	if o.CustomFunctions != nil {
@@ -971,6 +982,7 @@ func (p *Parser) walk(currentState, previousState *state.State, functions functi
 		previous: previousState,
 		resolver: p.providerResolver,
 		options:  &p.options,
+		types:    p.typeRegistry,
 		bodies:   p.parsedResources.bodies,
 		progress: newApplyProgress(),
 	}

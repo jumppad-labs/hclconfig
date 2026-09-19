@@ -1,0 +1,6 @@
+# location is required by the database type, but the block is disabled so it
+# is never decoded, and validation leaves missing values to decoding
+resource "database" "off" {
+  disabled = true
+  port     = 5432
+}

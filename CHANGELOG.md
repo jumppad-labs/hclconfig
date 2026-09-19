@@ -1,5 +1,9 @@
 # Changelog
 
+## 20260919120639-config-only-types-and-examples
+
+Added configuration-only block types. `PluginRegistry.RegisterType("postgres", &PostgreSQL{})` registers a plain Go type that embeds `types.ResourceBase` as a block type, with no plugin or provider. Its blocks decode into your own Go type, take part in references, dependency ordering, modules and disabled handling, are saved to state and reloaded as that type, and never trigger a provider call. Type names are now unique across builtins, registered types and plugins: registering or discovering a type or plugin whose name is already taken fails with a `*registry.TypeNameClashError` naming the type, where previously the first plugin silently won. **Breaking:** `Querier[T].FindResourcesByType` now takes the type name (`FindResourcesByType("postgres")`) and returns exactly that type's resources, which it previously never did. Registered types are returned as the value held in state. `Validate` now rejects attributes and blocks that a resource's type doesn't have, for every resource type, instead of failing later during `Apply`. The stale example was replaced with a shared configuration and Go types used by two tested programs, `example/configonly` and `example/plugin`.
+
 ## 20260714080036-restore-module-support
 
 Restored support for `module` blocks in configuration files. You can now package a set of resources into a reusable module, instantiate it multiple times with different variable values, and nest modules inside other modules. Each module instance produces its own independent set of resources, resources inside a module can reference each other and the module's own variables, and a module instance can be disabled (which also disables all of its resources) while a resource inside a module can still independently control its own disabled state. Only local, relative-path module sources are supported; remote or URL-based module sources are not part of this change.

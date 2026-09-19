@@ -1,0 +1,22 @@
+resource "database" "primary" {
+  location = "eu-west"
+  port     = 5432
+}
+
+resource "database" "replica" {
+  location = "eu-central"
+  port     = 5433
+}
+
+resource "database" "archive" {
+  location = "us-east"
+  port     = 5434
+}
+
+resource "network" "frontend" {
+  subnet = "10.0.1.0/24"
+}
+
+resource "network" "backend" {
+  subnet = "10.0.2.0/24"
+}

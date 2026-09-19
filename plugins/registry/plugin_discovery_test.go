@@ -1,12 +1,14 @@
 package registry
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -493,4 +495,108 @@ func TestDiscoverAndLoadPluginsLoadsNothingWhenNoPluginMatches(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Empty(t, r.GetPluginHosts())
+}
+
+// Person is a plain Go resource type registered under the name the example
+// plugin provides, "person"
+type Person struct {
+	types.ResourceBase `xcl:",remain"`
+
+	FirstName string `xcl:"first_name" json:"first_name"`
+}
+
+func TestDiscoverAndLoadPluginsRejectsPluginClashingWithRegisteredType(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	pluginDir := setup.createPluginDir("plugins")
+
+	examplePlugin := setup.buildExamplePlugin("test-plugin")
+	setup.copyPlugin(examplePlugin, pluginDir, "xcl-plugin-test")
+
+	testLogger := logger.NewTestLogger(t)
+	r := NewPluginRegistry(testLogger)
+
+	err := r.RegisterType("person", &Person{})
+	require.NoError(t, err)
+
+	err = r.DiscoverAndLoadPlugins(testLogger, []string{pluginDir}, "xcl-plugin-*")
+	require.Error(t, err)
+	require.ErrorContains(t, err, `"person"`)
+
+	var clash *TypeNameClashError
+	require.True(t, errors.As(err, &clash))
+	require.Equal(t, "person", clash.Name)
+	require.Equal(t, "registered type", clash.Existing)
+
+	require.Empty(t, r.GetPluginHosts())
+	require.True(t, r.IsRegisteredType("person"))
+}
+
+func TestDiscoverAndLoadPluginsRejectsSecondPluginProvidingSameType(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	pluginDir := setup.createPluginDir("plugins")
+
+	examplePlugin := setup.buildExamplePlugin("test-plugin")
+	setup.copyPlugin(examplePlugin, pluginDir, "xcl-plugin-one")
+	setup.copyPlugin(examplePlugin, pluginDir, "xcl-plugin-two")
+
+	testLogger := logger.NewTestLogger(t)
+	r := NewPluginRegistry(testLogger)
+
+	err := r.DiscoverAndLoadPlugins(testLogger, []string{pluginDir}, "xcl-plugin-*")
+	require.Error(t, err)
+	require.ErrorContains(t, err, `"person"`)
+
+	var clash *TypeNameClashError
+	require.True(t, errors.As(err, &clash))
+	require.Equal(t, "person", clash.Name)
+	require.Equal(t, "plugin", clash.Existing)
+
+	require.Len(t, r.GetPluginHosts(), 1)
+
+	for _, host := range r.GetPluginHosts() {
+		host.Stop()
+	}
+}
+
+func TestRegisterPluginWithPathRejectsRegisteredTypeName(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	examplePlugin := setup.buildExamplePlugin("test-plugin")
+
+	testLogger := logger.NewTestLogger(t)
+	r := NewPluginRegistry(testLogger)
+
+	err := r.RegisterType("person", &Person{})
+	require.NoError(t, err)
+
+	err = r.RegisterPluginWithPath(examplePlugin)
+	require.Error(t, err)
+	require.ErrorContains(t, err, `"person"`)
+	require.ErrorContains(t, err, examplePlugin)
+
+	var clash *TypeNameClashError
+	require.True(t, errors.As(err, &clash))
+	require.Equal(t, "person", clash.Name)
+	require.Equal(t, "registered type", clash.Existing)
+
+	require.Empty(t, r.GetPluginHosts())
+}
+
+func TestRegisterPluginWithPathLoadsPluginWithoutClash(t *testing.T) {
+	setup := newTestPluginSetup(t)
+	examplePlugin := setup.buildExamplePlugin("test-plugin")
+
+	testLogger := logger.NewTestLogger(t)
+	r := NewPluginRegistry(testLogger)
+
+	err := r.RegisterType("thing", &Thing{})
+	require.NoError(t, err)
+
+	err = r.RegisterPluginWithPath(examplePlugin)
+	require.NoError(t, err)
+
+	require.Len(t, r.GetPluginHosts(), 1)
+
+	for _, host := range r.GetPluginHosts() {
+		host.Stop()
+	}
 }

@@ -1,0 +1,12 @@
+resource "database" "shared" {
+  location = "eu-west"
+  port     = 5433
+
+  timeouts {
+    connect = 10
+  }
+}
+
+output "location" {
+  value = resource.database.shared.location
+}

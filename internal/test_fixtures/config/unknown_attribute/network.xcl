@@ -1,0 +1,5 @@
+# bogus is not an attribute of the plugin network type
+resource "network" "main" {
+  subnet = "10.0.0.0/16"
+  bogus  = 1
+}

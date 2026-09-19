@@ -27,10 +27,15 @@ type TestPluginHost struct {
 
 // InProcessPluginSetup creates an in-process plugin host for testing
 func InProcessPluginSetup(t *testing.T, plugin plugins.Plugin) *TestPluginHost {
-	logger := logger.NewTestLogger(t)
+	return InProcessPluginSetupWithLogger(t, plugin, logger.NewTestLogger(t))
+}
+
+// InProcessPluginSetupWithLogger creates an in-process plugin host for testing
+// that passes log to the plugin, so a test can assert what the plugin logs
+func InProcessPluginSetupWithLogger(t *testing.T, plugin plugins.Plugin, log plugins.Logger) *TestPluginHost {
 	state := mocks.NewMockState(t)
 
-	ph, err := plugins.NewDirectPluginHost(logger, state, plugin)
+	ph, err := plugins.NewDirectPluginHost(log, state, plugin)
 	require.NoError(t, err, "In-process plugin should initialize without error")
 
 	t.Cleanup(func() {
@@ -45,8 +50,14 @@ func InProcessPluginSetup(t *testing.T, plugin plugins.Plugin) *TestPluginHost {
 
 // ExternalPluginSetup creates an external process plugin host for testing
 func ExternalPluginSetup(t *testing.T, binaryPath string) *TestPluginHost {
-	logger := logger.NewTestLogger(t)
-	ph := plugins.NewGRPCPluginHost(logger, nil)
+	return ExternalPluginSetupWithLogger(t, binaryPath, logger.NewTestLogger(t))
+}
+
+// ExternalPluginSetupWithLogger creates an external process plugin host for
+// testing that receives the plugin's logs on log, so a test can assert what
+// the plugin logs across the process boundary
+func ExternalPluginSetupWithLogger(t *testing.T, binaryPath string, log plugins.Logger) *TestPluginHost {
+	ph := plugins.NewGRPCPluginHost(log, nil)
 
 	err := ph.Start(binaryPath)
 	require.NoError(t, err, "External plugin should start without error")

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/gohcl"
 	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/jumppad-labs/xcl/internal/cty"
@@ -145,7 +146,9 @@ func (p *Parser) sortedResourceIDs() []string {
 // checked further. Problems found during parsing have already been reported by
 // the time validation runs. This stage reports computed fields: a computed field
 // that is not optional, which no configuration could satisfy, and every computed
-// field set in configuration, since only the provider may set one.
+// field set in configuration, since only the provider may set one. It also checks
+// each resource body against the schema of its type, reporting attributes and
+// blocks the type does not have, before any body is decoded.
 func (p *Parser) validateStructure() []error {
 	problems := []error{}
 
@@ -178,6 +181,35 @@ func (p *Parser) validateStructure() []error {
 		}
 
 		problems = append(problems, configuredComputedFields(id, body, resourceType, "")...)
+		problems = append(problems, schemaProblems(id, meta, body, resource)...)
+	}
+
+	return problems
+}
+
+// schemaProblems checks body against the schema implied by the type of
+// resource, without evaluating anything, and reports every problem decoding
+// would find with its shape against the resource
+func schemaProblems(id string, meta *types.Meta, body *hclsyntax.Body, resource any) []error {
+	problems := []error{}
+
+	for _, d := range gohcl.CheckBody(body, resource) {
+		if d.Severity != hcl.DiagError {
+			continue
+		}
+
+		file, line, column := meta.File, meta.Line, meta.Column
+		if d.Subject != nil {
+			line = d.Subject.Start.Line
+			column = d.Subject.Start.Column
+		}
+
+		problems = append(problems, errors.NewParserError(
+			file,
+			line,
+			column,
+			fmt.Sprintf("resource '%s' %s: %s", id, d.Summary, d.Detail),
+		))
 	}
 
 	return problems

@@ -1,0 +1,57 @@
+# The example configuration, shared by the configonly and plugin examples.
+#
+# Variables can be overridden with environment variables prefixed HCL_VAR_,
+# i.e. HCL_VAR_db_username.
+variable "db_username" {
+  default = "admin"
+}
+
+variable "db_password" {
+  default = "password"
+}
+
+resource "postgres" "main" {
+  location = "localhost"
+  port     = 5432
+  db_name  = "main"
+  username = variable.db_username
+  password = variable.db_password
+
+  timeouts {
+    connection = 10
+    keep_alive = 60
+  }
+}
+
+resource "postgres" "replica" {
+  # depends_on orders blocks that do not reference each other
+  depends_on = ["resource.postgres.main"]
+
+  location = "replica.localhost"
+  port     = 5433
+  db_name  = "main"
+  username = variable.db_username
+  password = variable.db_password
+}
+
+# Modules group configuration in a directory, their outputs can be read by the
+# configuration that uses them
+module "analytics" {
+  source = "./modules/db"
+}
+
+resource "app" "web" {
+  # References order blocks, app.web is always processed after postgres.main
+  # and the analytics module
+  database_location  = resource.postgres.main.location
+  database_user      = variable.db_username
+  analytics_location = module.analytics.output.location
+
+  # connection_string is computed on postgres, it only has a value when a
+  # provider fills it in
+  connection_string = resource.postgres.main.connection_string
+}
+
+output "web_database" {
+  value = resource.app.web.database_location
+}

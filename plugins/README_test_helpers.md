@@ -60,6 +60,12 @@ func TestMyPluginExternal(t *testing.T) {
   - Creates an external process plugin host
   - Automatically handles cleanup via t.Cleanup()
 
+- `plugintesting.InProcessPluginSetupWithLogger(t *testing.T, plugin plugins.Plugin, log plugins.Logger) *TestPluginHost`
+- `plugintesting.ExternalPluginSetupWithLogger(t *testing.T, binaryPath string, log plugins.Logger) *TestPluginHost`
+  - The same as the setup functions above, but the plugin logs to `log`, so a
+    test can assert what the plugin logs. For an external plugin the logs
+    cross the process boundary over gRPC before they reach `log`.
+
 ### Test Operations
 
 - `ops.AssertSchemaValidation(expectedCount, entityType, entitySubType)`

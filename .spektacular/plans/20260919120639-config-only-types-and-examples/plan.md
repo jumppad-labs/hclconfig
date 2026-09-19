@@ -1,6 +1,7 @@
 ---
 created_date: "2026-09-19"
-document_status: draft
+document_status: final
+closed_date: "2026-09-19"
 ---
 
 # Plan: 20260919120639-config-only-types-and-examples
@@ -176,7 +177,7 @@ There are no serialization-boundary changes. State, plugin wire data and querier
 
 **Validation point**: Integration tests apply registered-only configurations with no plugins registered and succeed (first apply, re-apply from real state, removal). Resources come back as the exact registered type. Every clash direction is rejected with an error naming the type. The existing test suite and vet checks still pass.
 
-#### - [ ] Phase 1.1: Register plain types on the plugin registry and guard type names
+#### - [x] Phase 1.1: Register plain types on the plugin registry and guard type names
 
 **Repo:** xclconfig
 
@@ -185,16 +186,16 @@ The plugin registry learns to hold plain Go types under a block type name and to
 *Technical detail:* [context.md#phase-11](./context.md#phase-11-register-plain-types-on-the-plugin-registry-and-guard-type-names)
 
 **Acceptance criteria**:
-- [ ] A plain Go type registers on an otherwise empty registry with no plugins, and creating a resource of that type gives back an instance of exactly that Go type with its name and type set.
-- [ ] Registering a second type under a name already registered fails with an error naming it, and the first type still creates correctly.
-- [ ] Registering a type named `variable`, `output`, `module` or `root` fails with an error naming it.
-- [ ] Registering a type that a registered plugin already provides fails with an error naming it.
-- [ ] Registering an in-process plugin, an external plugin, or discovering a plugin that provides an already-registered type fails with an error naming it, and the clashing plugin is not added.
-- [ ] Registering a second plugin that provides the same type as an earlier plugin fails with an error naming the type.
-- [ ] A type with a computed field registers without error.
-- [ ] Registering something that isn't a pointer to a struct embedding the resource base fails with a clear error.
+- [x] A plain Go type registers on an otherwise empty registry with no plugins, and creating a resource of that type gives back an instance of exactly that Go type with its name and type set.
+- [x] Registering a second type under a name already registered fails with an error naming it, and the first type still creates correctly.
+- [x] Registering a type named `variable`, `output`, `module` or `root` fails with an error naming it.
+- [x] Registering a type that a registered plugin already provides fails with an error naming it.
+- [x] Registering an in-process plugin, an external plugin, or discovering a plugin that provides an already-registered type fails with an error naming it, and the clashing plugin is not added.
+- [x] Registering a second plugin that provides the same type as an earlier plugin fails with an error naming the type.
+- [x] A type with a computed field registers without error.
+- [x] Registering something that isn't a pointer to a struct embedding the resource base fails with a clear error.
 
-#### - [ ] Phase 1.2: Apply registered types without any provider
+#### - [x] Phase 1.2: Apply registered types without any provider
 
 **Repo:** xclconfig
 
@@ -203,16 +204,16 @@ The lifecycle and the destroy walk treat registered types like builtins. They're
 *Technical detail:* [context.md#phase-12](./context.md#phase-12-apply-registered-types-without-any-provider)
 
 **Acceptance criteria**:
-- [ ] A configuration with only builtin and registered blocks applies with no plugins registered and no "no provider found" error, and each registered resource reports the same status builtins get.
-- [ ] Every configured value of a registered block, nested block included, is present on the applied resource, and the resource is exactly the registered Go type.
-- [ ] A registered block reads a variable, another resource's field and a module output, a third block reads a field of the registered block, and every referencing field holds the referenced value.
-- [ ] A block that depends on a registered block is processed after it.
-- [ ] Re-applying unchanged configuration against the state saved by the first apply succeeds with no provider error.
-- [ ] Re-applying after a registered block is removed from configuration succeeds with no provider error.
-- [ ] A disabled registered block is reported as disabled, the same as a disabled plugin resource.
-- [ ] A registered block inside a module lands in state under the module's path.
-- [ ] A registered type with a computed field applies with no warning logged, and the computed field stays empty.
-- [ ] Every existing plugin and builtin behaviour is unchanged.
+- [x] A configuration with only builtin and registered blocks applies with no plugins registered and no "no provider found" error, and each registered resource reports the same status builtins get.
+- [x] Every configured value of a registered block, nested block included, is present on the applied resource, and the resource is exactly the registered Go type.
+- [x] A registered block reads a variable, another resource's field and a module output, a third block reads a field of the registered block, and every referencing field holds the referenced value.
+- [x] A block that depends on a registered block is processed after it.
+- [x] Re-applying unchanged configuration against the state saved by the first apply succeeds with no provider error.
+- [x] Re-applying after a registered block is removed from configuration succeeds with no provider error.
+- [x] A disabled registered block is reported as disabled, the same as a disabled plugin resource.
+- [x] A registered block inside a module lands in state under the module's path.
+- [x] A registered type with a computed field applies with no warning logged, and the computed field stays empty.
+- [x] Every existing plugin and builtin behaviour is unchanged.
 
 ### Milestone 2: Querying by type and validating attributes work for every resource type
 
@@ -220,7 +221,7 @@ The lifecycle and the destroy walk treat registered types like builtins. They're
 
 **Validation point**: Tests list a registered type and a plugin type from one configuration and get exactly their own resources. Validate fails with an error naming the block for an unknown attribute, on both a registered and a plugin type, and still accepts every existing valid fixture. The full test suite and vet checks pass.
 
-#### - [ ] Phase 2.1: List resources by type and return registered types as themselves
+#### - [x] Phase 2.1: List resources by type and return registered types as themselves
 
 **Repo:** xclconfig
 
@@ -229,12 +230,12 @@ The typed querier's list-by-type is fixed. The caller names the type, and gets e
 *Technical detail:* [context.md#phase-21](./context.md#phase-21-list-resources-by-type-and-return-registered-types-as-themselves)
 
 **Acceptance criteria**:
-- [ ] With several resources of one registered type and one plugin type in a configuration, listing by each type returns exactly that type's resources and no others.
-- [ ] Finding a registered resource by its path returns the value held in state, as the registered Go type, without conversion.
-- [ ] Finding and listing plugin resources still return filled-in copies, as before.
-- [ ] Listing a type with no resources returns a not-found error.
+- [x] With several resources of one registered type and one plugin type in a configuration, listing by each type returns exactly that type's resources and no others.
+- [x] Finding a registered resource by its path returns the value held in state, as the registered Go type, without conversion.
+- [x] Finding and listing plugin resources still return filled-in copies, as before.
+- [x] Listing a type with no resources returns a not-found error.
 
-#### - [ ] Phase 2.2: Reject attributes a resource's type doesn't have at validation time
+#### - [x] Phase 2.2: Reject attributes a resource's type doesn't have at validation time
 
 **Repo:** xclconfig
 
@@ -243,12 +244,12 @@ Validation gains a schema check of every resource body against its type, using a
 *Technical detail:* [context.md#phase-22](./context.md#phase-22-reject-attributes-a-resources-type-doesnt-have-at-validation-time)
 
 **Acceptance criteria**:
-- [ ] Validating a configuration where a registered block sets an attribute its type doesn't have fails with an error naming the block.
-- [ ] Validating a configuration where a plugin block sets an attribute its type doesn't have fails the same way.
-- [ ] Validating a configuration where a registered block references something undefined fails with an error naming the block.
-- [ ] A correct configuration with registered blocks validates successfully.
-- [ ] Every existing valid configuration in the test suite still validates and applies.
-- [ ] The HCL fork change carries its licence notices and is recorded in the fork's upstream notes.
+- [x] Validating a configuration where a registered block sets an attribute its type doesn't have fails with an error naming the block.
+- [x] Validating a configuration where a plugin block sets an attribute its type doesn't have fails the same way.
+- [x] Validating a configuration where a registered block references something undefined fails with an error naming the block.
+- [x] A correct configuration with registered blocks validates successfully.
+- [x] Every existing valid configuration in the test suite still validates and applies.
+- [x] The HCL fork change carries its licence notices and is recorded in the fork's upstream notes.
 
 ### Milestone 3: A working, tested example for both configuration-only and plugin use
 
@@ -256,7 +257,7 @@ Validation gains a schema check of every resource body against its type, using a
 
 **Validation point**: Both example programs run successfully from the command line. Their tests assert the exact set of declared resources, the query result, and the connection-string difference between the two modes. The config-only example is checked to contain no plugin code. The full test suite and vet checks pass.
 
-#### - [ ] Phase 3.1: Shared example configuration and the configuration-only example
+#### - [x] Phase 3.1: Shared example configuration and the configuration-only example
 
 **Repo:** xclconfig
 
@@ -265,12 +266,12 @@ The stale example is replaced by a shared `.xcl` configuration (root plus a loca
 *Technical detail:* [context.md#phase-31](./context.md#phase-31-shared-example-configuration-and-the-configuration-only-example)
 
 **Acceptance criteria**:
-- [ ] Running the configuration-only example exits successfully and prints every resource the configuration declares plus at least one query result.
-- [ ] The example's tests fail if it finds no resources or a different set from the one the configuration declares.
-- [ ] The configuration-only example contains no plugin or provider code, and a test enforces that.
-- [ ] The old `.hcl` example files and unregistered types are gone.
+- [x] Running the configuration-only example exits successfully and prints every resource the configuration declares plus at least one query result.
+- [x] The example's tests fail if it finds no resources or a different set from the one the configuration declares.
+- [x] The configuration-only example contains no plugin or provider code, and a test enforces that.
+- [x] The old `.hcl` example files and unregistered types are gone.
 
-#### - [ ] Phase 3.2: Plugin example on the same configuration and types
+#### - [x] Phase 3.2: Plugin example on the same configuration and types
 
 **Repo:** xclconfig
 
@@ -279,11 +280,11 @@ A second program uses the same configuration and Go types through an in-process 
 *Technical detail:* [context.md#phase-32](./context.md#phase-32-plugin-example-on-the-same-configuration-and-types)
 
 **Acceptance criteria**:
-- [ ] Running the plugin example on the shared configuration exits successfully and lists the same resources as the configuration-only example.
-- [ ] The connection string has a value in the plugin example's output and is empty in the configuration-only output.
-- [ ] The plugin example defines no configuration or resource types of its own.
-- [ ] The documentation describes registering a plain type and points at both examples.
-- [ ] The full test suite and vet checks pass with both examples included.
+- [x] Running the plugin example on the shared configuration exits successfully and lists the same resources as the configuration-only example.
+- [x] The connection string has a value in the plugin example's output and is empty in the configuration-only output.
+- [x] The plugin example defines no configuration or resource types of its own.
+- [x] The documentation describes registering a plain type and points at both examples.
+- [x] The full test suite and vet checks pass with both examples included.
 
 ## Open Questions
 
@@ -301,6 +302,101 @@ A second program uses the same configuration and Go types through an in-process 
 - **Erroring on non-`.xcl` files.** Files without the extension stay silently ignored, even when passed by path (spec Constraints).
 - **Destroying removed resources during Apply, and `Config.Destroy`.** Apply doesn't run the destroy walk today and `Config.Destroy` is a TODO. This plan only makes the destroy walk skip providers for registered types, and doesn't wire destruction into Apply.
 - **Custom functions (`random_number()`) and `count` in the example.** The rewritten example drops them because the current parser doesn't support them. Restoring them is not part of this work.
+- **A typed collection helper (follow-up).** This plan only fixes `Querier[T].FindResourcesByType(typeName)` and returns registered types directly. A helper that returns a typed collection straight away (for example, every resource of a Go type as `[]*T`, without the caller passing a type name) is worth looking at separately. It should be captured as its own follow-up rather than added here.
 - **Skipping computed-field validation for registered types.** Registered types get the same computed-field validation as plugin types. Computed fields are accepted at registration and never warned about, but configuration still may not set them.
 
+## Changelog
 
+
+### 2026-09-19 — Phase 1.1: Register plain types on the plugin registry and guard type names
+
+**What was done**: `PluginRegistry` gained `RegisterType` and `IsRegisteredType`, and `CreateResource` now resolves builtin, then registered (a real Go instance through `reflect.New`), then plugin. Every route a type name can enter by (`RegisterType`, `RegisterPlugin`, `RegisterPluginWithPath` and discovery) now goes through one clash check, which returns a typed `TypeNameClashError`. A clashing plugin host is stopped and not added, and discovery always returns clash errors.
+
+**Deviations**: None. `TypeNameClashError.Existing` also takes the value "the same plugin" for a plugin that lists a type twice. `gofmt` fixed an import-order problem that was already in `plugin_registry.go`.
+
+**Files changed**:
+- `plugins/registry/errors.go`
+- `plugins/registry/plugin_registry.go`
+- `plugins/registry/plugin_registry_test.go`
+- `plugins/registry/plugin_discovery_test.go`
+
+**Discoveries**: Loading two copies of the same external plugin used to succeed silently, with the first host winning. It is now rejected as a clash. `types.GetMeta` panics when given a pointer to a non-struct or a nil pointer, so callers must check the kind first. `destroyWalkCallback` has no callers at all today. About 20 files in the repo already fail `gofmt` because of import order after the cty embedding.
+
+### 2026-09-19 — Phase 1.2: Apply registered types without any provider
+
+**What was done**: The parser gained a one-method `TypeRegistry` interface and a `ParserOptions.TypeRegistry` option, which defaults to the plugin registry. A single `handledWithoutProvider` helper replaces the hard-coded builtin checks in the lifecycle and the destroy walk, so registered types are handled like builtins: a success event, no status change, and no provider call. Integration tests with real `.xcl` fixtures and no plugins cover decoding, the exact Go type, references, module outputs, ordering, re-apply, removal, disabled blocks, modules and computed fields.
+
+**Deviations**: None.
+
+**Files changed**:
+- `internal/parser/callbacks.go`
+- `internal/parser/lifecycle.go`
+- `internal/parser/parser.go`
+- `internal/parser/registered_types_test.go`
+- `internal/test_fixtures/registered/types.go`
+- `internal/test_fixtures/config/registered/` (`basic`, `disabled`, `removed/before`, `removed/after`, `invalid_reference`, `invalid_attribute`)
+
+**Discoveries**: Registered types survive a `FileStateStore` save and reload through `encoding/json` with every field intact, including nested pointer blocks and `depends_on`, which answers one of the plan's open questions. Disabled resources get no parser event and an empty status. `ParserOptions.TypeRegistry` only falls back to `PluginRegistry` when the registry is non-nil, to avoid a nil pointer inside a non-nil interface.
+
+### 2026-09-19 — Phase 2.1: List resources by type and return registered types as themselves
+
+**What was done**: `Querier[T].FindResourcesByType` now takes the type name and matches it against each resource's `Meta.Type`, so listing by type works for registered and plugin types. Both query methods go through a shared `asType` helper. It returns the stored value directly when it already is a `*T` (registered types), and otherwise copies it through `schema.UnmarshalUntyped` into a new `T`, which fixes the old nil `*T` fallback.
+
+**Deviations**: `example/main.go` was changed to call `FindResourcesByType("postgres")` so the build stays green until Phase 3.1 deletes it. `querier.go` no longer imports `fmt`.
+
+**Files changed**:
+- `querier.go`
+- `querier_test.go`
+- `internal/test_fixtures/config/query/main.xcl`
+- `example/main.go`
+
+**Discoveries**: Plugin resources are held in state as generated types, never as the plugin's Go type, so the copy path is still needed for them. The not-found error from `FindResourcesByType` now carries the type name.
+
+### 2026-09-19 — Phase 2.2: Reject attributes a resource's type doesn't have at validation time
+
+**What was done**: The in-repo HCL fork gained `gohcl.CheckBody`, which walks a body against a Go value's implied schema the way `DecodeBody` does (remain fields, nested and repeated blocks) without evaluating anything. It reports only attributes and blocks the type doesn't have. `validateStructure` runs it for every resource type and reports each problem against the resource ID at the attribute's position, so an unknown attribute now fails at `Validate` instead of partway through `Apply`.
+
+**Deviations**: The plan had `CheckBody` report everything decode would. The first version did, and `TestValidateRejectsNonOptionalComputedField` then got a duplicate "Missing required argument" error, which the plan's open question said to stop on. The user chose option A: report only unknown attributes and blocks. Missing required attributes and blocks, and duplicate blocks, are still reported by decode at apply time, so disabled blocks that leave out required values keep validating. No existing test or fixture was changed.
+
+**Files changed**:
+- `internal/xcl/gohcl/check.go`
+- `internal/xcl/gohcl/check_test.go`
+- `internal/xcl/UPSTREAM.md`
+- `internal/parser/validate.go`
+- `internal/parser/validate_test.go`
+- `internal/test_fixtures/config/unknown_attribute/network.xcl`
+- `internal/test_fixtures/config/registered/disabled_missing_required/main.xcl`
+
+**Discoveries**: The HCL fork's root package is imported as `github.com/jumppad-labs/xcl/internal/xcl` but its package name is `hcl`. `hcl.Body.Content` itself reports missing required attributes, so a check limited to unknown attributes has to clear `Required` on the implied schema. Validation that also reported missing values would break disabled blocks, because they are never decoded.
+
+### 2026-09-19 — Phase 3.1: Shared example configuration and the configuration-only example
+
+**What was done**: The stale `.hcl` example was replaced with a shared `.xcl` configuration in `example/config` (two variables, two postgres blocks, one with a nested `timeouts` block and one ordered with `depends_on`, an app that reads a variable, a postgres field, a computed field and a module output, a local `analytics` module and an output). The shared Go types live in `example/resources`. The `example/configonly` program registers the types with `RegisterType`, applies the configuration with no plugin, and prints every resource plus the results of querying by type and by path. Its logic is in a `run(out, dir)` function that `main` and the tests share.
+
+**Deviations**: `PostgreSQL` has no `DBCommon` embedding and no `id` field. `App` has a plain (not computed) `connection_string` field that reads the postgres computed field, which makes the difference between the two modes show up on a second resource. The module declares its own `db_username` variable instead of receiving values from the root.
+
+**Files changed**:
+- `example/main.go`, `example/types.go`, `example/config.hcl`, `example/modules/db/db.hcl` (deleted)
+- `example/config/main.xcl`
+- `example/config/modules/db/db.xcl`
+- `example/resources/resources.go`
+- `example/configonly/main.go`
+- `example/configonly/main_test.go`
+
+**Discoveries**: `Config` without a state store writes nothing to disk for local modules, so the old `os.RemoveAll(".xclconfig")` isn't needed. `GetResources` returns resources in no fixed order, so tests sort IDs before comparing. A module's own variables and outputs show up as resources (for example `module.analytics.variable.db_username`), so the declared set has 10 IDs.
+
+### 2026-09-19 — Phase 3.2: Plugin example on the same configuration and types
+
+**What was done**: `example/plugin` applies the shared configuration and Go types through an in-process `ExamplePlugin`. Its postgres provider fills in the computed `connection_string` on Create and Update, and a no-op provider handles `app`. It shares the `run(out, dir)` shape with the config-only example. Its tests check the same 10 resource IDs, the filled connection strings (including where `app.web` reads one), that resources are held as generated types, and that the package declares no resource types and holds no `.xcl` files. The README example section, which described a removed API, was rewritten for `RegisterType`, the clash rule and the querier. `docs/plugins.md` gained a "Configuration-only types" section, and `docs/README.md` describes the new example layout.
+
+**Deviations**: The `CHANGELOG.md` entry was added during the feature-changelog step rather than in this phase, as a single prose record in the file's existing style.
+
+**Files changed**:
+- `example/plugin/main.go`
+- `example/plugin/main_test.go`
+- `README.md`
+- `docs/plugins.md`
+- `docs/README.md`
+- `CHANGELOG.md`
+
+**Discoveries**: A plugin's generated types copy back into the shared Go types through `schema.UnmarshalUntyped` with every field filled in, including the computed `connection_string`, when the types carry `json` tags that match their `xcl` names. That answers the plan's second open question. A block that reads another block's computed field gets the provider's value in plugin mode and an empty string in config-only mode.

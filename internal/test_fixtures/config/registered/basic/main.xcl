@@ -1,0 +1,34 @@
+# Only builtin and registered types, no plugin provides any of these blocks.
+# database.main is read by app.web, app.web is read by consumer.reader, and
+# app.web also reads a variable and an output of module.shared.
+
+variable "environment" {
+  default = "production"
+}
+
+resource "database" "main" {
+  location = "us-east"
+  port     = 5432
+
+  timeouts {
+    connect = 30
+    read    = 60
+  }
+}
+
+module "shared" {
+  source = "./module"
+}
+
+resource "app" "web" {
+  environment       = variable.environment
+  database_location = resource.database.main.location
+  database_port     = resource.database.main.port
+  shared_location   = module.shared.output.location
+}
+
+resource "consumer" "reader" {
+  depends_on = ["resource.app.web"]
+
+  app_environment = resource.app.web.environment
+}

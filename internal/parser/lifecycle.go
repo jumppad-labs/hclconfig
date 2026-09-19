@@ -24,6 +24,9 @@ type resourceLifecycle struct {
 	resolver ProviderResolver
 	options  *ParserOptions
 
+	// types reports the registered types, which like builtins have no provider
+	types TypeRegistry
+
 	// bodies are the HCL bodies of the parsed resources keyed by ID
 	bodies map[string]*hclsyntax.Body
 
@@ -68,8 +71,8 @@ func (l *resourceLifecycle) run(r any) error {
 		return err
 	}
 
-	// builtin resource types have no provider, they always succeed
-	if isBuiltinType(meta.Type) {
+	// builtin and registered resource types have no provider, they always succeed
+	if handledWithoutProvider(l.types, meta.Type) {
 		fireParserEvent(l.options, "create", resourceType(meta), meta.ID, "success", 0, nil, nil)
 		return nil
 	}
@@ -346,13 +349,19 @@ func (l *resourceLifecycle) callProvider(operation string, r any, data []byte, c
 	return nil
 }
 
-// isBuiltinType returns true for resource types that xcl handles itself and
-// that have no provider
-func isBuiltinType(t string) bool {
-	return t == resources.TypeVariable ||
+// handledWithoutProvider returns true for resource types that have no
+// provider: the builtin types xcl handles itself, and the plain Go types
+// registered without a plugin. typeRegistry may be nil, in which case only
+// builtin types are handled without a provider.
+func handledWithoutProvider(typeRegistry TypeRegistry, t string) bool {
+	if t == resources.TypeVariable ||
 		t == resources.TypeOutput ||
 		t == resources.TypeModule ||
-		t == resources.TypeRoot
+		t == resources.TypeRoot {
+		return true
+	}
+
+	return typeRegistry != nil && typeRegistry.IsRegisteredType(t)
 }
 
 // resourceType returns the "<type>.<name>" form used in parser events

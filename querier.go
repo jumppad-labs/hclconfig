@@ -1,8 +1,6 @@
 package xcl
 
 import (
-	"fmt"
-
 	"github.com/jumppad-labs/xcl/internal/schema"
 	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/types"
@@ -21,9 +19,11 @@ type Querier[T any] struct {
 
 // FindResource finds a resource by its FQRN path
 // If the resource is not found, it returns a ResourceNotFoundError
+//
+// Resources of a type registered with PluginRegistry.RegisterType are held in
+// state as T, they are returned by reference, changing the returned value
+// changes the value held in state. Plugin resources are returned as a copy.
 func (q *Querier[T]) FindResource(path string) (*T, error) {
-	returnResource := new(T)
-
 	// Use Config's GetResources() method
 	resources := q.config.GetResources()
 	for _, r := range resources {
@@ -33,47 +33,58 @@ func (q *Querier[T]) FindResource(path string) (*T, error) {
 		}
 
 		if meta.ID == path {
-			err := schema.UnmarshalUntyped(r, returnResource)
-			return returnResource, err
+			return asType[T](r)
 		}
 	}
 
 	// return a zero value of T and an error
-	return returnResource, state.ResourceNotFoundError{Resource: path}
+	return new(T), state.ResourceNotFoundError{Resource: path}
 }
 
-// FindResourcesByType finds all resources of the given type
+// FindResourcesByType finds all resources whose type is typeName, i.e. the
+// "postgres" in resource "postgres" "main"
 // If no resources are found, it returns a ResourceNotFoundError
-func (q *Querier[T]) FindResourcesByType() ([]*T, error) {
+//
+// Resources of a type registered with PluginRegistry.RegisterType are held in
+// state as T, they are returned by reference, changing a returned value
+// changes the value held in state. Plugin resources are returned as copies.
+func (q *Querier[T]) FindResourcesByType(typeName string) ([]*T, error) {
 	var results []*T
-
-	t := new(T)
-	metaT, err := types.GetMeta(t)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get metadata for type %T: %w", t, err)
-	}
 
 	// Use Config's GetResources() method
 	resources := q.config.GetResources()
 	for _, r := range resources {
-		metaR, err := types.GetMeta(r)
+		meta, err := types.GetMeta(r)
 		if err != nil {
 			panic(err) // should never happen, all resources should have metadata
 		}
 
-		if metaR.Type == metaT.Type {
-			var nr *T
-			err := schema.UnmarshalUntyped(r, &nr)
+		if meta.Type == typeName {
+			typed, err := asType[T](r)
 			if err != nil {
 				return nil, err
 			}
-			results = append(results, nr)
+
+			results = append(results, typed)
 		}
 	}
 
 	if len(results) == 0 {
-		return nil, state.ResourceNotFoundError{Resource: fmt.Sprintf("no resources of type %T found", new(T))}
+		return nil, state.ResourceNotFoundError{Resource: typeName}
 	}
 
 	return results, nil
+}
+
+// asType returns r as a *T. A resource that already is a *T, a registered
+// type, is returned as is. Any other resource, such as the schema-generated
+// instance of a plugin type, is copied into a new T.
+func asType[T any](r any) (*T, error) {
+	if typed, ok := r.(*T); ok {
+		return typed, nil
+	}
+
+	typed := new(T)
+	err := schema.UnmarshalUntyped(r, typed)
+	return typed, err
 }

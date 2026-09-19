@@ -1,0 +1,4 @@
+resource "database" "kept" {
+  location = "us-east"
+  port     = 5432
+}

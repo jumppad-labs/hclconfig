@@ -116,3 +116,22 @@
 - Assembled docs staged in .spektacular/tmp/{plan,context,research}_template.md. Next: verification.
 - Verification passed (added Project References to context). Next: write steps.
 - All three plan docs committed to store; work dir removed. Now in walkthrough (read docs via spektacular plan file read).
+- Walkthrough complete (2026-09-19), user signed off. Added Out of Scope follow-up: a typed collection helper on the querier (e.g. all resources of a Go type as []*T without passing a type name). User accepted all drafting assumptions unchanged. Next: implement workflow.
+
+## Implement workflow (started 2026-09-19)
+
+- read_plan passed: structure OK, no drift (destroyWalkCallback has no callers at all, not even tests), full spec coverage. First-phase run (no Changelog section yet).
+- Phase 1.1 analysis: GetMeta panics on non-struct / nil pointers, so RegisterType validates kind before GetMeta. plugins/example binary provides type "person" (use for discovery/external clash tests).
+- Phase 1.1 code: plugins/registry/errors.go (TypeNameClashError, Existing = "builtin" | "registered type" | "plugin" | "the same plugin"); RegisterType/IsRegisteredType/checkTypeName/checkHostTypes in plugin_registry.go. Discovery collects clash errors separately and always returns them. gofmt fixed a pre-existing import order issue in plugin_registry.go.
+- Phase 1.1 tests: plugins/registry/plugin_registry_test.go + 4 tests appended to plugin_discovery_test.go. Note: loading two copies of the same external plugin now fails with a clash (intended).
+- Pre-existing: ~20 files fail gofmt (import order after cty embed); not ours, left alone. gofmt only files we touch.
+- Phase 1.1 done & changelogged. User said run all phases without asking.
+- Phase 1.2 code: TypeRegistry in callbacks.go, ParserOptions.TypeRegistry (defaults to PluginRegistry only when non-nil), handledWithoutProvider(typeRegistry, t) replaces isBuiltinType + destroy list; destroyWalkCallback(registry, typeRegistry, options).
+- Phase 1.2 done. Registered types round-trip through FileStateStore fine (open question resolved). Gotcha: implement goto must go analyze→implement→test→verify→update_plan→update_changelog in order; check each goto's error.
+- Phase 2.1 done (querier asType helper; example/main.go temp-patched).
+- Phase 2.2: USER DECISION: schema check reports only unknown attributes/blocks (option A); attrs forced non-required in CheckBody; missing required / duplicate blocks left to decode. Triggered by TestValidateRejectsNonOptionalComputedField getting a duplicate 'Missing required argument'.
+- Phase 2.2 done.
+- Phase 3.1 done. Example declared ID set = 10 IDs (see example/configonly/main_test.go declaredResourceIDs).
+- Phase 3.2 done; all phases ticked. CHANGELOG.md left to feature-changelog step.
+- Feature changelog written (.spektacular/changelog + CHANGELOG.md entry). Tests rebuild tracked plugins/example/build/example binary; restored with git checkout.
+- Spec reconciled: all 38 checkboxes satisfied. Implement workflow finished 2026-09-19.

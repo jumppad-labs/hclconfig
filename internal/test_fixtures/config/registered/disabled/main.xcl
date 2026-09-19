@@ -1,0 +1,6 @@
+resource "database" "off" {
+  disabled = true
+
+  location = "us-east"
+  port     = 5432
+}
