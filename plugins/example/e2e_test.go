@@ -516,7 +516,8 @@ func TestInProcessPluginLogsToHostLogger(t *testing.T) {
 	_, err := ph.Create("resource", "person", loggingTestPerson(t))
 	require.NoError(t, err)
 
-	created := log.withMessage("info", "Creating person")
+	// xcl tags the message with the plugin's Go type and the provider's block type
+	created := log.withMessage("info", "plugin=PersonPlugin provider=person Creating person")
 	require.Len(t, created, 1, "Provider should log the create once")
 	require.Equal(t, []any{"id", "test-person", "name", "John Doe"}, created[0].args)
 }
@@ -535,7 +536,112 @@ func TestExternalPluginLogsToHostLogger(t *testing.T) {
 	_, err := ph.Create("resource", "person", loggingTestPerson(t))
 	require.NoError(t, err)
 
-	created := log.withMessage("info", "Creating person")
+	// xcl tags the message with the plugin's binary name and the provider's
+	// block type, the provider tag is added inside the plugin process
+	created := log.withMessage("info", "plugin=example provider=person Creating person")
 	require.Len(t, created, 1, "Provider should log the create once")
 	require.Equal(t, []any{"id", "test-person", "name", "John Doe"}, created[0].args)
+}
+
+// TestExternalPluginFrameworkLogsReachHostLogger tests that go-plugin, which
+// starts and connects to the external plugin, logs through the host's logger
+// tagged with the plugin, instead of writing straight to stderr
+func TestExternalPluginFrameworkLogsReachHostLogger(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	log := &recordingLogger{}
+	plugintesting.ExternalPluginSetupWithLogger(t, "./build/example", log)
+
+	started := log.withMessage("debug", "plugin=example starting plugin")
+	require.Len(t, started, 1, "go-plugin should log that it started the plugin")
+	require.Equal(t, []any{"path", "./build/example", "args", []string{"./build/example"}}, started[0].args)
+}
+
+// infoMessages returns the text of every info message recorded
+func (l *recordingLogger) infoMessages() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	messages := []string{}
+	for _, m := range l.messages {
+		if m.level == "info" {
+			messages = append(messages, m.msg)
+		}
+	}
+
+	return messages
+}
+
+// TestInProcessPluginLogsFrameworkMessagesAtDebug tests that xcl logs loading
+// an in-process plugin and calling its provider at debug, the same messages
+// it logs for an external plugin
+func TestInProcessPluginLogsFrameworkMessagesAtDebug(t *testing.T) {
+	log := &recordingLogger{}
+	ph := plugintesting.InProcessPluginSetupWithLogger(t, &PersonPlugin{}, log)
+
+	_, err := ph.Create("resource", "person", loggingTestPerson(t))
+	require.NoError(t, err)
+
+	loaded := log.withMessage("debug", "plugin=PersonPlugin plugin loaded")
+	require.Len(t, loaded, 1)
+	require.Equal(t, []any{"block_types", "person"}, loaded[0].args)
+
+	called := log.withMessage("debug", "plugin=PersonPlugin provider=person calling provider")
+	require.Len(t, called, 1)
+	require.Equal(t, []any{"operation", "create", "id", "test-person"}, called[0].args)
+}
+
+// TestExternalPluginLogsFrameworkMessagesAtDebug tests that xcl logs loading
+// an external plugin and calling its provider at debug, the same messages it
+// logs for an in-process plugin
+func TestExternalPluginLogsFrameworkMessagesAtDebug(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	log := &recordingLogger{}
+	ph := plugintesting.ExternalPluginSetupWithLogger(t, "./build/example", log)
+
+	_, err := ph.Create("resource", "person", loggingTestPerson(t))
+	require.NoError(t, err)
+
+	loaded := log.withMessage("debug", "plugin=example plugin loaded")
+	require.Len(t, loaded, 1)
+	require.Equal(t, []any{"block_types", "person"}, loaded[0].args)
+
+	// args from an external plugin cross gRPC as strings
+	called := log.withMessage("debug", "plugin=example provider=person calling provider")
+	require.Len(t, called, 1)
+	require.Equal(t, []any{"operation", "create", "id", "test-person"}, called[0].args)
+}
+
+// TestInProcessPluginLogsOnlyProviderMessagesAtInfo tests that xcl logs
+// nothing at info for an in-process plugin, only what its provider logs
+func TestInProcessPluginLogsOnlyProviderMessagesAtInfo(t *testing.T) {
+	log := &recordingLogger{}
+	ph := plugintesting.InProcessPluginSetupWithLogger(t, &PersonPlugin{}, log)
+
+	_, err := ph.Create("resource", "person", loggingTestPerson(t))
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"plugin=PersonPlugin provider=person Creating person"}, log.infoMessages())
+}
+
+// TestExternalPluginLogsOnlyProviderMessagesAtInfo tests that xcl logs
+// nothing at info for an external plugin, the same as for an in-process one,
+// only what its provider logs
+func TestExternalPluginLogsOnlyProviderMessagesAtInfo(t *testing.T) {
+	// Build the plugin first
+	buildCmd := plugintesting.BuildPlugin(t, ".")
+	require.NoError(t, buildCmd, "Plugin should build successfully")
+
+	log := &recordingLogger{}
+	ph := plugintesting.ExternalPluginSetupWithLogger(t, "./build/example", log)
+
+	_, err := ph.Create("resource", "person", loggingTestPerson(t))
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"plugin=example provider=person Creating person"}, log.infoMessages())
 }

@@ -69,12 +69,27 @@ The [`example`](./example) directory holds one configuration,
 - [`example/configonly`](./example/configonly) uses XCL for configuration
   only. The block types are plain Go types registered on the plugin registry,
   with no plugin and no provider.
-- [`example/plugin`](./example/plugin) applies the same configuration through
-  an in-process plugin, whose provider fills in the computed
-  `connection_string` that the configuration only example leaves empty.
 
-Run either one from its directory with `go run .`, their tests run as part of
-`go test ./...`.
+Both examples log every event xcl fires, parse events included, through the
+shared [`example/eventlog`](./example/eventlog) handler, at debug unless
+something fails.
+- [`example/plugin`](./example/plugin) applies the same configuration through
+  two plugins. `ExamplePlugin` (`internal/`) is an in-process plugin that
+  provides `postgres` and fills in the computed `connection_string` that the
+  configuration only example leaves empty. `external` (`external/`) is an
+  external plugin, compiled to its own binary and called over gRPC, that
+  provides `app`. Their providers log from each lifecycle method, and the
+  example logs every event with `xcl.WithEventHandler`. Everything a
+  plugin logs is tagged by xcl with the plugin, and with the provider for
+  provider logs, i.e.
+  `DEBU plugin=ExamplePlugin provider=postgres create id=resource.postgres.main`.
+  Everything in the example logs at debug except a failure, which logs at
+  error.
+
+Run either one from its directory with `make run`. For `plugin` this builds
+the external plugin into `build/` first. Both have the same Makefile targets:
+`build`, `run`, `test` and `clean`. The tests for both run as part of `go test ./...`, and build the
+external plugin themselves.
 
 Block types are defined as Go structs that embed `types.ResourceBase` and map
 configuration to fields with `xcl` tags.
@@ -142,6 +157,29 @@ db, err := q.FindResource("resource.postgres.main")
 
 A registered type is returned as the value held in state, so changing it
 changes state. A plugin type is returned as a copy.
+
+### Lifecycle events
+
+`WithEventHandler` is called for every step of the resource lifecycle during
+`Apply`. First a `parse` event for each block as it is read, a `success` or
+an `error`, with the `File` it was read from. A block that can not be tied to
+a resource, such as a file that is not valid syntax, gets a parse `error`
+with an empty `ResourceID`. Then a `start` before each provider call (create,
+read, changed, update, destroy), and a `success` or an `error` when it
+returns. Builtin and registered types have no provider, they only get a
+`success`. `Validate` passes the parse events to the handler too. Resources
+that don't depend on each other are processed concurrently, so the handler
+may be called from several goroutines at once.
+
+```go
+c := xcl.NewConfig(
+	xcl.WithPluginRegistry(r),
+	xcl.WithEventHandler(func(e xcl.Event) {
+		// logs: DEBU event=create resource=resource.postgres.main phase=start
+		log.Debug("", "event", e.Operation, "resource", e.ResourceID, "phase", e.Phase)
+	}),
+)
+```
 
 ## Struct Tags
 

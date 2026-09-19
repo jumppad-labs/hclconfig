@@ -317,6 +317,11 @@ func TestApplyMarksDisabledRegisteredTypeDisabled(t *testing.T) {
 	var mu sync.Mutex
 	eventIDs := []string{}
 	onEvent := func(e ParserEvent) {
+		// a disabled resource is still parsed, only the walk skips it
+		if e.Operation == "parse" {
+			return
+		}
+
 		mu.Lock()
 		defer mu.Unlock()
 		eventIDs = append(eventIDs, e.ResourceID)

@@ -25,6 +25,15 @@ func WithStateStore(ss state.StateStore) ConfigOption {
 	}
 }
 
+// WithEventHandler sets a handler that is called for every lifecycle event
+// during Apply, such as a block being parsed or a provider's Create starting
+// or succeeding, and for the parse events during Validate
+func WithEventHandler(handler EventHandler) ConfigOption {
+	return func(c *Config) {
+		c.eventHandler = handler
+	}
+}
+
 // WithVariables sets variables to pass to HCL parsing
 func WithVariables(vars map[string]any) ConfigOption {
 	return func(c *Config) {

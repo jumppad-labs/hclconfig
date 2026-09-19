@@ -180,12 +180,18 @@ func callsFor(calls []string, resourceID string) []string {
 }
 
 // eventCollector gathers parser events; the walker fires them in parallel.
+// eventCollector records the lifecycle events of an apply. Parse events, fired
+// as each block is read, are not recorded, they have tests of their own.
 type eventCollector struct {
 	mu     sync.Mutex
 	events []ParserEvent
 }
 
 func (c *eventCollector) collect(event ParserEvent) {
+	if event.Operation == "parse" {
+		return
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.events = append(c.events, event)

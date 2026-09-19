@@ -370,7 +370,11 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 		// one of them rather than only the first
 		errs := []error{}
 		for _, d := range diag {
-			errs = append(errs, errors.NewParserErrorFromHCLDiag(d, file))
+			pe := errors.NewParserErrorFromHCLDiag(d, file)
+			errs = append(errs, pe)
+
+			// the file is not valid syntax, so no problem is in a resource
+			fireParseEvent(&p.options, "", "", file, pe)
 		}
 
 		return errs
@@ -397,6 +401,7 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 				fmt.Sprintf("resource '%s' has no name, please specify resources using the syntax 'resource_type \"name\" {}'", b.Type),
 			)
 
+			fireParseEvent(&p.options, "", "", file, de)
 			blockErrors = append(blockErrors, de)
 			continue
 		}
@@ -405,6 +410,8 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 		// variables and outputs are processed in a separate run
 		switch b.Type {
 		case resources.TypeModule:
+			// parseModule fires the module's own parse event, the resources in
+			// its source fire theirs as they are parsed
 			errs := p.parseModule(file, b, module)
 			blockErrors = append(blockErrors, errs...)
 		case resources.TypeVariable:
@@ -416,6 +423,9 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 			if err != nil {
 				blockErrors = append(blockErrors, err)
 			}
+
+			resourceType, resourceID := blockResource(b, module)
+			fireParseEvent(&p.options, resourceType, resourceID, file, err)
 		default:
 			de := errors.NewParserError(
 				file,
@@ -424,6 +434,7 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 				fmt.Sprintf("unable to process stanza '%s' in file %s at %d,%d , only 'variable', 'resource', 'module', and 'output' are valid stanza blocks", b.Type, file, b.Range().Start.Line, b.Range().Start.Column),
 			)
 
+			fireParseEvent(&p.options, "", "", file, de)
 			blockErrors = append(blockErrors, de)
 		}
 	}
@@ -433,6 +444,27 @@ func (p *Parser) parseResourcesInFile(file string, module string) []error {
 	}
 
 	return nil
+}
+
+// blockResource returns the "<type>.<name>" and the ID of the resource a block
+// declares in module, i.e. "postgres.main" and "resource.postgres.main". They
+// are the same the parsed resource gets, and are worked out from the block's
+// labels so a block that fails to parse can still be reported against its
+// resource. They are empty when the labels do not name a resource.
+func blockResource(b *hclsyntax.Block, module string) (string, string) {
+	fqrn := resources.FQRN{Module: module, Type: b.Type}
+
+	switch {
+	case b.Type == types.TypeResource && len(b.Labels) == 2:
+		fqrn.Type = b.Labels[0]
+		fqrn.Resource = b.Labels[1]
+	case b.Type != types.TypeResource && len(b.Labels) == 1:
+		fqrn.Resource = b.Labels[0]
+	default:
+		return "", ""
+	}
+
+	return fqrn.Type + "." + fqrn.Resource, fqrn.String()
 }
 
 func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName string) error {
@@ -617,6 +649,14 @@ func (p *Parser) parseResource(file string, b *hclsyntax.Block, moduleName strin
 // so that the module's child resources are discovered and scoped under the
 // module's own instance name.
 func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule string) []error {
+	// fail fires the module's parse error and returns it, every problem with
+	// the module block itself goes through it
+	resourceType, resourceID := blockResource(b, parentModule)
+	fail := func(err error) []error {
+		fireParseEvent(&p.options, resourceType, resourceID, file, err)
+		return []error{err}
+	}
+
 	// If the type is module there should be one label for the instance name
 	if len(b.Labels) != 1 {
 		de := &errors.ParserError{}
@@ -625,7 +665,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Filename = file
 		de.Message = `invalid formatting for 'module' stanza, resources should have a name and a type, i.e. 'module "name" {}'`
 
-		return []error{de}
+		return fail(de)
 	}
 
 	name := b.Labels[0]
@@ -636,7 +676,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Filename = file
 		de.Message = err.Error()
 
-		return []error{de}
+		return fail(de)
 	}
 
 	rt, err := p.createBuiltinResource(resources.TypeModule, name)
@@ -647,7 +687,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Filename = file
 		de.Message = fmt.Sprintf(`unable to create module, this error should never happen %s`, err)
 
-		return []error{de}
+		return fail(de)
 	}
 
 	// We now have an entity, get the meta
@@ -658,7 +698,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf("unable to get resource meta for resource %s: %s", b.Labels[0], err)
-		return []error{de}
+		return fail(de)
 	}
 
 	rtMeta.Module = parentModule
@@ -681,7 +721,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf("error creating resource '%s' in file %s: %s", b.Labels[0], file, err)
-		return []error{de}
+		return fail(de)
 	}
 
 	// add the module to the cache
@@ -698,7 +738,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf(`module '%s' has no 'source' attribute`, name)
-		return []error{de}
+		return fail(de)
 	}
 
 	sourceVal, diags := sourceAttr.Expr.Value(nil)
@@ -708,7 +748,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = sourceAttr.SrcRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf(`unable to resolve 'source' for module '%s': %s`, name, diags.Error())
-		return []error{de}
+		return fail(de)
 	}
 
 	sourceDir := filepath.Join(filepath.Dir(file), sourceVal.AsString())
@@ -729,7 +769,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf(`unable to obtain contents for module '%s' source '%s': %s`, name, sourceDir, err)
-		return []error{de}
+		return fail(de)
 	}
 
 	// A module whose source transitively includes itself would recurse until
@@ -740,7 +780,7 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf(`module '%s' source '%s' includes itself`, name, sourceDir)
-		return []error{de}
+		return fail(de)
 	}
 
 	p.parsedResources.moduleSources[canonicalSource] = true
@@ -753,8 +793,12 @@ func (p *Parser) parseModule(file string, b *hclsyntax.Block, parentModule strin
 		de.Column = b.TypeRange.Start.Column
 		de.Filename = file
 		de.Message = fmt.Sprintf(`unable to discover files for module '%s' source '%s': %s`, name, sourceDir, err)
-		return []error{de}
+		return fail(de)
 	}
+
+	// the module block itself has parsed, the resources in its source fire
+	// their own parse events as they are parsed
+	fireParseEvent(&p.options, resourceType, resourceID, file, nil)
 
 	moduleErrors := []error{}
 	for _, childFile := range childFiles {

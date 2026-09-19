@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/hashicorp/go-plugin"
+	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/proto"
 )
 
@@ -28,10 +31,14 @@ func NewGRPCPluginHost(logger Logger, state State) *GRPCPluginHost {
 	}
 }
 
-// Start initializes and starts the external plugin process
+// Start initializes and starts the external plugin process. The plugin's logs
+// reach the host logger with every message tagged plugin=<binary file name>,
+// so they can be told apart from the host's.
 func (h *GRPCPluginHost) Start(pluginPath string) error {
+	pluginLogger := logger.WithTag(h.logger, "plugin", pluginBinaryName(pluginPath))
+
 	var PluginMap = map[string]plugin.Plugin{
-		"plugin": &GRPCPlugin{logger: h.logger},
+		"plugin": &GRPCPlugin{logger: pluginLogger},
 	}
 
 	// Create the plugin client
@@ -40,6 +47,11 @@ func (h *GRPCPluginHost) Start(pluginPath string) error {
 		Plugins:          PluginMap,
 		Cmd:              exec.Command(pluginPath),
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
+		// go-plugin logs how it starts and talks to the plugin process, and
+		// passes on what the process writes to stderr. Log it all through the
+		// host's logger, tagged with the plugin, rather than go-plugin's
+		// default logger which writes straight to stderr.
+		Logger: newHCLogAdapter(pluginLogger),
 	})
 
 	// Connect to the plugin
@@ -58,7 +70,17 @@ func (h *GRPCPluginHost) Start(pluginPath string) error {
 	grpcClient := raw.(proto.PluginServiceClient)
 	h.plugin = &grpcPluginWrapper{client: grpcClient}
 
+	if pluginLogger != nil {
+		pluginLogger.Debug("plugin loaded", "block_types", resourceTypeNames(h.GetTypes()))
+	}
+
 	return nil
+}
+
+// pluginBinaryName returns the file name of the plugin binary without a
+// Windows .exe extension, i.e. xcl-plugin-person for /plugins/xcl-plugin-person
+func pluginBinaryName(pluginPath string) string {
+	return strings.TrimSuffix(filepath.Base(pluginPath), ".exe")
 }
 
 // Stop shuts down the plugin host and cleans up resources

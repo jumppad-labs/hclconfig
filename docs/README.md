@@ -42,6 +42,6 @@ not at end users writing `.xcl` config.
 | `state/` | `State`, `StateStore` interface, `FileStateStore` |
 | `errors/` | Structured error types (`ParserError`, `ConfigError`) |
 | `logger/` | Pluggable `Logger` interface + implementations |
-| `example/` | Runnable, tested examples: `configonly` (registered types, no plugin) and `plugin` (in-process plugin), sharing `config/` and `resources/` |
+| `example/` | Runnable, tested examples: `configonly` (registered types, no plugin) and `plugin` (an in-process and an external plugin), sharing `config/`, `resources/` and the `eventlog/` event handler |
 
 See individual pages for details on how these pieces connect.

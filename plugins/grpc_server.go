@@ -48,8 +48,6 @@ func (s *GRPCServer) GetTypes(ctx context.Context, req *proto.GetTypesRequest) (
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
 
-	l.Info("Getting types")
-
 	types := s.plugin.GetTypes()
 	protoTypes := make([]*proto.RegisteredType, len(types))
 
@@ -73,8 +71,6 @@ func (s *GRPCServer) Validate(ctx context.Context, req *proto.ValidateRequest) (
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
 
-	l.Info("Validating entity")
-
 	err = s.plugin.Validate(req.EntityType, req.EntitySubType, req.EntityData)
 	return &proto.ValidateResponse{Error: errorToString(err)}, nil
 }
@@ -87,8 +83,6 @@ func (s *GRPCServer) Create(ctx context.Context, req *proto.CreateRequest) (*pro
 
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
-
-	l.Info("Creating entity")
 
 	// Get the registered type to access its adapter
 	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
@@ -113,8 +107,6 @@ func (s *GRPCServer) Destroy(ctx context.Context, req *proto.DestroyRequest) (*p
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
 
-	l.Info("Destroying entity")
-
 	err = s.plugin.Destroy(req.EntityType, req.EntitySubType, req.EntityData)
 	return &proto.DestroyResponse{Error: errorToString(err)}, nil
 }
@@ -127,8 +119,6 @@ func (s *GRPCServer) Read(ctx context.Context, req *proto.ReadRequest) (*proto.R
 
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
-
-	l.Info("Reading entity")
 
 	// Get the registered type to access its adapter
 	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
@@ -154,8 +144,6 @@ func (s *GRPCServer) Update(ctx context.Context, req *proto.UpdateRequest) (*pro
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
 
-	l.Info("Updating entity")
-
 	// Get the registered type to access its adapter
 	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
 	if rt == nil {
@@ -178,8 +166,6 @@ func (s *GRPCServer) Changed(ctx context.Context, req *proto.ChangedRequest) (*p
 
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
-
-	l.Info("Checking if entity changed")
 
 	changed, err := s.plugin.Changed(req.EntityType, req.EntitySubType, req.OldEntityData, req.NewEntityData)
 	return &proto.ChangedResponse{

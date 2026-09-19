@@ -18,6 +18,7 @@ type Config struct {
 	pluginRegistry *registry.PluginRegistry // Config owns plugins
 	stateStore     state.StateStore         // Persistence for state
 	variables      map[string]any           // Variables for HCL parsing
+	eventHandler   EventHandler             // Called for every lifecycle event during Apply
 }
 
 // NewConfig creates a new Config with functional options
@@ -83,6 +84,7 @@ func (c *Config) Validate(paths ...string) error {
 		StateStore:     c.stateStore,
 		PluginRegistry: c.pluginRegistry,
 		Variables:      convertVariablesToStringMap(c.variables),
+		OnParserEvent:  parserEventHandler(c.eventHandler),
 	})
 
 	// Validate without resolving: no decode, no DAG walk, no plugins
@@ -108,6 +110,7 @@ func (c *Config) Apply(paths ...string) error {
 		StateStore:     c.stateStore,
 		PluginRegistry: c.pluginRegistry,
 		Variables:      convertVariablesToStringMap(c.variables),
+		OnParserEvent:  parserEventHandler(c.eventHandler),
 	})
 
 	// Parser manages State independently (loads from store, parses, returns new state)

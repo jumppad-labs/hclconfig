@@ -194,6 +194,53 @@ only needs the second one can depend on the narrower
 `*PluginRegistry` (see the "testing" note in [Parser & Resource
 Lifecycle](parser-lifecycle.md)).
 
+## Plugin logging
+
+A plugin logs to the logger its host was given, with every message tagged so
+it can be told apart from the host's own logs. The plugin host tags the
+plugin's logger with `plugin=<name>`: the Go type name for an in-process
+plugin (`ExamplePlugin`), the binary's file name for an external one. The
+adapter that `RegisterResourceProvider` creates also tags the provider's
+logger with `provider=<block type>`, inside the plugin process, so a provider
+message reads
+
+```
+DEBU plugin=ExamplePlugin provider=postgres create id=resource.postgres.main
+```
+
+The tags are written at the start of the message by `logger.WithTag`.
+
+An external plugin reaches the host through go-plugin, which logs how it
+starts and talks to the plugin process, and passes on anything the process
+writes to stderr. `GRPCPluginHost` gives go-plugin an adapter
+([`plugins/hclog_adapter.go`](../plugins/hclog_adapter.go)) that writes all
+of that through the same `plugin=<name>` tagged logger. go-plugin's info and
+debug messages are passed on at debug and its trace messages are dropped;
+warnings and errors keep their level. go-plugin's `received EOF, stopping recv
+loop` debug message is dropped as well: it reports the plugin's stdio stream
+ending, which happens every time the plugin process stops, but carries an
+`err=` field that reads like a failure. Everything an external plugin
+produces therefore reaches the host app's logger in one format, rather than
+partly through go-plugin's default logger straight to stderr:
+
+```
+DEBU plugin=external starting plugin path=build/external args=[build/external]
+DEBU plugin=external provider=app create id=resource.app.web
+```
+
+Both kinds of plugin log the same framework messages, at debug: a
+`plugin loaded` line listing the block types when the host loads the plugin,
+and a `calling provider` line before each provider call. The call line is
+written by the adapter around the provider, which runs in the host for an
+in-process plugin and inside the plugin process for an external one:
+
+```
+DEBU plugin=ExamplePlugin plugin loaded block_types=postgres
+DEBU plugin=ExamplePlugin provider=postgres calling provider operation=create id=resource.postgres.main
+DEBU plugin=external plugin loaded block_types=app
+DEBU plugin=external provider=app calling provider operation=create id=resource.app.web
+```
+
 ## Configuration-only types
 
 Not every block type needs a plugin. `PluginRegistry.RegisterType(name,

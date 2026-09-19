@@ -1034,6 +1034,11 @@ func TestParserEventCallback(t *testing.T) {
 	var successEvents []ParserEvent
 
 	for _, event := range events {
+		// parse events are not provider operations, they have tests of their own
+		if event.Operation == "parse" {
+			continue
+		}
+
 		if event.Phase == "start" {
 			startEvents = append(startEvents, event)
 		}

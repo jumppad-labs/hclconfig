@@ -8,3 +8,4 @@ plugins/build
 plugins/example/build/
 *.test
 __debug_bin*
+example/*/build/
