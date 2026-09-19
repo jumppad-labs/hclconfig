@@ -1,0 +1,13 @@
+# web has two network blocks, identified by their id keys
+
+resource "container" "web" {
+  network {
+    id   = 1
+    name = "n1"
+  }
+
+  network {
+    id   = 2
+    name = "n2"
+  }
+}

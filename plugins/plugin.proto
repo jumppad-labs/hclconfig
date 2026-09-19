@@ -8,7 +8,7 @@ service PluginService {
   rpc Validate(ValidateRequest) returns (ValidateResponse);
   rpc Create(CreateRequest) returns (CreateResponse);
   rpc Destroy(DestroyRequest) returns (DestroyResponse);
-  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+  rpc Read(ReadRequest) returns (ReadResponse);
   rpc Update(UpdateRequest) returns (UpdateResponse);
   rpc Changed(ChangedRequest) returns (ChangedResponse);
 }
@@ -70,15 +70,19 @@ message DestroyResponse {
   string error = 1;
 }
 
-message RefreshRequest {
+message ReadRequest {
   string entity_type = 1;
   string entity_sub_type = 2;
-  bytes entity_data = 3;
+  bytes old_entity_data = 3;
+  bytes new_entity_data = 4;
 }
 
-message RefreshResponse {
-  string error = 1;
-  bytes refreshed_entity_data = 2;
+message ReadResponse {
+  bytes entity_data = 1;
+  string error = 2;
+  // not_found is true when the provider reported that the real resource no
+  // longer exists (plugins.ErrNotFound); error identity doesn't survive the wire
+  bool not_found = 3;
 }
 
 message UpdateRequest {

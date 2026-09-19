@@ -1,0 +1,4 @@
+resource "network" "main" {
+  subnet      = "10.0.0.0/16"
+  provider_id = "abc"
+}

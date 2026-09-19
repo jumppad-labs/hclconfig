@@ -11,7 +11,7 @@ import (
 
 // ResourceProvider defines the generic interface that all resource providers must implement.
 // It provides lifecycle management for resources including creation, destruction,
-// refresh, and state checking operations.
+// reading, and change detection operations.
 // T must be a type that has embedded types.ResourceBase.
 type ResourceProvider[T any] interface {
 	// Init initializes the provider with state access, provider functions, and a logger.
@@ -23,9 +23,10 @@ type ResourceProvider[T any] interface {
 	// The logger parameter is the logger instance for all logging operations.
 	Init(state State, functions ProviderFunctions, logger Logger) error
 
-	// Create creates a new resource or recreates a failed resource.
-	// This method is called when a resource does not exist or when creation
-	// has previously failed and 'up' is executed.
+	// Create creates a new resource.
+	// This method is called when a resource is not in the previous state, when
+	// Read reports the resource as not found, and after a resource saved as failed
+	// has been destroyed (xcl destroys a failed resource, then creates it again).
 	//
 	// The ctx parameter provides cancellation and timeout control.
 	// The resource parameter contains the resource configuration to create.
@@ -37,7 +38,10 @@ type ResourceProvider[T any] interface {
 
 	// Destroy removes an existing resource.
 	// This method is called when a resource exists and 'down' is executed,
-	// or when cleanup is required after a failure.
+	// or before a resource saved as failed is created again.
+	//
+	// Whether destroying a resource that no longer exists is an error is the
+	// provider's decision. Any error returned fails the destroy.
 	//
 	// The ctx parameter provides cancellation and timeout control.
 	// The resource parameter contains the resource configuration to destroy.
@@ -47,16 +51,26 @@ type ResourceProvider[T any] interface {
 	// The implementation should periodically check the context for cancellation.
 	Destroy(ctx context.Context, resource T, force bool) error
 
-	// Refresh updates the state of an existing resource.
-	// This method is called when a resource exists and 'up' is executed
-	// to ensure the resource is in the desired state.
+	// Read reports the real resource.
+	// This method is only called for resources that are in the previous state,
+	// so old is never nil. Read is called before Changed.
 	//
 	// The ctx parameter provides cancellation and timeout control.
-	// The resource parameter contains the resource configuration to refresh.
-	// Returns the refreshed resource with updated state and any refresh error.
+	// The old parameter is the resource as saved by the last apply. Use it to
+	// locate the real resource, for example by an ID set at create.
+	// The new parameter is the resource as described by the current configuration.
+	// Returns new with its identity, observed and derived fields filled in from
+	// the real resource.
+	//
+	// Read must never change configured fields, must never record values that
+	// change on their own (such as uptime or timestamps), and must never create,
+	// change or remove anything in the real world.
+	//
+	// When the real resource no longer exists, Read returns ErrNotFound and xcl
+	// creates the resource again. Any other error fails the apply.
 	//
 	// The implementation should periodically check the context for cancellation.
-	Refresh(ctx context.Context, resource T) (T, error)
+	Read(ctx context.Context, old T, new T) (T, error)
 
 	// Update updates an existing resource to match the desired configuration.
 	// This method is called after Changed() returns true, indicating the resource
@@ -73,8 +87,12 @@ type ResourceProvider[T any] interface {
 	// with the desired configuration.
 	//
 	// The ctx parameter provides cancellation and timeout control.
-	// The old parameter contains the resource as it currently exists (from state).
-	// The new parameter contains the desired resource configuration (from config).
+	// The old parameter contains the resource as saved by the last apply.
+	// The new parameter contains the current configuration after it has been
+	// through Read, so it holds both configuration edits and observed drift.
+	//
+	// Embed DefaultChanged in the provider to get a default comparison;
+	// defining Changed on the provider overrides it.
 	// Returns true if the resource has changed and needs updating, false otherwise,
 	// and any error encountered while checking for changes.
 	Changed(ctx context.Context, old T, new T) (bool, error)

@@ -1,6 +1,7 @@
 package xcl
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/jumppad-labs/xcl/internal/parser"
@@ -86,10 +87,11 @@ func (c *Config) Validate(paths ...string) error {
 	return nil
 }
 
-// Apply parses config from paths, loads existing state, and applies changes
-// Automatically determines creates, updates, and destroys
-// Executes plugins for each resource in dependency order
-// Saves state after each successful resource operation for resumability
+// Apply parses config from paths, loads existing state, and applies changes.
+// Executes plugins for each resource in dependency order and saves the
+// resulting state. When a provider call fails, the progress made so far is
+// saved before the error is returned, so the next apply resumes from it.
+// Nothing is saved when the configuration does not parse or validate.
 func (c *Config) Apply(paths ...string) error {
 	if len(paths) == 0 {
 		return fmt.Errorf("at least one path is required")
@@ -103,8 +105,9 @@ func (c *Config) Apply(paths ...string) error {
 	})
 
 	// Parser manages State independently (loads from store, parses, returns new state)
+	// A failed apply returns the progress it made along with the error
 	newState, err := p.Apply(paths...)
-	if err != nil {
+	if newState == nil {
 		return err
 	}
 
@@ -113,12 +116,12 @@ func (c *Config) Apply(paths ...string) error {
 
 	// Save to store
 	if c.stateStore != nil {
-		if err := c.stateStore.Save(c.currentState); err != nil {
-			return fmt.Errorf("failed to save state: %w", err)
+		if saveErr := c.stateStore.Save(c.currentState); saveErr != nil {
+			return errors.Join(err, fmt.Errorf("failed to save state: %w", saveErr))
 		}
 	}
 
-	return nil
+	return err
 }
 
 // Destroy removes all resources currently in state

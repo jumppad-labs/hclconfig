@@ -1,6 +1,7 @@
 package xcl
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +10,9 @@ import (
 	"github.com/jumppad-labs/xcl/internal/parser"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
+	"github.com/jumppad-labs/xcl/state"
 	statemocks "github.com/jumppad-labs/xcl/state/mocks"
+	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -254,6 +257,47 @@ func TestApplyCreatesResourcesFromValidConfiguration(t *testing.T) {
 	ss.AssertCalled(t, "Save", mock.Anything)
 }
 
+// TestApplySavesStateWhenProviderFails asserts that when a provider call fails
+// the apply reports the failure and still persists the progress it made, with
+// the failed resource recorded as failed.
+func TestApplySavesStateWhenProviderFails(t *testing.T) {
+	path, err := filepath.Abs("./internal/test_fixtures/config/single/container.xcl")
+	require.NoError(t, err)
+
+	c, testPlugin, ss := setupConfig(t)
+
+	// the plugin is initialised when it is registered, so errors are set after
+	testPlugin.SetCreateError("resource.container.consul", fmt.Errorf("container runtime unavailable"))
+
+	err = c.Apply(path)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "create failed for resource.container.consul")
+
+	ss.AssertCalled(t, "Save", mock.Anything)
+
+	var saved *state.State
+	for _, call := range ss.Calls {
+		if call.Method == "Save" {
+			saved = call.Arguments.Get(0).(*state.State)
+		}
+	}
+	require.NotNil(t, saved)
+
+	consul, err := saved.FindResource("resource.container.consul")
+	require.NoError(t, err)
+
+	consulMeta, err := types.GetMeta(consul)
+	require.NoError(t, err)
+	require.Equal(t, types.StatusFailed, consulMeta.Status)
+
+	onprem, err := saved.FindResource("resource.network.onprem")
+	require.NoError(t, err)
+
+	onpremMeta, err := types.GetMeta(onprem)
+	require.NoError(t, err)
+	require.Equal(t, types.StatusCreated, onpremMeta.Status)
+}
+
 // TestApplyCreatesChangesAndRemovesNothingWhenConfigurationIsInvalid asserts
 // that applying an invalid configuration reports failure and that the gate
 // stops it before anything is created, changed, removed or persisted.
@@ -320,4 +364,63 @@ func TestValidateStillProducesTheSameResourcesAsApply(t *testing.T) {
 	r, err = c.FindResource("resource.network.onprem")
 	require.NoError(t, err)
 	require.NotNil(t, r)
+}
+
+// TestValidateRejectsConfiguredComputedField asserts that validating a
+// configuration that sets a computed field reports failure naming the resource
+// and the field.
+func TestValidateRejectsConfiguredComputedField(t *testing.T) {
+	path, err := filepath.Abs("./internal/test_fixtures/config/computed_set/top.xcl")
+	require.NoError(t, err)
+
+	c, _, _ := setupConfig(t)
+
+	err = c.Validate(path)
+	require.Error(t, err)
+
+	ce, ok := err.(*errors.ConfigError)
+	require.True(t, ok, "Validate should report failure as a *errors.ConfigError")
+	require.Len(t, ce.Errors, 1)
+
+	pe, ok := ce.Errors[0].(*errors.ParserError)
+	require.True(t, ok, "the problem should be a *errors.ParserError")
+	require.Equal(t, path, pe.Filename)
+	require.Equal(t, 3, pe.Line)
+	require.Equal(t, "resource 'resource.network.main' sets computed field 'provider_id', computed fields are set by the provider and cannot be configured", pe.Message)
+}
+
+// TestApplyCreatesNothingWhenComputedFieldIsConfigured asserts that applying a
+// configuration that sets a computed field is stopped before any provider is
+// called and before any state is persisted.
+func TestApplyCreatesNothingWhenComputedFieldIsConfigured(t *testing.T) {
+	path, err := filepath.Abs("./internal/test_fixtures/config/computed_set/top.xcl")
+	require.NoError(t, err)
+
+	c, testPlugin, ss := setupConfig(t)
+
+	err = c.Apply(path)
+	require.Error(t, err)
+
+	ce, ok := err.(*errors.ConfigError)
+	require.True(t, ok, "Apply should report failure as a *errors.ConfigError")
+	require.Len(t, ce.Errors, 1)
+	require.Contains(t, ce.Errors[0].Error(), "provider_id")
+
+	require.Empty(t, testPlugin.GetCalls())
+	require.Empty(t, testPlugin.GetCreatedResources())
+
+	ss.AssertNotCalled(t, "Save", mock.Anything)
+	require.Equal(t, 0, c.ResourceCount())
+}
+
+// TestValidateAcceptsUnsetComputedField asserts that a configuration that
+// leaves every computed field to the provider is valid.
+func TestValidateAcceptsUnsetComputedField(t *testing.T) {
+	path, err := filepath.Abs("./internal/test_fixtures/config/computed_set/unset.xcl")
+	require.NoError(t, err)
+
+	c, _, _ := setupConfig(t)
+
+	err = c.Validate(path)
+	require.NoError(t, err)
 }

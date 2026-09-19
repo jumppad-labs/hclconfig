@@ -1,0 +1,12 @@
+# The container's network block is named after the network's provider id, a
+# computed value set by the network's Create.
+
+resource "network" "one" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "container" "user" {
+  network {
+    name = resource.network.one.provider_id
+  }
+}

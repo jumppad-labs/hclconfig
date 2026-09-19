@@ -304,47 +304,48 @@ func (_c *MockProviderAdapter_Init_Call) RunAndReturn(run func(state plugins.Sta
 	return _c
 }
 
-// Refresh provides a mock function for the type MockProviderAdapter
-func (_mock *MockProviderAdapter) Refresh(ctx context.Context, entityData []byte) ([]byte, error) {
-	ret := _mock.Called(ctx, entityData)
+// Read provides a mock function for the type MockProviderAdapter
+func (_mock *MockProviderAdapter) Read(ctx context.Context, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
+	ret := _mock.Called(ctx, oldEntityData, newEntityData)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Refresh")
+		panic("no return value specified for Read")
 	}
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) ([]byte, error)); ok {
-		return returnFunc(ctx, entityData)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, []byte) ([]byte, error)); ok {
+		return returnFunc(ctx, oldEntityData, newEntityData)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) []byte); ok {
-		r0 = returnFunc(ctx, entityData)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, []byte) []byte); ok {
+		r0 = returnFunc(ctx, oldEntityData, newEntityData)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
-		r1 = returnFunc(ctx, entityData)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte, []byte) error); ok {
+		r1 = returnFunc(ctx, oldEntityData, newEntityData)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockProviderAdapter_Refresh_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Refresh'
-type MockProviderAdapter_Refresh_Call struct {
+// MockProviderAdapter_Read_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Read'
+type MockProviderAdapter_Read_Call struct {
 	*mock.Call
 }
 
-// Refresh is a helper method to define mock.On call
+// Read is a helper method to define mock.On call
 //   - ctx context.Context
-//   - entityData []byte
-func (_e *MockProviderAdapter_Expecter) Refresh(ctx interface{}, entityData interface{}) *MockProviderAdapter_Refresh_Call {
-	return &MockProviderAdapter_Refresh_Call{Call: _e.mock.On("Refresh", ctx, entityData)}
+//   - oldEntityData []byte
+//   - newEntityData []byte
+func (_e *MockProviderAdapter_Expecter) Read(ctx interface{}, oldEntityData interface{}, newEntityData interface{}) *MockProviderAdapter_Read_Call {
+	return &MockProviderAdapter_Read_Call{Call: _e.mock.On("Read", ctx, oldEntityData, newEntityData)}
 }
 
-func (_c *MockProviderAdapter_Refresh_Call) Run(run func(ctx context.Context, entityData []byte)) *MockProviderAdapter_Refresh_Call {
+func (_c *MockProviderAdapter_Read_Call) Run(run func(ctx context.Context, oldEntityData []byte, newEntityData []byte)) *MockProviderAdapter_Read_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -354,20 +355,25 @@ func (_c *MockProviderAdapter_Refresh_Call) Run(run func(ctx context.Context, en
 		if args[1] != nil {
 			arg1 = args[1].([]byte)
 		}
+		var arg2 []byte
+		if args[2] != nil {
+			arg2 = args[2].([]byte)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *MockProviderAdapter_Refresh_Call) Return(bytes []byte, err error) *MockProviderAdapter_Refresh_Call {
+func (_c *MockProviderAdapter_Read_Call) Return(bytes []byte, err error) *MockProviderAdapter_Read_Call {
 	_c.Call.Return(bytes, err)
 	return _c
 }
 
-func (_c *MockProviderAdapter_Refresh_Call) RunAndReturn(run func(ctx context.Context, entityData []byte) ([]byte, error)) *MockProviderAdapter_Refresh_Call {
+func (_c *MockProviderAdapter_Read_Call) RunAndReturn(run func(ctx context.Context, oldEntityData []byte, newEntityData []byte) ([]byte, error)) *MockProviderAdapter_Read_Call {
 	_c.Call.Return(run)
 	return _c
 }

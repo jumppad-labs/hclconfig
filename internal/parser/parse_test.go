@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -709,9 +710,12 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	o.ProviderResolver = resolver
 
 	calls := []string{}
+	var callsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	o.OnParserEvent = func(event ParserEvent) {
 		if event.Operation == "create" && event.Phase == "success" {
+			callsMu.Lock()
+			defer callsMu.Unlock()
 			calls = append(calls, event.ResourceID)
 		}
 	}
@@ -994,11 +998,14 @@ func TestParserEventCallback(t *testing.T) {
 
 	// Track all events
 	var events []ParserEvent
+	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	// Setup parser with event callback
 	options := DefaultOptions()
 	options.Logger = logger.NewTestLogger(t)
 	options.OnParserEvent = func(event ParserEvent) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		events = append(events, event)
 	}
 
@@ -1029,7 +1036,7 @@ func TestParserEventCallback(t *testing.T) {
 
 	// Verify event structure for success events
 	for _, event := range successEvents {
-		require.Contains(t, []string{"create", "refresh", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
+		require.Contains(t, []string{"create", "read", "changed", "update", "destroy"}, event.Operation, "Expected valid operation type")
 		require.Equal(t, "success", event.Phase)
 		require.Contains(t, event.ResourceType, ".", "Expected resource type to contain a dot")
 		require.NotEmpty(t, event.ResourceID, "Expected resource ID to be set")
@@ -1061,9 +1068,12 @@ func TestParserCreateEventErrorCallback(t *testing.T) {
 	require.NoError(t, err)
 
 	var events []ParserEvent
+	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	options := DefaultOptions()
 	options.OnParserEvent = func(event ParserEvent) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		events = append(events, event)
 	}
 
@@ -1086,7 +1096,7 @@ func TestParserCreateEventErrorCallback(t *testing.T) {
 	require.NotEmpty(t, event.Data)
 }
 
-func TestParserRefreshEventErrorCallback(t *testing.T) {
+func TestParserReadEventErrorCallback(t *testing.T) {
 	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/modules/modules.xcl")
 	require.NoError(t, err)
 
@@ -1103,6 +1113,7 @@ func TestParserRefreshEventErrorCallback(t *testing.T) {
 	require.NoError(t, err)
 
 	var events []ParserEvent
+	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	secondStore := &statemocks.MockStateStore{}
 	secondStore.On("Exists").Return(true)
@@ -1111,21 +1122,23 @@ func TestParserRefreshEventErrorCallback(t *testing.T) {
 	secondOptions := DefaultOptions()
 	secondOptions.StateStore = secondStore
 	secondOptions.OnParserEvent = func(event ParserEvent) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		events = append(events, event)
 	}
 
 	secondParser, tp := setupParser(t, secondOptions)
 
-	// the resource exists in state, so it is refreshed rather than created
-	tp.SetRefreshError("resource.container.base", fmt.Errorf("test refresh error"))
+	// the resource exists in state, so it is read rather than created
+	tp.SetReadError("resource.container.base", fmt.Errorf("test read error"))
 
 	_, err = secondParser.Apply(absoluteFolderPath)
 	require.Error(t, err)
 
-	requireEvent(t, events, "refresh", "start", "resource.container.base")
+	requireEvent(t, events, "read", "start", "resource.container.base")
 
-	event := requireEvent(t, events, "refresh", "error", "resource.container.base")
-	require.ErrorContains(t, event.Error, "test refresh error")
+	event := requireEvent(t, events, "read", "error", "resource.container.base")
+	require.ErrorContains(t, event.Error, "test read error")
 	require.Greater(t, event.Duration, time.Duration(0))
 	require.NotEmpty(t, event.Data)
 }
@@ -1138,11 +1151,14 @@ func TestParserEventForVariablesOutputsLocals(t *testing.T) {
 
 	// Track all events
 	var events []ParserEvent
+	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	// Setup parser with event callback
 	options := DefaultOptions()
 	options.Logger = logger.NewTestLogger(t)
 	options.OnParserEvent = func(event ParserEvent) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		events = append(events, event)
 	}
 
@@ -1196,55 +1212,6 @@ func TestParserEventForVariablesOutputsLocals(t *testing.T) {
 		require.Equal(t, time.Duration(0), event.Duration, "Expected 0 duration for outputs")
 		require.NoError(t, event.Error, "Expected no error for success events")
 	}
-}
-
-func TestDestroyLifecycle(t *testing.T) {
-	// Setup parser with file state store
-	ms := &statemocks.MockStateStore{}
-	ms.On("Load").Return(nil, nil)
-	ms.On("Save", mock.Anything).Return(nil)
-
-	o := DefaultOptions()
-	o.StateStore = ms
-	o.Logger = logger.NewTestLogger(t)
-
-	p, testPlugin := setupParser(t, o)
-
-	// First parse: create resources
-	absoluteFolderPath, err := filepath.Abs("../test_fixtures/config/simple/container.xcl")
-	require.NoError(t, err)
-
-	config1, err := p.Apply(absoluteFolderPath)
-	require.NoError(t, err)
-	require.NotNil(t, config1)
-
-	// Verify resources were created
-	createdResources := testPlugin.GetCreatedResources()
-	require.Contains(t, createdResources, "resource.container.consul")
-	require.Contains(t, createdResources, "resource.container.base")
-
-	// Mock state store to return the created config as previous state
-	ms.ExpectedCalls = nil // Clear previous expectations
-	ms.On("Load").Return(config1, nil)
-	ms.On("Save", mock.Anything).Return(nil)
-
-	// Create a smaller config (remove some resources)
-	p2, testPlugin2 := setupParser(t, o)
-
-	// Parse a config with fewer resources (to trigger destroy)
-	absoluteFolderPath2, err := filepath.Abs("../test_fixtures/config/defaults/container.xcl")
-	require.NoError(t, err)
-
-	config2, err := p2.Apply(absoluteFolderPath2)
-	require.NoError(t, err)
-	require.NotNil(t, config2)
-
-	// Verify destroy operations were called for removed resources
-	destroyedResources := testPlugin2.GetDestroyedResources()
-
-	// Resources from config1 that are not in config2 should be destroyed
-	// This will depend on what's actually in the test fixtures
-	require.NotEmpty(t, destroyedResources, "Expected some resources to be destroyed")
 }
 
 // requireEvent fails the test unless events contains an event with the given

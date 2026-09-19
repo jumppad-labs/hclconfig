@@ -48,7 +48,7 @@ touches a real provider or disk — useful for testing.
 
 ## What `Apply` actually does
 
-[`config.go:94`](../config.go#L94):
+[`config.go:95`](../config.go#L95):
 
 1. Construct a `parser.Parser` for this call only, handing it `Config`'s
    `StateStore`, `PluginRegistry`, and variables via `ParserOptions`.
@@ -56,6 +56,16 @@ touches a real provider or disk — useful for testing.
    [Parser & Resource Lifecycle](parser-lifecycle.md).
 3. Adopt the returned `*state.State` as `c.currentState`.
 4. If a `StateStore` is configured, `Save` the new state.
+5. Return the error from `p.Apply`, if any.
+
+State is saved even when the apply failed. When a provider call fails,
+`p.Apply` returns the state the walk reached along with the error: reached
+resources with their new status, the failing resource as `failed` (or
+`destroy_failed`), and the previous entry of resources that were not reached.
+`Config.Apply` saves that state and then returns the error. Only when
+`p.Apply` returns no state at all (the configuration didn't parse or
+validate, or the dependency graph couldn't be built) is nothing saved. See
+[State & Persistence](state.md#state-saved-after-a-failed-apply).
 
 `Config.Validate` ([`config.go`](../config.go)) answers only whether a
 configuration is valid, returning `error` alone. It calls `p.Validate(paths...)`,
@@ -70,10 +80,13 @@ considered. A later stage is skipped when an earlier one found anything, because
 checking properties on a reference that resolves nowhere would only report
 consequences of a problem already reported.
 
-`Config.Destroy` ([`config.go:128`](../config.go#L128)) is currently a stub
+`Config.Destroy` ([`config.go:130`](../config.go#L130)) is currently a stub
 (`// TODO: Implement destroy logic`) — the destroy DAG-walk machinery exists
 in the parser (`destroyWalkCallback`, see [Parser & Resource
-Lifecycle](parser-lifecycle.md)) but nothing in `Config` calls it yet.
+Lifecycle](parser-lifecycle.md#destroy)) but nothing calls it yet. Resources
+removed from the configuration are not destroyed either; the only `Destroy`
+call an apply makes is when it rebuilds a resource saved as `failed` or
+`destroy_failed`.
 
 ## Resource metadata convention
 
@@ -93,9 +106,17 @@ type Meta struct {
     Line, Column                 int
     Properties                   map[string]any
     Links                        []string // unresolved cross-resource references
-    Status                       string   // "pending" | "created" | "failed"
+    Status                       string   // see below
 }
 ```
+
+`Status` is set by xcl, never by providers, and is one of `created`,
+`updated`, `failed`, `destroyed` or `destroy_failed`
+([`types/status.go`](../types/status.go)). The status saved by the last apply
+decides what the next apply does with the resource: `created` and `updated`
+resources are read and updated if they changed, `failed` and
+`destroy_failed` resources are destroyed and created again. See
+[State & Persistence](state.md#resource-statuses).
 
 `types.GetMeta(resource any) (*Meta, error)` ([`types/resource_helpers.go`](../types/resource_helpers.go))
 is the canonical way engine code reads this off an arbitrary resource value —

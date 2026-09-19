@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/go-plugin"
@@ -118,7 +119,7 @@ func (s *GRPCServer) Destroy(ctx context.Context, req *proto.DestroyRequest) (*p
 	return &proto.DestroyResponse{Error: errorToString(err)}, nil
 }
 
-func (s *GRPCServer) Refresh(ctx context.Context, req *proto.RefreshRequest) (*proto.RefreshResponse, error) {
+func (s *GRPCServer) Read(ctx context.Context, req *proto.ReadRequest) (*proto.ReadResponse, error) {
 	l, err := s.getLogger()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logger: %w", err)
@@ -127,19 +128,20 @@ func (s *GRPCServer) Refresh(ctx context.Context, req *proto.RefreshRequest) (*p
 	// set the logger for the plugin
 	s.plugin.SetLogger(l)
 
-	l.Info("Refreshing entity")
+	l.Info("Reading entity")
 
 	// Get the registered type to access its adapter
 	rt := s.getRegisteredType(req.EntityType, req.EntitySubType)
 	if rt == nil {
-		return &proto.RefreshResponse{Error: "no registered type found for " + req.EntityType + "." + req.EntitySubType}, nil
+		return &proto.ReadResponse{Error: "no registered type found for " + req.EntityType + "." + req.EntitySubType}, nil
 	}
 
-	// Call the adapter's Refresh method which returns mutated data
-	refreshedData, err := rt.Adapter.Refresh(ctx, req.EntityData)
-	return &proto.RefreshResponse{
-		Error:               errorToString(err),
-		RefreshedEntityData: refreshedData,
+	// Call the adapter's Read method which returns the read data
+	readData, err := rt.Adapter.Read(ctx, req.OldEntityData, req.NewEntityData)
+	return &proto.ReadResponse{
+		Error:      errorToString(err),
+		NotFound:   errors.Is(err, ErrNotFound),
+		EntityData: readData,
 	}, nil
 }
 

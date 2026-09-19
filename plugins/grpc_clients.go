@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -60,7 +61,7 @@ func (s *GRPCState) Get(key string) (any, error) {
 	}
 
 	if resp.Error != "" {
-		return nil, fmt.Errorf(resp.Error)
+		return nil, errors.New(resp.Error)
 	}
 
 	// Unmarshal the resource data back to any
@@ -83,7 +84,7 @@ func (s *GRPCState) Find(pattern string) ([]any, error) {
 	}
 
 	if resp.Error != "" {
-		return nil, fmt.Errorf(resp.Error)
+		return nil, errors.New(resp.Error)
 	}
 
 	// Similar issue as Get - need to properly deserialize resources

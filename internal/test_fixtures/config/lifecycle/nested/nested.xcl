@@ -1,0 +1,21 @@
+# web has two network blocks, identified by their id keys. Create assigns each
+# an address, a computed value. consumer names its network block after the
+# address assigned to web's first network block.
+
+resource "container" "web" {
+  network {
+    id   = 1
+    name = "n1"
+  }
+
+  network {
+    id   = 2
+    name = "n2"
+  }
+}
+
+resource "container" "consumer" {
+  network {
+    name = resource.container.web.network[0].assigned_address
+  }
+}

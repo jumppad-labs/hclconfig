@@ -47,9 +47,9 @@ func (h *DirectPluginHost) Destroy(entityType, entitySubType string, entityData 
 	return h.plugin.Destroy(entityType, entitySubType, entityData)
 }
 
-// Refresh refreshes the plugin state
-func (h *DirectPluginHost) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
-	return h.plugin.Refresh(ctx, entityType, entitySubType, entityData)
+// Read reports the real entity, given its saved and configured copies
+func (h *DirectPluginHost) Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
+	return h.plugin.Read(ctx, entityType, entitySubType, oldEntityData, newEntityData)
 }
 
 // Update updates an existing entity

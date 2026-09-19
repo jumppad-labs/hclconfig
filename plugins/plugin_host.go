@@ -18,8 +18,8 @@ type PluginHost interface {
 	// Destroy deletes an existing entity
 	Destroy(entityType, entitySubType string, entityData []byte) error
 
-	// Refresh refreshes the plugin state
-	Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error)
+	// Read reports the real entity, given its saved and configured copies
+	Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error)
 
 	// Update updates an existing entity
 	Update(entityType, entitySubType string, entityData []byte) ([]byte, error)

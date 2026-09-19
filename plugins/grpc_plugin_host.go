@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -102,7 +103,7 @@ func (w *grpcPluginWrapper) Validate(entityType, entitySubType string, entityDat
 	}
 
 	if resp.Error != "" {
-		return fmt.Errorf(resp.Error)
+		return errors.New(resp.Error)
 	}
 
 	return nil
@@ -119,7 +120,7 @@ func (w *grpcPluginWrapper) Create(entityType, entitySubType string, entityData 
 	}
 
 	if resp.Error != "" {
-		return nil, fmt.Errorf(resp.Error)
+		return nil, errors.New(resp.Error)
 	}
 
 	return resp.MutatedEntityData, nil
@@ -136,27 +137,34 @@ func (w *grpcPluginWrapper) Destroy(entityType, entitySubType string, entityData
 	}
 
 	if resp.Error != "" {
-		return fmt.Errorf(resp.Error)
+		return errors.New(resp.Error)
 	}
 
 	return nil
 }
 
-func (w *grpcPluginWrapper) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
-	resp, err := w.client.Refresh(ctx, &proto.RefreshRequest{
+func (w *grpcPluginWrapper) Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
+	resp, err := w.client.Read(ctx, &proto.ReadRequest{
 		EntityType:    entityType,
 		EntitySubType: entitySubType,
-		EntityData:    entityData,
+		OldEntityData: oldEntityData,
+		NewEntityData: newEntityData,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	if resp.Error != "" {
-		return nil, fmt.Errorf(resp.Error)
+	// the not found signal is carried in its own field, restore the sentinel
+	// so that callers can check it with errors.Is
+	if resp.NotFound {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, resp.Error)
 	}
 
-	return resp.RefreshedEntityData, nil
+	if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp.EntityData, nil
 }
 
 func (w *grpcPluginWrapper) Update(entityType, entitySubType string, entityData []byte) ([]byte, error) {
@@ -170,7 +178,7 @@ func (w *grpcPluginWrapper) Update(entityType, entitySubType string, entityData 
 	}
 
 	if resp.Error != "" {
-		return nil, fmt.Errorf(resp.Error)
+		return nil, errors.New(resp.Error)
 	}
 
 	return resp.UpdatedEntityData, nil
@@ -188,7 +196,7 @@ func (w *grpcPluginWrapper) Changed(entityType, entitySubType string, oldEntityD
 	}
 
 	if resp.Error != "" {
-		return false, fmt.Errorf(resp.Error)
+		return false, errors.New(resp.Error)
 	}
 
 	return resp.Changed, nil
@@ -258,12 +266,12 @@ func (h *GRPCPluginHost) Destroy(entityType, entitySubType string, entityData []
 	return h.plugin.Destroy(entityType, entitySubType, entityData)
 }
 
-// Refresh refreshes the plugin state
-func (h *GRPCPluginHost) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
+// Read reports the real entity, given its saved and configured copies
+func (h *GRPCPluginHost) Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
 	if h.plugin == nil {
 		return nil, fmt.Errorf("plugin not initialized")
 	}
-	return h.plugin.(*grpcPluginWrapper).Refresh(ctx, entityType, entitySubType, entityData)
+	return h.plugin.(*grpcPluginWrapper).Read(ctx, entityType, entitySubType, oldEntityData, newEntityData)
 }
 
 // Update updates an existing entity

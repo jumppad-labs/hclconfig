@@ -23,7 +23,7 @@ const (
 	PluginService_Validate_FullMethodName = "/proto.PluginService/Validate"
 	PluginService_Create_FullMethodName   = "/proto.PluginService/Create"
 	PluginService_Destroy_FullMethodName  = "/proto.PluginService/Destroy"
-	PluginService_Refresh_FullMethodName  = "/proto.PluginService/Refresh"
+	PluginService_Read_FullMethodName     = "/proto.PluginService/Read"
 	PluginService_Update_FullMethodName   = "/proto.PluginService/Update"
 	PluginService_Changed_FullMethodName  = "/proto.PluginService/Changed"
 )
@@ -38,7 +38,7 @@ type PluginServiceClient interface {
 	Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	Create(ctx context.Context, in *CreateRequest, opts ...grpc.CallOption) (*CreateResponse, error)
 	Destroy(ctx context.Context, in *DestroyRequest, opts ...grpc.CallOption) (*DestroyResponse, error)
-	Refresh(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshResponse, error)
+	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error)
 	Changed(ctx context.Context, in *ChangedRequest, opts ...grpc.CallOption) (*ChangedResponse, error)
 }
@@ -91,10 +91,10 @@ func (c *pluginServiceClient) Destroy(ctx context.Context, in *DestroyRequest, o
 	return out, nil
 }
 
-func (c *pluginServiceClient) Refresh(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshResponse, error) {
+func (c *pluginServiceClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RefreshResponse)
-	err := c.cc.Invoke(ctx, PluginService_Refresh_FullMethodName, in, out, cOpts...)
+	out := new(ReadResponse)
+	err := c.cc.Invoke(ctx, PluginService_Read_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ type PluginServiceServer interface {
 	Validate(context.Context, *ValidateRequest) (*ValidateResponse, error)
 	Create(context.Context, *CreateRequest) (*CreateResponse, error)
 	Destroy(context.Context, *DestroyRequest) (*DestroyResponse, error)
-	Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error)
+	Read(context.Context, *ReadRequest) (*ReadResponse, error)
 	Update(context.Context, *UpdateRequest) (*UpdateResponse, error)
 	Changed(context.Context, *ChangedRequest) (*ChangedResponse, error)
 	mustEmbedUnimplementedPluginServiceServer()
@@ -156,8 +156,8 @@ func (UnimplementedPluginServiceServer) Create(context.Context, *CreateRequest) 
 func (UnimplementedPluginServiceServer) Destroy(context.Context, *DestroyRequest) (*DestroyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Destroy not implemented")
 }
-func (UnimplementedPluginServiceServer) Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Refresh not implemented")
+func (UnimplementedPluginServiceServer) Read(context.Context, *ReadRequest) (*ReadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
 func (UnimplementedPluginServiceServer) Update(context.Context, *UpdateRequest) (*UpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
@@ -258,20 +258,20 @@ func _PluginService_Destroy_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PluginService_Refresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RefreshRequest)
+func _PluginService_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PluginServiceServer).Refresh(ctx, in)
+		return srv.(PluginServiceServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PluginService_Refresh_FullMethodName,
+		FullMethod: PluginService_Read_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PluginServiceServer).Refresh(ctx, req.(*RefreshRequest))
+		return srv.(PluginServiceServer).Read(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -336,8 +336,8 @@ var PluginService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PluginService_Destroy_Handler,
 		},
 		{
-			MethodName: "Refresh",
-			Handler:    _PluginService_Refresh_Handler,
+			MethodName: "Read",
+			Handler:    _PluginService_Read_Handler,
 		},
 		{
 			MethodName: "Update",

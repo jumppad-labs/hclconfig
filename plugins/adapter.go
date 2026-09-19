@@ -24,7 +24,7 @@ type ProviderAdapter interface {
 	Validate(ctx context.Context, entityData []byte) error
 	Create(ctx context.Context, entityData []byte) ([]byte, error)
 	Destroy(ctx context.Context, entityData []byte, force bool) error
-	Refresh(ctx context.Context, entityData []byte) ([]byte, error)
+	Read(ctx context.Context, oldEntityData []byte, newEntityData []byte) ([]byte, error)
 	Update(ctx context.Context, entityData []byte) ([]byte, error)
 	Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error)
 }
@@ -135,32 +135,37 @@ func (a *TypedProviderAdapter[T]) Destroy(ctx context.Context, entityData []byte
 	return a.provider.Destroy(ctx, resource, force)
 }
 
-func (a *TypedProviderAdapter[T]) Refresh(ctx context.Context, entityData []byte) ([]byte, error) {
-	// Create a new instance of type T to unmarshal into
-	var resource T
+func (a *TypedProviderAdapter[T]) Read(ctx context.Context, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
+	// Create instances for old and new resources, when no data is provided
+	// the resource is the zero value of T
+	var oldResource, newResource T
 
-	// If entityData is provided, unmarshal it
-	if entityData != nil {
-		// Unmarshal JSON bytes into the concrete type
-		if err := json.Unmarshal(entityData, &resource); err != nil {
+	if oldEntityData != nil {
+		if err := json.Unmarshal(oldEntityData, &oldResource); err != nil {
 			return nil, err
 		}
 	}
 
-	// Call the provider's Refresh method with the concrete type
-	// Note: if entityData was nil, resource will be the zero value of T
-	refreshedResource, err := a.provider.Refresh(ctx, resource)
+	if newEntityData != nil {
+		if err := json.Unmarshal(newEntityData, &newResource); err != nil {
+			return nil, err
+		}
+	}
+
+	// Call the provider's Read method with the concrete types, the error is
+	// returned unwrapped so that callers can check for ErrNotFound
+	readResource, err := a.provider.Read(ctx, oldResource, newResource)
 	if err != nil {
 		return nil, err
 	}
 
-	// Serialize the refreshed resource back to JSON
-	refreshedData, err := json.Marshal(refreshedResource)
+	// Serialize the read resource back to JSON
+	readData, err := json.Marshal(readResource)
 	if err != nil {
 		return nil, err
 	}
 
-	return refreshedData, nil
+	return readData, nil
 }
 
 func (a *TypedProviderAdapter[T]) Update(ctx context.Context, entityData []byte) ([]byte, error) {

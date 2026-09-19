@@ -13,9 +13,9 @@ type State struct {
 ```
 
 There's no separate index or status table — a resource's operational
-status (`"pending"`/`"created"`/`"failed"`) lives on its own
-`types.Meta.Status` field (see [Overview](overview.md)), so `State` itself
-just needs to store and find resources.
+status lives on its own `types.Meta.Status` field (see
+[Resource statuses](#resource-statuses)), so `State` itself just needs to
+store and find resources.
 
 Every lookup (`FindResource`, `FindResourcesByType`, `FindModuleResources`)
 is a **linear scan** comparing `types.GetMeta(r)` fields against a parsed
@@ -41,6 +41,42 @@ Key operations:
   serialization boundary: `json.MarshalIndent(s.resources, "", "  ")`. This
   is what any `StateStore.Save` implementation is expected to persist.
 
+## Resource statuses
+
+xcl records what happened to each resource in `Meta.Status`
+([`types/status.go`](../types/status.go)). These are the only values it
+sets:
+
+| Status | Meaning | Next apply |
+|---|---|---|
+| `created` | the provider created the resource | read, then updated if changed |
+| `updated` | the provider updated the resource | read, then updated if changed |
+| `failed` | a provider call for the resource failed | rebuilt: destroyed, then created |
+| `destroyed` | the provider destroyed the resource | — |
+| `destroy_failed` | destroying the resource failed | rebuilt: the destroy is tried again, then created |
+
+`destroyed` is only set by the destroy walk, which nothing runs yet (see
+[Parser & Resource Lifecycle](parser-lifecycle.md#destroy)).
+
+## State saved after a failed apply
+
+A failed apply still produces a state to save. `Parser.Apply` returns it
+together with the error, and `Config.Apply` saves it before returning the
+error, so the next apply picks up where this one stopped:
+
+- resources the walk reached are saved with their new values and status;
+- the failing resource is saved as `failed`, or `destroy_failed` if a
+  rebuild's destroy failed;
+- resources that existed before but were not reached keep their previous
+  entry;
+- new resources that were not reached are left out.
+
+Nothing is saved when the configuration doesn't parse or validate, or the
+dependency graph can't be built: no provider was called, so the previous
+state still stands. See
+[Parser & Resource Lifecycle](parser-lifecycle.md#state-saved-after-a-failed-apply)
+for how the state is built.
+
 ## `StateStore` — the persistence contract
 
 ```go
@@ -53,17 +89,21 @@ type StateStore interface {
 }
 ```
 
-`Parser.Parse` calls `Exists()`/`Load()` at the start of every run to get a
-"previous state" to diff against for Create-vs-Update decisions (see
-[Parser & Resource Lifecycle](parser-lifecycle.md)); `Config.Apply` calls
-`Save()` after adopting the newly parsed state.
+`Parser.Apply` (and `Parser.Validate`) call `Exists()`/`Load()` at the
+start of every run to get the "previous state", the state saved by the last
+apply. `Parser.Apply` uses each resource's entry in it to decide between
+create, read-then-update and rebuild (see
+[Parser & Resource Lifecycle](parser-lifecycle.md)). `Config.Apply` calls
+`Save()` after adopting the returned state, including after a failed apply
+(see [State saved after a failed apply](#state-saved-after-a-failed-apply)).
 
 `state/mocks/mock_state_store.go` is a generated mock of this interface
 (same mockery setup as the plugin mocks — see [Plugin
 Architecture](plugins.md)). Tests must stub `Exists()` even when it's
-expected to return `false` — `Parser.Parse` calls it unconditionally
-(`internal/parser/parser.go:189`), so a bare mock with no expectation set
-panics on the first `Parse` call.
+expected to return `false` — `Parser.Apply` and `Parser.Validate` call it
+unconditionally (`parseAndValidate`,
+[`internal/parser/parser.go:255`](../internal/parser/parser.go#L255)), so a
+bare mock with no expectation set panics on the first call.
 
 ## `FileStateStore` — the on-disk implementation
 

@@ -81,8 +81,17 @@ type Person struct {
     Age       int    `hcl:"age,optional" json:"age,omitempty"`
     Email     string `hcl:"email,optional" json:"email,omitempty"`
     Address   string `hcl:"address,optional" json:"address,omitempty"`
+    Description string `hcl:"description,optional" json:"description,omitempty"`
+
+    // set by the provider in Create, can not be set in configuration
+    PersonID string `hcl:"person_id,optional" json:"person_id,omitempty" xcl:"computed"`
 }
 ```
+
+`PersonID` is a computed field. The provider sets it in `Create`, a
+configuration that sets it fails validation, and xcl carries the saved value
+over on every apply, so it survives applies where nothing changed and other
+resources can reference it.
 
 ### Provider Implementation (`pkg/person/provider.go`)
 ```go
@@ -118,8 +127,21 @@ All resources support standard lifecycle operations:
 - **Validate** - Check resource configuration
 - **Create** - Create new resources
 - **Destroy** - Clean up resources
-- **Refresh** - Update resource state
-- **Changed** - Detect configuration drift
+- **Read** - Report the real resource, given the saved copy and the configured copy; returns `plugins.ErrNotFound` when it no longer exists
+- **Update** - Update a resource that changed
+- **Changed** - Detect configuration edits and drift; the example embeds `plugins.DefaultChanged` rather than writing its own
+
+The example provider never changes a configured field; it only sets `PersonID`.
+
+To see the not-found path, configure a person whose `email` is
+`missing@example.com` (`person.MissingPersonEmail`). The first apply creates
+it. On every later apply the provider's `Read` sees that email on the saved
+copy, returns `plugins.ErrNotFound`, and xcl creates the person again. This is a
+sentinel for demonstration; a real provider would look the resource up by its
+identity, such as `PersonID`.
+
+See the [Plugin Developer Guide](../../docs/plugin-developer-guide.md) for the
+full provider contract.
 
 ## HCL Configuration Format
 

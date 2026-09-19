@@ -37,8 +37,8 @@ func (a *GRPCResourceProviderAdapter) Destroy(ctx context.Context, entityData []
 	return a.wrapper.Destroy(a.resourceType, a.resourceSubType, entityData)
 }
 
-func (a *GRPCResourceProviderAdapter) Refresh(ctx context.Context, entityData []byte) ([]byte, error) {
-	return a.wrapper.Refresh(ctx, a.resourceType, a.resourceSubType, entityData)
+func (a *GRPCResourceProviderAdapter) Read(ctx context.Context, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
+	return a.wrapper.Read(ctx, a.resourceType, a.resourceSubType, oldEntityData, newEntityData)
 }
 
 func (a *GRPCResourceProviderAdapter) Update(ctx context.Context, entityData []byte) ([]byte, error) {

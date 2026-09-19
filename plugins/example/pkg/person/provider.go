@@ -2,6 +2,7 @@ package person
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins"
@@ -9,7 +10,11 @@ import (
 
 // ExampleProvider is a basic implementation of Provider[*Person]
 // that demonstrates the structure and lifecycle methods for Person resources.
+//
+// It embeds DefaultChanged to get change detection without writing any.
 type ExampleProvider struct {
+	plugins.DefaultChanged[*Person]
+
 	state     plugins.State
 	functions plugins.ProviderFunctions
 	logger    logger.Logger
@@ -37,8 +42,9 @@ func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, 
 	default:
 	}
 
-	// Modify the email field to demonstrate provider logic
-	person.Description = "<Created by ExampleProvider> By the way, " + person.FirstName + " " + person.LastName + " is not as good as Nic as he could not make this work even with AI help!"
+	// Simulate person creation (e.g., insert into a database). Provider-owned
+	// computed fields are set here, configured fields are never changed.
+	person.PersonID = "person-" + strings.ToLower(person.FirstName+"-"+person.LastName)
 
 	return person, nil
 }
@@ -61,17 +67,13 @@ func (p *ExampleProvider) Destroy(ctx context.Context, person *Person, force boo
 	return nil
 }
 
-func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) (*Person, error) {
-	// Handle nil person (when no entity data is provided)
-	if person == nil {
-		if p.logger != nil {
-			p.logger.Info("Refreshing person with no entity data")
-		}
-		return nil, nil
-	}
+// MissingPersonEmail is a sentinel used to demonstrate ErrNotFound. When the
+// saved person has this email, Read reports the person as no longer existing.
+const MissingPersonEmail = "missing@example.com"
 
+func (p *ExampleProvider) Read(ctx context.Context, old *Person, new *Person) (*Person, error) {
 	if p.logger != nil {
-		p.logger.Info("Refreshing person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Reading person", "id", new.Meta.ID, "name", new.FirstName+" "+new.LastName)
 	}
 
 	// Check for context cancellation
@@ -81,34 +83,16 @@ func (p *ExampleProvider) Refresh(ctx context.Context, person *Person) (*Person,
 	default:
 	}
 
-	// Simulate person refresh (e.g., sync from database, update fields, etc.)
-	// In a real implementation, this would sync resource state
-	// Add a refresh timestamp to demonstrate mutation
-	person.Description = "<Refreshed by ExampleProvider> " + person.FirstName + " " + person.LastName + " was refreshed!"
-
-	return person, nil
-}
-
-func (p *ExampleProvider) Changed(ctx context.Context, old *Person, new *Person) (bool, error) {
-	if p.logger != nil {
-		p.logger.Info("Checking if person changed", "id", new.Meta.ID, "old_name", old.FirstName+" "+old.LastName, "new_name", new.FirstName+" "+new.LastName)
+	// A real provider would use old to locate the person, for example by
+	// old.PersonID, and report ErrNotFound when it no longer exists
+	if old.Email == MissingPersonEmail {
+		return nil, plugins.ErrNotFound
 	}
 
-	// Check for context cancellation
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	default:
-	}
-
-	// Simulate drift detection for person (e.g., compare old vs new state)
-	// In a real implementation, this would compare the old state with the new desired state
-	// For this example, we'll check if names or ages differ
-	if old.FirstName != new.FirstName || old.LastName != new.LastName || old.Age != new.Age {
-		return true, nil
-	}
-
-	return false, nil
+	// xcl has already carried the computed PersonID over onto new. A real
+	// provider would fill in observed fields here. Configured fields are never
+	// changed.
+	return new, nil
 }
 
 func (p *ExampleProvider) Update(ctx context.Context, person *Person) (*Person, error) {
@@ -132,9 +116,8 @@ func (p *ExampleProvider) Update(ctx context.Context, person *Person) (*Person, 
 	}
 
 	// Simulate person update (e.g., update in database, modify user account, etc.)
-	// In a real implementation, this would update the resource
-	// Add an update marker to demonstrate mutation
-	person.Description = "<Updated by ExampleProvider> " + person.FirstName + " " + person.LastName + " was updated!"
+	// In a real implementation, this would update the resource, configured
+	// fields are never changed.
 
 	return person, nil
 }

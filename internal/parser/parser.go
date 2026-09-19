@@ -75,7 +75,7 @@ type ParserOptions struct {
 	PluginRegistry *registry.PluginRegistry
 
 	// ProviderResolver overrides how provider adapters are looked up during the resource
-	// lifecycle walk (Create/Refresh/Changed/Update/Destroy). Defaults to PluginRegistry.
+	// lifecycle walk (Create/Read/Changed/Update/Destroy). Defaults to PluginRegistry.
 	// Primarily useful for testing lifecycle/ordering behavior without a real plugin registry.
 	ProviderResolver ProviderResolver
 
@@ -181,9 +181,17 @@ func NewParser(options *ParserOptions) *Parser {
 //  3. Build a DAG based on resource dependencies
 //  4. Walk the DAG in dependency order
 //  5. Decode each resource body (HCL → Go structs)
-//  6. Compare with previousState and call Create/Update on plugins
+//  6. Call the provider lifecycle: resources not in previousState are
+//     created, resources in it are read, then updated if they changed
 //
 // Returns the new State containing all parsed resources.
+//
+// When a provider call fails the walk stops processing the resources that
+// depend on the failed one, and Apply returns a partial State together with
+// the error. The partial State holds the resources that were reached, the
+// failed resource with status "failed", and the previous entry of resources
+// that existed before but were not reached. Parse and validation failures
+// return a nil State.
 func (p *Parser) Apply(paths ...string) (*state.State, error) {
 	currentState, previousState, err := p.parseAndValidate(paths...)
 	if err != nil {
@@ -197,12 +205,25 @@ func (p *Parser) Apply(paths ...string) (*state.State, error) {
 
 	// Always walk the DAG to decode resources (fills in their fields from HCL)
 	// This decodes interpolations and resolves dependencies regardless of plugin execution
-	errs := p.walk(currentState, previousState, functions)
+	progress, errs := p.walk(currentState, previousState, functions)
 	if len(errs) > 0 {
 		for _, e := range errs {
 			ce.AppendError(e)
 		}
-		return nil, ce
+
+		// keep the progress the walk made so that the next apply picks up
+		// where this one stopped
+		if progress == nil {
+			return nil, ce
+		}
+
+		partial, err := progress.buildState(currentState, previousState)
+		if err != nil {
+			ce.AppendError(err)
+			return nil, ce
+		}
+
+		return partial, ce
 	}
 
 	return currentState, nil
@@ -924,11 +945,13 @@ func processDisabled(bdy *hclsyntax.Body, ctx *hcl.EvalContext, r dag.Vertex) (b
 // walk builds a DAG from the state and walks it with the given callback
 // This is the core parsing logic that processes resources in dependency order
 // and calls the provider lifecycle for each resource
-func (p *Parser) walk(currentState, previousState *state.State, functions map[string]function.Function) []error {
+//
+// It returns the progress of the walk, which is nil when the walk did not start.
+func (p *Parser) walk(currentState, previousState *state.State, functions map[string]function.Function) (*applyProgress, []error) {
 	// Build the DAG using currentState (implements ResourceProvider)
 	d, err := DoYouLikeDags(currentState, false)
 	if err != nil {
-		return []error{err}
+		return nil, []error{err}
 	}
 
 	// Reduce the graph nodes to unique instances
@@ -937,17 +960,23 @@ func (p *Parser) walk(currentState, previousState *state.State, functions map[st
 	// Validate the dependency graph is ok
 	err = d.Validate()
 	if err != nil {
-		return []error{fmt.Errorf("unable to validate dependency graph: %w", err)}
+		return nil, []error{fmt.Errorf("unable to validate dependency graph: %w", err)}
 	}
 
 	// Define the walker callback that will be called for every node in the graph
 	w := dag.Walker{}
 
-	// For now, previousState is nil as we need to implement state loading
-	// TODO: Load previousState from StateStore when implementing state persistence
-	var previousParsed *parsed = nil
+	// The lifecycle decides the provider calls for each resource from the
+	// state saved by the last apply
+	lifecycle := &resourceLifecycle{
+		previous: previousState,
+		resolver: p.providerResolver,
+		options:  &p.options,
+		bodies:   p.parsedResources.bodies,
+		progress: newApplyProgress(),
+	}
 
-	w.Callback = walkCallback(p.parsedResources, previousParsed, currentState, p.providerResolver, &p.options, functions)
+	w.Callback = walkCallback(p.parsedResources, currentState, lifecycle, &p.options, functions)
 	w.Reverse = false
 
 	// Update the dag and process the nodes
@@ -958,10 +987,10 @@ func (p *Parser) walk(currentState, previousState *state.State, functions map[st
 	diags := w.Wait()
 	if diags.HasErrors() {
 		errs = append(errs, diags.Err().(errwrap.Wrapper).WrappedErrors()...)
-		return errs
+		return lifecycle.progress, errs
 	}
 
-	return nil
+	return lifecycle.progress, nil
 }
 
 // createBuiltinResource creates built-in resource types (local, output, variable, module)

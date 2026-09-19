@@ -28,7 +28,7 @@ type ProviderResolver interface {
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values.
-func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvider, registry ProviderResolver, options *ParserOptions, functions map[string]function.Function) func(v dag.Vertex) (diags dag.Diagnostics) {
+func walkCallback(parsedData *parsed, rp ResourceProvider, lifecycle *resourceLifecycle, options *ParserOptions, functions map[string]function.Function) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		// v should be a resource (either builtin or schema-generated)
@@ -40,6 +40,7 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 
 		// Skip the root node
 		if rMeta.Type == resources.TypeRoot {
+			lifecycle.progress.record(rMeta.ID, outcome{saved: r})
 			return nil
 		}
 
@@ -51,6 +52,7 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 		}
 
 		if disabled {
+			lifecycle.progress.record(rMeta.ID, outcome{saved: r})
 			return nil
 		}
 
@@ -96,6 +98,7 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 
 		// If the resource is disabled we need to skip the resource
 		if isDisabled {
+			lifecycle.progress.record(rMeta.ID, outcome{saved: r})
 			return nil
 		}
 
@@ -148,7 +151,7 @@ func walkCallback(parsedData *parsed, previousParsed *parsed, rp ResourceProvide
 		}
 
 		// Call provider lifecycle methods
-		if err := callProviderLifecycle(r, previousParsed, registry, options); err != nil {
+		if err := lifecycle.apply(r); err != nil {
 			pe := errors.NewParserErrorFromResource(
 				r,
 				fmt.Sprintf("provider lifecycle error: %s", err),
@@ -195,7 +198,7 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 			resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
 			fireParserEvent(options, "destroy", resourceType, rMeta.ID, "success", 0, nil, nil)
 
-			rMeta.Status = "destroyed"
+			rMeta.Status = types.StatusDestroyed
 
 			return nil
 		}
@@ -204,7 +207,7 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 		adapter := registry.GetProviderForResource(r)
 		if adapter == nil {
 
-			rMeta.Status = "destroyed_failed"
+			rMeta.Status = types.StatusDestroyFailed
 
 			pe := errors.NewParserErrorFromResource(
 				r,
@@ -220,7 +223,7 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 		// Serialize the resource to JSON for provider call
 		resourceJSON, err := json.Marshal(r)
 		if err != nil {
-			rMeta.Status = "destroyed_failed"
+			rMeta.Status = types.StatusDestroyFailed
 
 			pe := errors.NewParserErrorFromResource(
 				r,
@@ -237,7 +240,7 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 
 		if err != nil {
 			fireParserEvent(options, "destroy", resourceType, resourceID, "error", duration, err, resourceJSON)
-			rMeta.Status = "destroy_failed"
+			rMeta.Status = types.StatusDestroyFailed
 
 			pe := errors.NewParserErrorFromResource(
 				r,
@@ -247,145 +250,8 @@ func destroyWalkCallback(registry ProviderResolver, options *ParserOptions) func
 		}
 
 		fireParserEvent(options, "destroy", resourceType, resourceID, "success", duration, nil, resourceJSON)
-		rMeta.Status = "destroyed"
+		rMeta.Status = types.StatusDestroyed
 
 		return nil
 	}
-}
-
-// callProviderLifecycle calls the appropriate provider lifecycle method based on resource state
-func callProviderLifecycle(r any, previousParsed *parsed, registry ProviderResolver, options *ParserOptions) error {
-	rMeta, err := types.GetMeta(r)
-	if err != nil {
-		return err
-	}
-
-	// Skip builtin resource types that don't have providers
-	if rMeta.Type == resources.TypeVariable ||
-		rMeta.Type == resources.TypeOutput ||
-		rMeta.Type == resources.TypeModule ||
-		rMeta.Type == resources.TypeRoot {
-
-		// Fire create events for builtin types (always succeed with 0 time)
-		resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
-		fireParserEvent(options, "create", resourceType, rMeta.ID, "success", 0, nil, nil)
-
-		return nil
-	}
-
-	// Get the provider for this resource
-	adapter := registry.GetProviderForResource(r)
-	if adapter == nil {
-		return fmt.Errorf("no provider found for resource type %s", rMeta.Type)
-	}
-
-	ctx := context.Background()
-	resourceID := rMeta.ID
-	resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
-
-	// Serialize the current resource to JSON for provider calls
-	resourceJSON, err := json.Marshal(r)
-	if err != nil {
-		return fmt.Errorf("failed to serialize resource: %w", err)
-	}
-
-	// Check if this resource existed in previous state
-	var previousResource any
-	if previousParsed != nil {
-		previousResource = previousParsed.resources[rMeta.ID]
-	}
-
-	// Determine lifecycle operation based on previous state
-	if previousResource == nil {
-		// New resource - call Create
-		fireParserEvent(options, "create", resourceType, resourceID, "start", 0, nil, resourceJSON)
-		start := time.Now()
-		updatedJSON, err := adapter.Create(ctx, resourceJSON)
-		duration := time.Since(start)
-
-		if err != nil {
-			fireParserEvent(options, "create", resourceType, resourceID, "error", duration, err, resourceJSON)
-			rMeta.Status = "failed"
-			return fmt.Errorf("create failed: %w", err)
-		}
-
-		// Update the resource with the result from the provider
-		if len(updatedJSON) > 0 {
-			if err := json.Unmarshal(updatedJSON, r); err != nil {
-				return fmt.Errorf("failed to unmarshal created resource: %w", err)
-			}
-		}
-
-		fireParserEvent(options, "create", resourceType, resourceID, "success", duration, nil, resourceJSON)
-		rMeta.Status = "created"
-	} else {
-		// Existing resource - check if changed
-		previousResourceJSON, err := json.Marshal(previousResource)
-		if err != nil {
-			return fmt.Errorf("failed to serialize previous resource: %w", err)
-		}
-
-		// Call Refresh to get current state from provider
-		fireParserEvent(options, "refresh", resourceType, resourceID, "start", 0, nil, resourceJSON)
-		start := time.Now()
-		refreshedJSON, err := adapter.Refresh(ctx, resourceJSON)
-		duration := time.Since(start)
-
-		if err != nil {
-			fireParserEvent(options, "refresh", resourceType, resourceID, "error", duration, err, resourceJSON)
-			// Continue even if refresh fails
-		} else {
-			// Update the resource with refreshed state
-			if len(refreshedJSON) > 0 {
-				if err := json.Unmarshal(refreshedJSON, r); err != nil {
-					return fmt.Errorf("failed to unmarshal refreshed resource: %w", err)
-				}
-			}
-			fireParserEvent(options, "refresh", resourceType, resourceID, "success", duration, nil, resourceJSON)
-		}
-
-		// Check if resource has changed
-		fireParserEvent(options, "changed", resourceType, resourceID, "start", 0, nil, resourceJSON)
-		start = time.Now()
-		changed, err := adapter.Changed(ctx, previousResourceJSON, resourceJSON)
-		duration = time.Since(start)
-
-		if err != nil {
-			fireParserEvent(options, "changed", resourceType, resourceID, "error", duration, err, resourceJSON)
-			return fmt.Errorf("changed check failed: %w", err)
-		}
-
-		fireParserEvent(options, "changed", resourceType, resourceID, "success", duration, nil, resourceJSON)
-
-		if changed {
-			// Resource changed - call Update
-			fireParserEvent(options, "update", resourceType, resourceID, "start", 0, nil, resourceJSON)
-			start = time.Now()
-			updatedJSON, err := adapter.Update(ctx, resourceJSON)
-			duration = time.Since(start)
-
-			if err != nil {
-				fireParserEvent(options, "update", resourceType, resourceID, "error", duration, err, resourceJSON)
-				rMeta.Status = "failed"
-				return fmt.Errorf("update failed: %w", err)
-			}
-
-			// Update the resource with the result from the provider
-			if len(updatedJSON) > 0 {
-				if err := json.Unmarshal(updatedJSON, r); err != nil {
-					return fmt.Errorf("failed to unmarshal updated resource: %w", err)
-				}
-			}
-
-			fireParserEvent(options, "update", resourceType, resourceID, "success", duration, nil, resourceJSON)
-			rMeta.Status = "updated"
-		} else {
-			// Resource unchanged - preserve existing status
-			if previousMeta, err := types.GetMeta(previousResource); err == nil {
-				rMeta.Status = previousMeta.Status
-			}
-		}
-	}
-
-	return nil
 }

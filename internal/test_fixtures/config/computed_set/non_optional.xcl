@@ -1,0 +1,2 @@
+resource "bad_computed" "x" {
+}

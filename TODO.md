@@ -54,6 +54,7 @@ This document tracks the implementation of resource state tracking for the HCLCo
 
 - [x] **Add state tracking to resources** - `types/resource.go`, `parser.go`
   - Added Status field to Meta struct to track operational state ("pending", "created", "failed")
+  - *Superseded in Phase 4.3: `pending` is gone; the statuses are `created`, `updated`, `failed`, `destroyed` and `destroy_failed` (`types/status.go`)*
   - Implemented preserve-by-default approach using previous state as working base
   - Created mergeNewResources() method to merge new config into existing state
   - Resources from new config are processed by DAG, resources not in new config are preserved
@@ -80,6 +81,7 @@ This document tracks the implementation of resource state tracking for the HCLCo
 - [x] **Implement operation sequencing** ✅
   - For existing resources: Refresh() → Changed(old, new) → Update() (if changed)
   - For new resources: Create()
+  - *Superseded in Phase 4.3: Refresh() was replaced by Read(old, new), see below*
   - Maintains correct dependency order through DAG processing
 
 - [x] **Add provider method routing** ✅
@@ -88,6 +90,26 @@ This document tracks the implementation of resource state tracking for the HCLCo
   - Existing changed → Update() and set status to "updated"
   - Error handling → set status to "failed"
   - Skips builtin types (Variable, Output, Local, Module, Root)
+
+### Provider Lifecycle Read ✅
+- [x] **Replace Refresh with Read** - `plugins/provider.go`, adapters, `plugins/plugin.proto`
+  - `Read(ctx, old, new)` gets the saved copy and the configured copy
+  - `plugins.ErrNotFound` (`plugins/errors.go`) makes xcl create the resource again; carried over gRPC by `ReadResponse.not_found`
+  - A Read error other than ErrNotFound fails the resource and the apply
+- [x] **Use the previous state** - `internal/parser/lifecycle.go`
+  - Not in previous state → Create; saved as created/updated → Read → Changed → Update if changed
+- [x] **Rebuild failed resources** - `internal/parser/lifecycle.go`
+  - Saved as failed/destroy_failed → Destroy (saved copy) then Create; a failed Destroy keeps the saved copy as destroy_failed
+- [x] **Settle the statuses** - `types/status.go`
+  - Exactly `created`, `updated`, `failed`, `destroyed`, `destroy_failed`
+- [x] **Default change detection** - `plugins/changed.go`
+  - Embeddable `plugins.DefaultChanged[T]`, JSON comparison ignoring `meta`, `depends_on`, `disabled`
+- [x] **Computed fields** - `internal/parser/computed.go`, `internal/parser/validate.go`
+  - `xcl:"computed"` fields can't be configured, must be optional, and are carried from the saved copy before Read at any depth; list elements paired by `xcl:"key"` or position
+  - Warning when a provider changes a configured value (`internal/parser/configured_check.go`)
+- [x] **Save state after a failed apply** - `internal/parser/progress.go`, `config.go`
+  - Reached resources, the failed resource, and the previous entry of unreached ones are saved; `Config.Apply` saves then returns the error
+- [x] **Plugin developer guide** - `docs/plugin-developer-guide.md`
 
 ### Phase 5: ParseDirectory Enhancement ✅
 - [x] **Enhance ParseDirectory flow** - `parser.go:400-420`
@@ -118,7 +140,7 @@ This document tracks the implementation of resource state tracking for the HCLCo
 - [ ] **Update documentation and examples**
   - Update `example/main.go` to demonstrate state tracking
   - Add state store configuration examples
-  - Document provider lifecycle requirements
+  - [x] Document provider lifecycle requirements (`docs/plugin-developer-guide.md`)
 
 ### Phase 7: Provider Interface Updates ✅
 - [x] **Update ResourceProvider Interface** - `plugins/provider.go`
@@ -144,7 +166,7 @@ This document tracks the implementation of resource state tracking for the HCLCo
   - Removed confusing "host" terminology from public interface
 
 ### Phase 9: Implementing Enhanced Diff for Resources
-- [ ] **Implement Enhanced Diff Functionality**
+- [x] **Implement Enhanced Diff Functionality** (done in Phase 4.3: `plugins.DefaultChanged[T]` as the default, computed fields carried over before comparison, providers override `Changed` when needed)
   - The Changed() method now receives both old and new resources for comparison
   - Providers can implement intelligent diff logic based on their resource types
   - This replaces the previous checksum-based approach with semantic comparison
@@ -175,28 +197,30 @@ This document tracks the implementation of resource state tracking for the HCLCo
 
 ### Key Design Principles ✅
 1. **Leverage existing Config JSON serialization** - Uses existing ToJSON/FromJSON for state persistence
-2. **Provider operation order**: Refresh() → Changed(old, new) → Update() (if changed) | Create() (if new)
+2. **Provider operation order**: Read(old, new) → Changed(old, read) → Update() (if changed) | Create() (if new) | Destroy() → Create() (if saved as failed)
 3. **State vs Config separation** - State = current reality, Config = desired state  
 4. **Support multiple state store implementations** - Interface-based design maintained
 5. **Maintain DAG dependency resolution** - State operations follow dependency order
 6. **Clear provider interface** - PluginRegistry.GetProvider() for clean provider access
 
 ### Code References
-- **Provider interface**: `plugins/provider.go` - ResourceProvider interface with Update() and Changed(old, new)
+- **Provider interface**: `plugins/provider.go` - ResourceProvider interface with Read(old, new), Update() and Changed(old, new)
 - **Resource metadata**: `types/resource.go` - Meta struct with Status field
-- **Lifecycle implementation**: `dag.go:351-426` - callProviderLifecycle function
+- **Lifecycle implementation**: `internal/parser/lifecycle.go` - resourceLifecycle (replaces callProviderLifecycle)
 - **DAG processing**: `dag.go:146` - walkCallback function with PluginRegistry integration
 - **Plugin management**: `plugin_registry.go` - PluginRegistry with GetProvider() method
 - **Parser entry point**: `parser.go` - ParseDirectory methods with state management
 - **Config serialization**: `config.go:266-271` - ToJSON/FromJSON methods
 - **State persistence**: `file_state_store.go` - FileStateStore implementation
 
-### Provider States (Implemented in callProviderLifecycle)
+### Provider States (Implemented in `internal/parser/lifecycle.go`)
 1. **New** - Resource doesn't exist in state, call Create() → status: "created"
-2. **Existing/Unchanged** - Resource exists, Changed() returns false → preserve existing status
-3. **Existing/Changed** - Resource exists, Changed(old, new) returns true → call Update() → status: "updated"  
-4. **Failed** - Any provider operation fails → status: "failed"
-5. **Removed** - Resource in state but not in config → call Destroy() → status: "destroyed" or "destroy_failed"
+2. **Existing/Unchanged** - Resource exists, Read() then Changed() returns false → preserve existing status
+3. **Existing/Changed** - Resource exists, Read() then Changed(old, read) returns true → call Update() → status: "updated"
+4. **Existing/Gone** - Read() returns ErrNotFound → call Create() → status: "created"
+5. **Failed** - Any provider operation fails → status: "failed"; the next apply destroys and creates it again
+6. **Destroy failed** - Destroy() during a rebuild fails → status: "destroy_failed"; retried on the next apply
+7. **Removed** - Resource in state but not in config → should call Destroy() → status: "destroyed" or "destroy_failed". **Not implemented yet**, see Remaining Work
 
 ## Completed Implementation 🎯
 
@@ -204,24 +228,27 @@ This document tracks the implementation of resource state tracking for the HCLCo
 1. StateStore interface and FileStateStore implementation
 2. PluginRegistry with provider lookup capabilities  
 3. Enhanced provider interface with Update() and Changed(old, new) 
-4. **Complete lifecycle integration including Destroy operations**
+4. Lifecycle integration for Create/Read/Changed/Update, and Destroy when rebuilding a failed resource (removed-resource destroy is not done, see Remaining Work)
 5. State comparison and resource status tracking
 6. Updated protobuf definitions and all plugin layers
 7. Improved naming and architecture
 8. Parser event callbacks for lifecycle operations
 9. Test plugin with full lifecycle method tracking
-10. **Destroy lifecycle with dependency validation and DAG-based ordering**
+10. Destroy walk callback with DAG-based ordering (`destroyWalkCallback`, written but never run)
 
 ## Remaining Work 🚧
 
 1. **Documentation** - Update examples and docs
    - Update `example/main.go` to demonstrate state tracking
    - Add state store configuration examples
-   - Document provider lifecycle requirements
+   - ~~Document provider lifecycle requirements~~ done: `docs/plugin-developer-guide.md`
    
 2. **Provider Implementations** - Providers need to implement enhanced Changed() logic
-   - Providers can now implement intelligent diff logic based on their resource types
+   - ~~Providers can now implement intelligent diff logic based on their resource types~~ done: embed `plugins.DefaultChanged[T]` or define `Changed`
    - Each provider decides what constitutes a "change" worth updating
+
+3. **Destroy removed resources** - Resources in state but no longer in config are not destroyed
+   - `Config.Destroy` is a stub and `destroyWalkCallback` is never run
 
 ## Notes
 - All tests are now passing (200+ tests)

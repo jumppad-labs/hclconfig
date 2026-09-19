@@ -1,0 +1,9 @@
+# b's subnet is set by reference to a's subnet.
+
+resource "network" "a" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "network" "b" {
+  subnet = resource.network.a.subnet
+}

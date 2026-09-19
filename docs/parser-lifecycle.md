@@ -23,8 +23,13 @@ in order:
 3. Walk the DAG in dependency order.
 4. Decode each resource body (`gohcl.DecodeBody`) once its dependencies'
    values are available.
-5. Compare against previous state and call
-   `Create`/`Refresh`+`Changed`+`Update` on the resource's provider.
+5. Look up the resource in the previous state and call
+   `Create`, or `Read`+`Changed`+`Update`, or `Destroy`+`Create`, on the
+   resource's provider.
+
+If a provider call fails, `Apply` returns the state the walk reached
+together with the error, see
+[State saved after a failed apply](#state-saved-after-a-failed-apply).
 
 ```go
 func (p *Parser) Validate(paths ...string) error
@@ -39,7 +44,10 @@ Validation sits between parsing and walking, and runs three stages in order —
 **structure**, then **references**, then **properties**
 ([`internal/parser/validate.go`](../internal/parser/validate.go)):
 
-- **structure** — resources too malformed to check further.
+- **structure** — resources too malformed to check further. This is also
+  where computed fields are checked: a computed field that is not optional,
+  and a computed field set in configuration, are both reported here (see the
+  [Plugin Developer Guide](plugin-developer-guide.md#computed-fields)).
 - **references** — everything a resource refers to must be defined somewhere
   in the configuration ([`references.go`](../internal/parser/references.go)).
   A reference is resolved against its referring resource's module scope first
@@ -56,34 +64,61 @@ is skipped when an earlier one found anything.
 `Parser` is stateless across calls — `Config` constructs a new one for
 every `Apply`/`Validate` (see [Overview](overview.md)).
 
-## `walkCallback` and `callProviderLifecycle`
+## `walkCallback` and `resourceLifecycle`
 
 The DAG walker (`github.com/silas/dag`) invokes one callback per vertex.
 [`walkCallback`](../internal/parser/callbacks.go#L31) is that callback: it
 decodes the resource's HCL body, handles module-specific evaluation-context
-setup, and then calls
-[`callProviderLifecycle`](../internal/parser/callbacks.go#L267).
+setup, and then hands the resource to `resourceLifecycle.apply`
+([`internal/parser/lifecycle.go`](../internal/parser/lifecycle.go)).
 
-`callProviderLifecycle` decides which provider methods to call based on
-whether the resource existed in the previous state:
+`resourceLifecycle` picks the provider calls from the resource's entry in the
+previous state, the state saved by the last apply:
 
 ```
-new resource (not in previous state)
-    -> Create
+not in previous state
+    -> Create                                  status created
 
-existing resource
-    -> Refresh (pull current provider-side state)
-    -> Changed (compare previous vs. current)
-    -> Update   (only if Changed returned true)
+saved as created or updated
+    -> carry computed values from the saved copy onto the configured copy
+    -> Read(saved, configured)
+         ErrNotFound -> reset to the configured copy, Create   status created
+         other error -> status failed, the apply fails
+    -> Changed(saved, read result)
+         true  -> Update(read result)          status updated
+         false -> keep the read result and the previous status
+
+saved as failed, destroy_failed, or anything else (rebuild)
+    -> Destroy(saved copy)
+         error -> keep the saved copy          status destroy_failed
+    -> Create(configured copy)                 status created
 ```
+
+A rebuild happens whether or not the resource's configuration changed. When
+the rebuild's `Destroy` fails, `Create` is not called; the saved copy is kept
+because it holds the identity needed to try the destroy again on the next
+apply.
+
+After `Create`, `Read` and `Update`, the lifecycle compares the resource it
+sent with what the provider returned and logs a warning for every configured
+(non-computed) value the provider changed
+([`configured_check.go`](../internal/parser/configured_check.go)). The
+warning never fails the apply. The
+[Plugin Developer Guide](plugin-developer-guide.md) describes what providers
+may change in each call.
 
 Builtin types with no provider (`variable`, `output`, `module`, the DAG
 root) are skipped early — see "Instrumentation" below for a subtlety here.
 
-Destroys are handled by a separate, simpler callback,
-[`destroyWalkCallback`](../internal/parser/callbacks.go#L182), walked over
-the DAG in *reverse* dependency order, calling `adapter.Destroy` directly
-(no Refresh/Changed step — a destroy is unconditional).
+### Destroy
+
+The only `Destroy` call made today is the one in a rebuild, above.
+
+Resources removed from the configuration are not destroyed.
+[`destroyWalkCallback`](../internal/parser/callbacks.go#L177) is a separate
+callback written to walk the DAG in *reverse* dependency order and call
+`adapter.Destroy` directly, but nothing runs that walk, and `Config.Destroy`
+is a stub.
 
 ## Resolving the provider: `ProviderResolver`
 
@@ -101,7 +136,7 @@ type ProviderResolver interface {
 `*registry.PluginRegistry` satisfies this structurally (Go interfaces are
 implicit), so production code is unaffected — `ParserOptions.PluginRegistry`
 is still what gets passed in practice. But `walkCallback`,
-`destroyWalkCallback`, and `callProviderLifecycle` only ever call this one
+`destroyWalkCallback`, and `resourceLifecycle` only ever call this one
 method, so tests can substitute
 [`internal/parser/mocks.MockProviderResolver`](../internal/parser/mocks/mock_provider_resolver.go)
 instead of standing up a real registry + real (or fake) plugin.
@@ -132,7 +167,7 @@ nil-safe helper — a no-op when no callback is set.
 
 ```go
 type ParserEvent struct {
-    Operation    string        // "create", "refresh", "changed", "update", "destroy"
+    Operation    string        // "create", "read", "changed", "update", "destroy"
     ResourceType string        // "<type>.<name>", e.g. "container.base"
     ResourceID   string        // full resource ID, e.g. "resource.container.base"
     Phase        string        // "start", "success", "error"
@@ -158,37 +193,67 @@ or `error`.
 
 ### Event sequences per resource
 
-Which operations fire depends on whether the resource exists in the previous
-state ([`callbacks.go`](../internal/parser/callbacks.go)):
+Which operations fire depends on the resource's entry in the previous state
+([`lifecycle.go`](../internal/parser/lifecycle.go)):
 
 - **New resource** — `create` start, then `create` success or error.
-- **Existing resource** — `refresh` start/success-or-error, then `changed`
-  start/success-or-error, then, only if `Changed` reported a change, `update`
+- **Existing resource** (saved as `created` or `updated`) — `read`
+  start/success-or-error, then `changed` start/success-or-error, then, only
+  if `Changed` reported a change, `update` start/success-or-error. When
+  `Read` returns `ErrNotFound`, the `read` error event is followed by
+  `create` start/success-or-error instead.
+- **Rebuilt resource** (saved as `failed` or `destroy_failed`) — `destroy`
+  start/success-or-error, then, if the destroy succeeded, `create`
   start/success-or-error.
-- **Removed resource** (destroy walk) — `destroy` start, then `destroy`
-  success or error. `destroyWalkCallback` defines these events, but nothing
-  runs the destroy walk yet, so today no `destroy` event is ever fired.
+- **Removed resource** — nothing. Resources removed from the configuration
+  are not destroyed, and `destroyWalkCallback`, which also fires `destroy`
+  events, is never run.
 
 ### Builtin types
 
 `variable`, `output` and `module` resources have no provider. They fire a
-single `create` success event (or `destroy` success on the destroy walk) with
+single `create` success event (or `destroy` success on the unused destroy walk) with
 zero duration, no error and no data, and no `start` event. This keeps every
 visited resource in the stream, which matters if you consume events to
 reconstruct processing order.
 
 ### Errors and control flow
 
-Events never affect control flow. Whether they abort the walk is decided by
-the operation, not by the event:
+Events never affect control flow. Every provider error is handled the same
+way, whichever operation it came from:
 
-- `create`, `changed`, `update` and `destroy` errors abort the walk and are
-  returned from `Apply`.
-- A `refresh` error does **not** abort. The `error` event fires and the walk
-  continues to `changed` using the unrefreshed resource.
+- An error from `create`, `read`, `changed`, `update` or `destroy` marks the
+  resource `failed` (`destroy_failed` for the rebuild's `destroy`), stops the
+  walk from reaching the resources that depend on it, and is returned from
+  `Apply`. Resources that don't depend on it still complete.
+- The one exception is `plugins.ErrNotFound` from `read`: the `error` event
+  fires, but the lifecycle creates the resource again instead of failing.
 
 ### Who can subscribe
 
 `Parser` lives under `internal/`, and `Config` has no option that sets
 `OnParserEvent`, so today the stream is only reachable from inside this
 module: tests use it to assert on provider calls and DAG-walk order.
+
+## State saved after a failed apply
+
+When the walk fails, `Parser.Apply` still returns a state, built by
+`applyProgress.buildState`
+([`internal/parser/progress.go`](../internal/parser/progress.go)), together
+with the error:
+
+- resources the walk reached are included as they are now, with their new
+  values and status;
+- the failing resource is included as `failed`, or `destroy_failed` if the
+  rebuild's destroy failed;
+- resources that existed in the previous state but were not reached keep
+  their previous entry;
+- new resources that were not reached are left out.
+
+A resource whose error came before any provider call (a decode error, or no
+provider for its type) is treated as not reached.
+
+`Config.Apply` ([`config.go`](../config.go)) saves this state and then
+returns the error, so the next apply picks up where this one stopped. When
+parsing or validation fails, or the dependency graph can't be built,
+`Parser.Apply` returns a nil state and nothing is saved.

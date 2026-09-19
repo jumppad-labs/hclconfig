@@ -40,7 +40,8 @@ type Meta struct {
 	Links []string `json:"links,omitempty"`
 
 	// Status tracks the operational state of the resource
-	// Possible values: "pending", "created", "failed"
+	// Possible values: "created", "updated", "failed", "destroyed", "destroy_failed"
+	// (see StatusCreated, StatusUpdated, StatusFailed, StatusDestroyed, StatusDestroyFailed)
 	// this is an internal property that can not be set with hcl
 	Status string `json:"status,omitempty"`
 }

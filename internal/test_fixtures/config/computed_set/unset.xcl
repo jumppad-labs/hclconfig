@@ -1,0 +1,21 @@
+resource "network" "main" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "container" "app" {
+  network {
+    id         = 1
+    name       = resource.network.main.meta.name
+    ip_address = "10.0.0.10"
+  }
+
+  network {
+    id   = 2
+    name = resource.network.main.meta.name
+  }
+
+  build {
+    context = "./app"
+    tag     = "latest"
+  }
+}

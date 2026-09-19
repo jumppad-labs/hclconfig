@@ -32,14 +32,29 @@ type ResourceProvider[T any] interface {
     Init(state State, functions ProviderFunctions, logger Logger) error
     Create(ctx context.Context, resource T) (T, error)
     Destroy(ctx context.Context, resource T, force bool) error
-    Refresh(ctx context.Context, resource T) (T, error)
+    Read(ctx context.Context, old T, new T) (T, error)
     Update(ctx context.Context, resource T) (T, error)
     Changed(ctx context.Context, old T, new T) (bool, error)
+    Functions() ProviderFunctions
 }
 ```
 
 This is the ergonomic, type-safe surface — no manual JSON marshaling, no
-`any`.
+`any`. What each method receives, may change and returns, and when xcl calls
+it, is in the [Plugin Developer Guide](plugin-developer-guide.md). In short:
+
+- `Read(ctx, old, new)` reports the real resource. `old` is the copy saved by
+  the last apply, `new` is the configured copy; `Read` fills `new` in and
+  returns it. It is only called for resources in the previous state.
+- `Read` returns `plugins.ErrNotFound`
+  ([`plugins/errors.go`](../plugins/errors.go)) when the real resource no
+  longer exists, and xcl creates it again. xcl checks for it with
+  `errors.Is`, so it can be wrapped.
+- `Changed(ctx, old, new)` compares the saved copy with what `Read` returned.
+  Embed `plugins.DefaultChanged[T]`
+  ([`plugins/changed.go`](../plugins/changed.go)) to get a comparison of the
+  JSON form of both copies that ignores `meta`, `depends_on` and `disabled`;
+  define `Changed` on the provider to override it.
 
 ### 2. `ProviderAdapter` — the uniform contract
 
@@ -54,14 +69,14 @@ type ProviderAdapter interface {
     Validate(ctx context.Context, entityData []byte) error
     Create(ctx context.Context, entityData []byte) ([]byte, error)
     Destroy(ctx context.Context, entityData []byte, force bool) error
-    Refresh(ctx context.Context, entityData []byte) ([]byte, error)
+    Read(ctx context.Context, oldEntityData []byte, newEntityData []byte) ([]byte, error)
     Update(ctx context.Context, entityData []byte) ([]byte, error)
     Changed(ctx context.Context, oldEntityData []byte, newEntityData []byte) (bool, error)
 }
 ```
 
 Everything is `[]byte` (JSON) in and out. This is the interface
-`internal/parser/callbacks.go` actually calls during the DAG walk (see
+`internal/parser/lifecycle.go` actually calls during the DAG walk (see
 [Parser & Resource Lifecycle](parser-lifecycle.md)) — it never knows or
 cares whether the concrete implementation is local or remote.
 
@@ -70,6 +85,8 @@ is the bridge between the two: it wraps a `ResourceProvider[T]`, and each
 method does `json.Unmarshal([]byte) -> T`, calls the typed provider, then
 `json.Marshal(T) -> []byte`. A plugin author never constructs this
 directly — `RegisterResourceProvider` does it for you (see below).
+`TypedProviderAdapter.Read` returns the provider's error unwrapped, so
+`ErrNotFound` reaches the parser intact.
 
 A second implementation, `GRPCResourceProviderAdapter`
 ([`plugins/grpc_resource_adapter.go`](../plugins/grpc_resource_adapter.go)),
@@ -86,7 +103,7 @@ type PluginHost interface {
     Validate(entityType, entitySubType string, entityData []byte) error
     Create(entityType, entitySubType string, entityData []byte) ([]byte, error)
     Destroy(entityType, entitySubType string, entityData []byte) error
-    Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error)
+    Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error)
     Update(entityType, entitySubType string, entityData []byte) ([]byte, error)
     Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error)
     Stop()
@@ -106,6 +123,15 @@ Two implementations:
   one `GRPCResourceProviderAdapter` per returned type (`h.cachedTypes`,
   `h.typesCached`) — so the gRPC round-trip for type discovery happens
   once per host, not once per lifecycle call.
+
+Error values don't survive gRPC: the plugin process sends an error back as a
+string. So that `ErrNotFound` still means "not found" out of process,
+`ReadResponse` in [`plugins/plugin.proto`](../plugins/plugin.proto) has a
+`not_found` field. The plugin side (`GRPCServer.Read`) sets it when the
+adapter's error `errors.Is` `ErrNotFound`, and the host side
+(`grpcPluginWrapper.Read`) turns it back into an error wrapping
+`ErrNotFound`. Every other error arrives at the host as a plain error with
+the provider's message.
 
 ## Registering a provider
 

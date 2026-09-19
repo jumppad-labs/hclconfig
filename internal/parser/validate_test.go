@@ -1,10 +1,17 @@
 package parser
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
 	"github.com/jumppad-labs/xcl/errors"
+	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/plugins"
+	"github.com/jumppad-labs/xcl/plugins/registry"
+	statemocks "github.com/jumppad-labs/xcl/state/mocks"
+	"github.com/jumppad-labs/xcl/types"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -532,4 +539,178 @@ func TestValidatePropertiesAcceptsCyclicalPassFixture(t *testing.T) {
 
 	_, err := p.Apply(f)
 	require.NoError(t, err)
+}
+
+// Computed fields are owned by the provider. The fixtures below set them in
+// configuration, which validation must reject before any provider is reached.
+
+func TestValidateRejectsConfiguredComputedField(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/computed_set/top.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, testPlugin := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, pe.Filename)
+	require.Contains(t, pe.Message, "resource.network.main")
+	require.Contains(t, pe.Message, "provider_id")
+	require.Equal(t, "resource 'resource.network.main' sets computed field 'provider_id', computed fields are set by the provider and cannot be configured", pe.Message)
+
+	// validation stops the apply before the provider receives any call
+	require.Empty(t, testPlugin.GetCalls())
+	require.Empty(t, testPlugin.GetCreatedResources())
+}
+
+func TestValidateRejectsConfiguredNestedComputedField(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/computed_set/nested.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, testPlugin := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Contains(t, pe.Message, "resource.container.app")
+	require.Contains(t, pe.Message, "network[1].assigned_address")
+	require.Equal(t, "resource 'resource.container.app' sets computed field 'network[1].assigned_address', computed fields are set by the provider and cannot be configured", pe.Message)
+
+	require.Empty(t, testPlugin.GetCalls())
+}
+
+func TestValidateReportsConfiguredComputedFieldAtAttributePosition(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/computed_set/nested.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	err := p.Validate(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	// assigned_address is written on line 14 of the fixture, inside the second
+	// network block, indented by four spaces
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 14, pe.Line)
+	require.Equal(t, 5, pe.Column)
+}
+
+func TestValidateAcceptsUnsetComputedField(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/computed_set/unset.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	p, _ := setupParser(t)
+
+	_, err := p.Apply(f)
+	require.NoError(t, err)
+}
+
+// badComputed is a resource type whose computed field is not optional, which no
+// configuration could satisfy since users can not set a computed field
+type badComputed struct {
+	types.ResourceBase `hcl:",remain"`
+
+	Secret string `hcl:"secret" json:"secret" xcl:"computed"`
+}
+
+// badComputedProvider is a provider for badComputed that does nothing
+type badComputedProvider struct {
+	plugins.DefaultChanged[*badComputed]
+}
+
+func (p *badComputedProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
+	return nil
+}
+
+func (p *badComputedProvider) Create(ctx context.Context, resource *badComputed) (*badComputed, error) {
+	return resource, nil
+}
+
+func (p *badComputedProvider) Destroy(ctx context.Context, resource *badComputed, force bool) error {
+	return nil
+}
+
+func (p *badComputedProvider) Read(ctx context.Context, old *badComputed, resource *badComputed) (*badComputed, error) {
+	return resource, nil
+}
+
+func (p *badComputedProvider) Update(ctx context.Context, resource *badComputed) (*badComputed, error) {
+	return resource, nil
+}
+
+func (p *badComputedProvider) Functions() plugins.ProviderFunctions {
+	return nil
+}
+
+// badComputedPlugin registers the badComputed resource type
+type badComputedPlugin struct {
+	plugins.PluginBase
+}
+
+func (p *badComputedPlugin) Init(logger logger.Logger, state plugins.State) error {
+	return plugins.RegisterResourceProvider(
+		&p.PluginBase,
+		logger,
+		state,
+		"resource",
+		"bad_computed",
+		&badComputed{},
+		&badComputedProvider{},
+	)
+}
+
+func TestValidateRejectsNonOptionalComputedField(t *testing.T) {
+	f, pathErr := filepath.Abs("../test_fixtures/config/computed_set/non_optional.xcl")
+	if pathErr != nil {
+		t.Fatal(pathErr)
+	}
+
+	ms := &statemocks.MockStateStore{}
+	ms.On("Exists").Return(false)
+	ms.On("Load").Return(nil, nil)
+	ms.On("Save", mock.Anything).Return(nil)
+
+	o := DefaultOptions()
+	o.StateStore = ms
+	o.PluginRegistry = registry.NewPluginRegistry(logger.NewTestLogger(t))
+
+	err := o.PluginRegistry.RegisterPlugin(&badComputedPlugin{})
+	require.NoError(t, err)
+
+	p, _ := setupParser(t, o)
+
+	err = p.Validate(f)
+	require.IsType(t, &errors.ConfigError{}, err)
+
+	ce := err.(*errors.ConfigError)
+	require.Len(t, ce.Errors, 1)
+
+	// the problem is with the type rather than the configuration, so it is
+	// reported at the resource block
+	pe := ce.Errors[0].(*errors.ParserError)
+	require.Equal(t, f, pe.Filename)
+	require.Equal(t, 1, pe.Line)
+	require.Contains(t, pe.Message, "is computed and must be optional")
+	require.Contains(t, pe.Message, "secret")
+	require.Equal(t, "resource 'resource.bad_computed.x' field 'secret' is computed and must be optional", pe.Message)
 }

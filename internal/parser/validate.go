@@ -5,8 +5,11 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/types"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // validate runs the validation stages over a parsed configuration and returns
@@ -140,8 +143,197 @@ func (p *Parser) sortedResourceIDs() []string {
 
 // validateStructure checks that each parsed resource is sound enough to be
 // checked further. Problems found during parsing have already been reported by
-// the time validation runs, so this stage currently adds nothing of its own and
-// exists to anchor the stage ordering.
+// the time validation runs. This stage reports computed fields: a computed field
+// that is not optional, which no configuration could satisfy, and every computed
+// field set in configuration, since only the provider may set one.
 func (p *Parser) validateStructure() []error {
-	return nil
+	problems := []error{}
+
+	for _, id := range p.sortedResourceIDs() {
+		resource := p.parsedResources.resources[id]
+
+		meta, err := types.GetMeta(resource)
+		if err != nil {
+			continue
+		}
+
+		resourceType := dereference(reflect.TypeOf(resource))
+
+		for _, computed := range computedFields(resourceType) {
+			if isOptional(computed.field) {
+				continue
+			}
+
+			problems = append(problems, errors.NewParserError(
+				meta.File,
+				meta.Line,
+				meta.Column,
+				fmt.Sprintf("resource '%s' field '%s' is computed and must be optional", id, computed.path),
+			))
+		}
+
+		body, ok := p.parsedResources.bodies[id]
+		if !ok {
+			continue
+		}
+
+		problems = append(problems, configuredComputedFields(id, body, resourceType, "")...)
+	}
+
+	return problems
+}
+
+// configuredComputedFields reports every computed field of t set in body,
+// including inside nested blocks and object values. path is the hcl path of
+// body within the resource, ending in a dot when it is not empty.
+func configuredComputedFields(id string, body *hclsyntax.Body, t reflect.Type, path string) []error {
+	problems := []error{}
+
+	fields := map[string]structField{}
+	for _, f := range structFields(t) {
+		fields[f.name] = f
+	}
+
+	// report attributes in the order they are written
+	attributes := make([]*hclsyntax.Attribute, 0, len(body.Attributes))
+	for _, attribute := range body.Attributes {
+		attributes = append(attributes, attribute)
+	}
+
+	sort.Slice(attributes, func(i, j int) bool {
+		return attributes[i].NameRange.Start.Byte < attributes[j].NameRange.Start.Byte
+	})
+
+	for _, attribute := range attributes {
+		f, ok := fields[attribute.Name]
+		if !ok {
+			continue
+		}
+
+		if isComputed(f.field) {
+			problems = append(problems, computedFieldProblem(id, path+attribute.Name, attribute.NameRange))
+			continue
+		}
+
+		problems = append(problems, configuredComputedValues(id, attribute.Expr, f.field.Type, path+attribute.Name)...)
+	}
+
+	counts := map[string]int{}
+	for _, block := range body.Blocks {
+		f, ok := fields[block.Type]
+		if !ok {
+			continue
+		}
+
+		index := counts[block.Type]
+		counts[block.Type]++
+
+		blockPath := path + block.Type
+		if kind := f.field.Type.Kind(); kind == reflect.Slice || kind == reflect.Array {
+			blockPath = fmt.Sprintf("%s[%d]", blockPath, index)
+		}
+
+		if isComputed(f.field) {
+			problems = append(problems, computedFieldProblem(id, blockPath, block.TypeRange))
+			continue
+		}
+
+		element := blockElement(f.field.Type)
+		if element == nil {
+			continue
+		}
+
+		problems = append(problems, configuredComputedFields(id, block.Body, element, blockPath+".")...)
+	}
+
+	return problems
+}
+
+// configuredComputedValues reports every computed field set inside an object or
+// tuple expression assigned to a field of type t
+func configuredComputedValues(id string, expr hclsyntax.Expression, t reflect.Type, path string) []error {
+	problems := []error{}
+
+	t = dereference(t)
+
+	switch t.Kind() {
+	case reflect.Slice, reflect.Array:
+		tuple, ok := expr.(*hclsyntax.TupleConsExpr)
+		if !ok {
+			return problems
+		}
+
+		for i, item := range tuple.Exprs {
+			problems = append(problems, configuredComputedValues(id, item, t.Elem(), fmt.Sprintf("%s[%d]", path, i))...)
+		}
+
+	case reflect.Map:
+		object, ok := expr.(*hclsyntax.ObjectConsExpr)
+		if !ok {
+			return problems
+		}
+
+		for _, item := range object.Items {
+			key := objectKey(item.KeyExpr)
+			problems = append(problems, configuredComputedValues(id, item.ValueExpr, t.Elem(), fmt.Sprintf("%s[%s]", path, key))...)
+		}
+
+	case reflect.Struct:
+		if blockElement(t) == nil {
+			return problems
+		}
+
+		object, ok := expr.(*hclsyntax.ObjectConsExpr)
+		if !ok {
+			return problems
+		}
+
+		fields := map[string]structField{}
+		for _, f := range structFields(t) {
+			fields[f.name] = f
+		}
+
+		for _, item := range object.Items {
+			name := objectKey(item.KeyExpr)
+
+			f, ok := fields[name]
+			if !ok {
+				continue
+			}
+
+			if isComputed(f.field) {
+				problems = append(problems, computedFieldProblem(id, path+"."+name, item.KeyExpr.Range()))
+				continue
+			}
+
+			problems = append(problems, configuredComputedValues(id, item.ValueExpr, f.field.Type, path+"."+name)...)
+		}
+	}
+
+	return problems
+}
+
+// objectKey returns the name of an object key, written either as a bare
+// keyword or as a string
+func objectKey(expr hclsyntax.Expression) string {
+	if keyword := hcl.ExprAsKeyword(expr); keyword != "" {
+		return keyword
+	}
+
+	value, diags := expr.Value(nil)
+	if diags.HasErrors() || !value.IsKnown() || value.IsNull() || value.Type() != cty.String {
+		return ""
+	}
+
+	return value.AsString()
+}
+
+// computedFieldProblem reports a computed field set in configuration
+func computedFieldProblem(id string, path string, at hcl.Range) error {
+	return errors.NewParserError(
+		at.Filename,
+		at.Start.Line,
+		at.Start.Column,
+		fmt.Sprintf("resource '%s' sets computed field '%s', computed fields are set by the provider and cannot be configured", id, path),
+	)
 }

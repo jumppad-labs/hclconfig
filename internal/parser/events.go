@@ -4,7 +4,7 @@ import "time"
 
 // ParserEvent represents an event that occurs during parser operations
 type ParserEvent struct {
-	Operation    string        // "create", "refresh", "changed", "update", "destroy"
+	Operation    string        // "create", "read", "changed", "update", "destroy"
 	ResourceType string        // "<type>.<name>", e.g. "container.web"
 	ResourceID   string        // "resource.container.web"
 	Phase        string        // "start", "success", "error"

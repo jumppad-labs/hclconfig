@@ -210,7 +210,7 @@ func TestPropertyNamesForResourceBase(t *testing.T) {
 func TestPropertyNamesForNetwork(t *testing.T) {
 	properties := propertyNames(reflect.TypeOf(structs.Network{}))
 
-	require.Equal(t, []string{"depends_on", "disabled", "meta", "subnet"}, sortedNames(properties))
+	require.Equal(t, []string{"depends_on", "disabled", "meta", "observed", "provider_id", "subnet"}, sortedNames(properties))
 }
 
 func TestPropertyNamesForNetworkFlattensResourceBaseWithoutNamingIt(t *testing.T) {

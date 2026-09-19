@@ -1,0 +1,14 @@
+# Two people for applying the example plugin through the parser. The parser
+# only reads .xcl files, so this mirrors examples/simple_person.hcl.
+
+resource "person" "test_person" {
+  first_name = "Test"
+  last_name  = "User"
+  age        = 42
+  email      = "test@example.com"
+}
+
+resource "person" "other_person" {
+  first_name = "Other"
+  last_name  = "Person"
+}

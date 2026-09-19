@@ -1,6 +1,7 @@
 package testing
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"reflect"
@@ -139,6 +140,15 @@ func (ops *TestPluginOperations) TestChanged(entityType, entitySubType string, h
 		require.NoError(ops.host.t, err, "Should check for changes without error for object %d", i)
 		require.False(ops.host.t, changed, "Newly created object %d should not be changed", i)
 	}
+}
+
+// TestRead calls the Read operation with the saved (old) and configured (new)
+// data and returns the data read by the provider
+func (ops *TestPluginOperations) TestRead(entityType, entitySubType string, oldData []byte, newData []byte) []byte {
+	readData, err := ops.host.Read(context.Background(), entityType, entitySubType, oldData, newData)
+	require.NoError(ops.host.t, err, "Should read without error")
+
+	return readData
 }
 
 // TestDestroy tests the Destroy operation using HCL test data

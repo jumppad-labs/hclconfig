@@ -49,10 +49,13 @@ type User struct {
 }
 
 type NetworkAttachment struct {
-	ID        int      `hcl:"id,optional" json:"id,omitempty"`
+	ID        int      `hcl:"id,optional" json:"id,omitempty" xcl:"key"` // pairs saved and configured attachments
 	Name      string   `hcl:"name" json:"name"`
 	IPAddress string   `hcl:"ip_address,optional" json:"ip_address,omitempty" mapstructure:"ip_address"`
 	Aliases   []string `hcl:"aliases,optional" json:"aliases,omitempty"` // Network aliases for the resource
+
+	// AssignedAddress is set by the provider when the container is attached
+	AssignedAddress string `hcl:"assigned_address,optional" json:"assigned_address,omitempty" xcl:"computed"`
 }
 
 // Resources allows the setting of resource constraints for the Container
@@ -90,6 +93,9 @@ type Build struct {
 	File    string `hcl:"file,optional" json:"file,omitempty"` // Location of build file inside build context defaults to ./Dockerfile
 	Context string `hcl:"context" json:"context"`              // Path to build context
 	Tag     string `hcl:"tag,optional" json:"tag,omitempty"`   // Image tag, defaults to latest
+
+	// ImageID is set by the provider when the image is built
+	ImageID string `hcl:"image_id,optional" json:"image_id,omitempty" xcl:"computed"`
 }
 
 type Container struct {

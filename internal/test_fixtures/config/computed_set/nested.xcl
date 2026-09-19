@@ -1,0 +1,16 @@
+resource "network" "main" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "container" "app" {
+  network {
+    id   = 1
+    name = resource.network.main.meta.name
+  }
+
+  network {
+    id               = 2
+    name             = resource.network.main.meta.name
+    assigned_address = "10.0.0.5"
+  }
+}

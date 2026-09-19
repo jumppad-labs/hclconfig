@@ -47,7 +47,7 @@ type PluginEntityProvider interface {
 	Validate(entityType, entitySubType string, entityData []byte) error
 	Create(entityType, entitySubType string, entityData []byte) ([]byte, error)
 	Destroy(entityType, entitySubType string, entityData []byte) error
-	Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error)
+	Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error)
 	Update(entityType, entitySubType string, entityData []byte) ([]byte, error)
 	Changed(entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) (bool, error)
 }
@@ -173,14 +173,14 @@ func (p *PluginBase) Destroy(entityType, entitySubType string, entityData []byte
 	return rt.Adapter.Destroy(context.Background(), entityData, false)
 }
 
-// Refresh refreshes the plugin state.
-func (p *PluginBase) Refresh(ctx context.Context, entityType, entitySubType string, entityData []byte) ([]byte, error) {
+// Read reports the real entity, given its saved and configured copies.
+func (p *PluginBase) Read(ctx context.Context, entityType, entitySubType string, oldEntityData []byte, newEntityData []byte) ([]byte, error) {
 	rt := p.getRegisteredType(entityType, entitySubType)
 	if rt == nil {
 		return nil, errors.New("no registered type found for " + entityType + "." + entitySubType)
 	}
 
-	return rt.Adapter.Refresh(ctx, entityData)
+	return rt.Adapter.Read(ctx, oldEntityData, newEntityData)
 }
 
 // Update updates an existing entity.

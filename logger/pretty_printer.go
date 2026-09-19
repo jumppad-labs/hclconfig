@@ -81,12 +81,12 @@ func WithVerbosity(level int) PrinterOption {
 type ResourcePrinter struct {
 	options PrinterOptions
 	colors  struct {
-		created color.Attribute
-		pending color.Attribute
-		failed  color.Attribute
-		header  color.Attribute
-		field   color.Attribute
-		value   color.Attribute
+		created   color.Attribute
+		destroyed color.Attribute
+		failed    color.Attribute
+		header    color.Attribute
+		field     color.Attribute
+		value     color.Attribute
 	}
 }
 
@@ -116,7 +116,7 @@ func NewResourcePrinter(opts ...PrinterOption) *ResourcePrinter {
 	// Configure colors
 	if *options.ColorEnabled {
 		printer.colors.created = color.FgGreen
-		printer.colors.pending = color.FgYellow
+		printer.colors.destroyed = color.FgYellow
 		printer.colors.failed = color.FgRed
 		printer.colors.header = color.FgCyan
 		printer.colors.field = color.FgBlue
@@ -161,11 +161,11 @@ func (p *ResourcePrinter) PrintResources(resources []any, format PrintFormat) er
 // getStatusColor returns the appropriate color for a resource status
 func (p *ResourcePrinter) getStatusColor(status string) color.Attribute {
 	switch status {
-	case "created":
+	case types.StatusCreated, types.StatusUpdated:
 		return p.colors.created
-	case "pending":
-		return p.colors.pending
-	case "failed":
+	case types.StatusDestroyed:
+		return p.colors.destroyed
+	case types.StatusFailed, types.StatusDestroyFailed:
 		return p.colors.failed
 	default:
 		return p.colors.value
@@ -865,11 +865,11 @@ func (p *ResourcePrinter) printCard(resource any) error {
 	statusText := fmt.Sprintf("Status: %s", meta.Status)
 	statusEmoji := ""
 	switch meta.Status {
-	case "created":
+	case types.StatusCreated, types.StatusUpdated:
 		statusEmoji = "✅"
-	case "pending":
+	case types.StatusDestroyed:
 		statusEmoji = "🟡"
-	case "failed":
+	case types.StatusFailed, types.StatusDestroyFailed:
 		statusEmoji = "❌"
 	default:
 		statusEmoji = "⚪"

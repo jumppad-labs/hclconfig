@@ -1,0 +1,7 @@
+# The same network as original/single.xcl, defined in a different file and
+# on a different line so only its metadata differs.
+
+
+resource "network" "one" {
+  subnet = "10.0.0.0/16"
+}

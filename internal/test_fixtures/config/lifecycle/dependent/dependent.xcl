@@ -1,0 +1,32 @@
+# first <- second <- third form a chain, each depends on the one before it
+# through a reference. independent has no dependencies on other resources and
+# nothing depends on it. The variable and output are builtin types, they have
+# no provider.
+
+variable "independent_subnet" {
+  default = "10.1.0.0/16"
+}
+
+resource "network" "first" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "container" "second" {
+  network {
+    name = resource.network.first.meta.name
+  }
+}
+
+resource "container" "third" {
+  network {
+    name = resource.container.second.meta.name
+  }
+}
+
+resource "network" "independent" {
+  subnet = variable.independent_subnet
+}
+
+output "first_name" {
+  value = resource.network.first.meta.name
+}
