@@ -1,205 +1,118 @@
-# Working context: provider-lifecycle-read
+# Working context: config-only-types-and-examples
 
-## How we got here
+## Problem and motivation
 
-Started from `TestParserEventCallback` failing: it called `p.Parse(false, ...)`,
-and `executePlugins=false` skipped the provider lifecycle, so no events fired.
-`executePlugins=false` existed only to back the old `Config.Validate` (which
-called `Parse(false)`); `Config.Validate` now calls `Parser.Validate`, so the
-flag was dead.
+- `example/` is stale from the old hclconfig API. It compiles and runs but finds
+  no resources, for two reasons:
+  1. Its files are `config.hcl` and `modules/db/db.hcl`. The parser only reads
+     `.xcl` files, even a file passed explicitly by path
+     (`internal/parser/util.go:64`, `findXclFiles`), so nothing is parsed and no
+     error is returned.
+  2. `example/types.go` defines plain structs (`Config`, `PostgreSQL`,
+     `DBCommon`, `Timeouts`) that are never registered. Since the plugin
+     refactor, non-builtin resource types only come from plugins registered on
+     the `PluginRegistry`, each with a provider.
+- User wants the example rewritten to demonstrate two modes (user's words):
+  "a really basic config only parse mode, no plugin just types. Then the same
+  example but with full plugins."
+- User on the API: "I like this register type, sometimes you don't need a
+  plugin you just want a simple config block type is fine here".
 
-Already done in the working tree (not part of this spec, but context):
-- Removed `executePlugins`; renamed `Parser.Parse` -> `Parser.Apply`; updated
-  70 test call sites, `config.go`, docs.
-- Added `requireEvent` test helper; split the event error test into
-  `TestParserCreateEventErrorCallback` (passes) and
-  `TestParserRefreshEventErrorCallback` (fails: previous state never reaches
-  the walk).
-- Rewrote the `ParserEvent` section of `docs/parser-lifecycle.md`; fixed
-  `ParserEvent` field comments.
-- Wrote `docs/plugin-developer-guide.md` (rough, "just for us") describing
-  the agreed contract, with a "gaps vs code today" list.
+## Current behaviour found in code (drives the design)
 
-## Problems found in current code
+- Registered types need a provider. For a non-builtin type with no provider,
+  the lifecycle fails with `no provider found for resource type ...`
+  (`internal/parser/lifecycle.go:78`, also `callbacks.go:213`). Only builtins
+  skip providers, via the hard-coded `isBuiltinType` list
+  (`lifecycle.go:351`: variable, output, module, root).
+- Plugin types are instantiated from the plugin's schema with
+  `reflect.StructOf` (`plugins/registry/plugin_registry.go`,
+  `createResourceFromPlugins`), so callers get an anonymous struct shaped like
+  the type, not the user's concrete type (e.g. not `*PostgreSQL`). Necessary
+  for out-of-process plugins; wrong for config-only use where callers expect
+  `NewQuerier[PostgreSQL]` to return their own type.
+- Builtins are created with `types.RegisteredTypes.CreateResource`, which does
+  `reflect.New` of the registered type, sets Meta name/type.
+- `ProviderResolver` interface (`callbacks.go:23`) has one method,
+  `GetProviderForResource`; there is a mockery mock
+  (`internal/parser/mocks`) used in `parse_test.go:716`.
 
-- `walk` hard-codes `previousParsed = nil` (TODO), so every resource takes the
-  Create path on every Apply; Refresh/Changed/Update are unreachable.
-- `Refresh` receives the *config* copy; its result is unmarshalled into `r`,
-  but `Changed` is passed `resourceJSON` serialized *before* Refresh, so the
-  refresh result never reaches `Changed`.
-- A Refresh error is swallowed ("Continue even if refresh fails"). Introduced
-  in commit ebd2672 "Refactor" (2026-02-04) with no stated reason; before it,
-  refresh errors set status `failed` and aborted. Treated as an accident.
-- Status values are inconsistent: `types/resource.go` documents
-  pending/created/failed; code sets created/updated/failed/destroyed/
-  destroy_failed/destroyed_failed; nothing sets `pending`; an unchanged
-  `failed` resource stays failed forever and is never recreated (contradicts
-  `plugins/provider.go` "Create ... recreates a failed resource").
-- `destroyWalkCallback` is never called: no destroy walk runs.
-- `internal/parser/plugins.go` `callPluginLifecycle` is dead duplicate code.
-- Example provider's Refresh rewrites a config field (`Description`); its
-  Changed comment calls it "drift detection".
+## Direction agreed so far
 
-## Purpose of Refresh: how the user got there
+- Add direct type registration without a plugin, e.g.
+  `registry.RegisterType("postgres", &PostgreSQL{})` (or an `xcl.WithTypes`
+  option). Instances created with `reflect.New` of the real type so querying
+  returns `*PostgreSQL`.
+- Lifecycle treats provider-less registered types like builtins: decoded,
+  references resolved, included in state, no Create/Read/Update/Destroy calls.
+- Proposed (not yet confirmed by user): registering a type that has a
+  `computed` field is an error, since nothing would ever set it.
+- Rewrite of the example:
+  - shared types in `example/types` (proposed layout)
+  - `example/configonly`: types only, no plugin
+  - `example/plugin`: same config and types, with an in-process plugin whose
+    provider fills a computed field (`connection_string`)
+  - tests that run both so the example cannot rot unnoticed
+  - rename `.hcl` files to `.xcl`
+- Proposed (user has not answered): passing a non-`.xcl` file explicitly to
+  Apply/Validate returns an error instead of silently skipping it. Directory
+  scans still skip non-`.xcl` files.
 
-User had lost the original intent ("This conversation is sadly gone from my
-memory"). Reasoned through examples:
-- Computed values (postgres `connection_string`): user pointed out these are
-  already written to state after Create/Update, so Refresh need not compute
-  them. Copying them from state into the new resource needs a computed-field
-  marker — user: "This is needed but is not our issue." (out of scope)
-- File hash: name unchanged, contents changed -> must trigger Update.
-- Container: "in the state the status is Running, but is it? Refresh would
-  check things like that". User settled on: Refresh fills in the non-config
-  fields of `new` so a flat diff works — "I am actually thinking Refresh
-  should add computed fields to the new config so that a diff can be done".
+## Alternatives considered
 
-Rejected: refreshing `old` instead of `new` — observed fields have no desired
-value in config, so a flat diff of refreshed-old vs raw-new is meaningless
-(always "changed" when running, never when stopped).
+- A "plugin shim" that registers types with a no-op provider (user's initial
+  suggestion). Rejected in favour of direct registration because the shim
+  would still produce schema-generated anonymous structs rather than the
+  user's own types, and a no-op provider would still run Create/Read/Changed.
+- Deleting `example/` in favour of `plugins/example` (which already shows the
+  external gRPC plugin route and has e2e tests). Rejected; user wants the
+  example rewritten to show both modes.
 
-## Decisions
+## Related context from this session (not part of this spec)
 
-- Rename `Refresh` -> `Read`. Signature `Read(ctx, old, new) (T, error)`:
-  `old` is used to locate the real resource (identity fields like IDs only
-  exist on old); returns `new` with identity/observed/derived fields filled in.
-  User: "I was thinking Refresh should be Read(new), but this assumes that you
-  can infer the resource from the config alone ... I don't think you can."
-  Options considered: Read(new) with parser copying identity from old (needs
-  computed marker), Read(old) + parser merge (needs marker). User chose
-  option 1: "I think option 1 is correct".
-- Read must never write config fields, nor self-changing values (uptime,
-  timestamps). Must not mutate the real resource.
-- Read returns `ErrNotFound` when the resource is gone -> parser calls Create.
-- Any other Read error is fatal; resource status `failed`.
-- Read is only called when the resource exists in previous state (old never nil).
-- `Changed(old, new)` receives `new` after Read. Default diff helper, overridable.
-  User: "we can have a default diff helper, if you want to override that then
-  you can. But in most cases as long as you put the work in Refresh you should
-  not have to". Proposed shape: embeddable `plugins.DefaultChanged[T]` doing a
-  flat diff ignoring `Meta` (Go has no optional interface methods).
-- `Update(new)` returns resource with observed fields set to new reality.
-- Parser must pass loaded previous state into `walk`.
-- Statuses: created, updated, failed, destroyed, destroy_failed.
-- Event operation `refresh` becomes `read`.
-- Document the concepts in a plugin developers guide — user: "keep it rough
-  for now just for us".
+- Struct tags are now `xcl:"name,kind,computed,key"`, parsed by
+  `internal/xcl/tags`.
+- go-cty is vendored at `internal/cty` (v1.15.0, gocty modified), dag at
+  `internal/dag`. No replace directives in go.mod.
+- Pending separately: XCL-owned JSON serialization using xcl tag names with
+  implicit omitempty (user: "extend encoding/json to use the xcl name, we
+  should also always assume omitempty"). Candidate for its own spec.
 
-## Interview answers
+## Interview answers (user)
 
-- Failed resources: "If Create or Update fails and it is marked as failed, it
-  should be put into destroy before create" -> next Apply does Destroy(old)
-  then Create(new).
-- Breaking the provider interface / gRPC proto is fine (v2); no Refresh shim.
-- Status clean-up is in this spec.
-- Saving state when Apply fails is in this spec (found: today a failed Apply
-  saves nothing, so created resources are forgotten).
-- Destroy of a missing resource: provider decides; parser treats Destroy
-  errors as fatal.
-
-## Review-round decisions
-
-- Computed marker is now IN scope (reverses earlier "not our issue"): user
-  "we need computed as a tag". Computed fields are optional by default,
-  provider may leave them unset; users setting one is a validation error.
-- Parser carries computed values from saved state onto the configured
-  resource before Read — user: "even if read has no custom logic we can
-  correctly detect changed with default logic. Read is still necessary as
-  some fields are only available with a manual lookup."
-- Provider changing a non-computed value: allowed but warned (log warning),
-  checked after create/read/update; fields set by reference are exempt.
-  User: "mark this as a warning rather than a hard error as a compromise".
-  Unset non-computed optional fields filled by a provider also warn.
-- Failure: dependents skipped, independent resources complete and are saved;
-  unreached new resources are not saved.
-- Rebuild whose destroy fails -> `destroy_failed`, no create, retried next apply.
-- Old saved state need not load.
-
-## Out of scope (explicitly)
-
-- Running the destroy walk.
-- Exposing `OnParserEvent` through `Config`.
-- Diff (plan) output — user: "we can add a Diff later".
-
+- Registration lives wherever plugins are registered (PluginRegistry).
+- Computed fields on registered types: ignore, no warning.
+- Name clashes are an error, checked both when registering a type and when
+  registering a plugin.
+- Provider-less types return the real Go type; plugins unchanged (Querier
+  already converts). Plugin instantiation change is out of scope.
+- Keep ignoring non-.xcl files, even when passed explicitly (the earlier
+  "error on explicit file" proposal is rejected).
+- Fixing Querier.FindResourcesByType (compares against empty Meta.Type of
+  zero T) is IN scope (user confirmed requirements).
+- All sections confirmed. Fresh-eyes review produced 14 findings; user approved
+  all fixes (dedup, a "no change to existing plugin/builtin behaviour" constraint,
+  extra acceptance criteria for module outputs, ordering, re-apply, removal,
+  split validate and plugin-vs-plugin clash criteria).
+- Spec committed to the store as
+  20260919120639-config-only-types-and-examples.md. Next: plan workflow. User confirmed breaking public API changes are acceptable (unreleased library).
 
 ## Plan workflow (started 2026-09-19)
 
-- Planning against spec `20260918165700-provider-lifecycle-read` (user choice).
+- Plan name: 20260919120639-config-only-types-and-examples. Working files in
+  `.spektacular/work/20260919120639-config-only-types-and-examples/`.
 - Single repo: xclconfig, root `/home/nicj/code/github.com/jumppad-labs/xclconfig`.
-- Discovery done. Key learnings: jumppad-labs/dag walker already skips dependents & runs independents in parallel (record outcomes in callback w/ mutex); `computed` must be separate tag key `xcl:"computed"` (gohcl panics on unknown hcl options); schema preserves raw tags so no proto change for computed; gRPC errors are in-band strings → add `not_found` bool to ReadResponse; Parser.Apply/Config.Apply drop state on error.
-- Baseline test failures pre-exist (errors pkg, root utils fixtures, build failures in ./example, internal/functions, plugins/registry tests) — treated as out of scope (see assumptions.md).
-- Architecture chosen: `internal/parser/lifecycle.go` resourceLifecycle + applyProgress (mutex); Parser.Apply returns partial state+error; Config.Apply saves non-nil state on error; ErrNotFound via proto `not_found`; DefaultChanged ignores meta/depends_on/disabled; `xcl:"computed"` top-level only; keep destroyWalkCallback (fix statuses), delete internal/parser/plugins.go.
-- Components drafted.
-- Data structures drafted (DefaultChanged value receiver struct; applyProgress/outcome; Apply returns partial state+err on walk failure).
-- Implementation detail drafted.
-- Dependencies drafted.
-- Testing approach drafted: scenario tests use real FileStateStore in t.TempDir().
-- Milestones: M1 contract, M2 repeat-apply lifecycle, M3 failed-apply progress, M4 computed + guide.
-- Phases drafted (9 phases: 1.1-1.3, 2.1-2.2, 3.1, 4.1-4.3). New files planned: plugins/errors.go, plugins/changed.go, types/status.go, internal/parser/{lifecycle,computed,configured_check}.go, fixtures config/lifecycle, config/computed_set.
-- Open questions: only DefaultChanged null/empty normalisation risk. Out of scope drafted.
-- Assembled & staged plan/context/research to .spektacular/tmp/*_template.md.
-- Verification passed (context section order fixed; removed make command from plan.md).
-- plan.md written.
-- context.md written.
-- research.md written; work dir removed. Next: walkthrough (read committed docs via plan file read).
-- Walkthrough: user asked about xcl-only tags (generate hcl/json via reflection at schema rebuild). Decision: follow-up spec; added to plan Out of Scope.
-- User direction: fork HCL fully into an XCL-owned parser with custom xcl tags (accept no upstream updates; may rewrite later). Recorded in plan Out of Scope as follow-up spec.
-- Knowledge written: decisions/own-hcl-fork-with-xcl-tags.md. Walkthrough now at beat 4 (drafting assumptions).
-- Walkthrough change: all scenario test state comes from real prior applies (no hand-built state). Rebuild moved from Phase 2.2 to Phase 3.2 (after save-on-failure 3.1); read-failure 'saved as failed' check moved to 3.1. M3 renamed.
-- Walkthrough change: computed fields at any depth (nested/pointer/list/map blocks); list elements paired by xcl:"key" fields else position; maps by key. Phase 4.1 now High. Based on jumppad container Image.ID / Networks[].AssignedAddress pattern.
-- Knowledge written: conventions/test-state-from-real-apply.md. User signed off on the plan (2026-09-19).
-
-## Implementation session (2026-09-19)
-
-- Implement workflow started for plan `20260918165700-provider-lifecycle-read`
-  (user chose it). HEAD = plan commit 2daa13f, so no drift; only line numbers
-  in context.md are approximate (e.g. `adapter.go` Refresh is at ~138, not 223).
-- Spec coverage check: every requirement and acceptance criterion is covered;
-  nothing descoped. First-phase run (no `## Changelog` in plan.md yet).
-- Tooling present: mockery v3.5.5, protoc, protoc-gen-go, protoc-gen-go-grpc.
-- Phase 1.1 analysis: all referenced symbols present. gRPC wrapper keeps the old
-  RefreshRequest on the wire during 1.1 (sends only new data) until 1.2 changes
-  the proto. logger already imports types, so the printer can use the status
-  constants.
-- Phase 1.1 implement:
-  - Deleted dead `internal/parser/plugins.go` in 1.1, not 1.3, because it
-    called `adapter.Refresh` and the module has to build at the end of every phase.
-  - Minimal renames in the example provider and test plugin (signature only);
-    their real rework is still Phase 1.3.
-  - Mocks were regenerated in 1.1, not 1.2. **Mockery gotcha:** the installed
-    mockery v3.5.5 (built with go1.25) fails under go1.27 with "package context
-    without types". `go run ...@v3.5.5` fails too (old x/tools). What works:
-    `PATH=$(go env GOMODCACHE)/golang.org/toolchain@v0.0.1-go1.25.6.linux-amd64/bin:$PATH GOTOOLCHAIN=local mockery`
-  - Pretty printer: created/updated → green ✅, destroyed → yellow 🟡,
-    failed/destroy_failed → red ❌; `pending` removed.
-- Phase 1.1 test: added `plugins/changed_test.go` and `plugins/adapter_test.go`.
-  These are the first tests in `plugins`, so `go test` now runs vet there. To
-  keep that working, the `fmt.Errorf(resp.Error)` → `errors.New` fix was
-  pulled forward from 1.2.
-- Pre-existing parser failures on the baseline: `TestDestroyLifecycle` (panics;
-  replaced in 3.2), `TestParserReadEventErrorCallback` (passes in 2.1) and
-  **`TestPluginResourceCreationWithFallback` (panics on a nil pluginRegistry; checked
-  at HEAD 2daa13f; not in the plan's baseline list)**. Run parser tests with
-  `-skip 'TestDestroyLifecycle|TestPluginResourceCreationWithFallback'`.
-- **User instruction (after 1.1): "Just finish all phases"**, so loop through every
-  phase without asking between them. The knowledge offer (mockery gotcha) got no
-  answer; don't write it.
-- Phase 2.1 implement: `internal/parser/lifecycle.go` holds `resourceLifecycle`
-  (paths: create, read→changed→update; any other previous status → create
-  until 3.2 adds rebuild). `callProvider` wraps every provider call with events
-  and errors `"<op> failed for <id>: …"`. `walkCallback(parsed, rp, lifecycle,
-  options, functions)`; `callProviderLifecycle` deleted.
-- The test plugin has a mutex and embeds `DefaultChanged`, with settings for
-  ReadNotFound, ReadObserved, ChangedResults, ReadCalls and Calls ("<op> <id>").
-  CreateSetsID (on by default) sets the Network `ProviderID="id-<name>"`.
-  `ResetCalls()` clears the recording only.
-- `-race` on internal/parser already reports races at the base commit (80), all
-  from test OnParserEvent closures appending to slices. Not ours.
-- All phases 1.1–4.3 implemented, verified and recorded in the plan changelog.
-  Test plan: none required (all three success metrics are covered by tests).
-- Spec reconciled: 44 criteria checked. "Test suite passes" left unchecked: every
-  touched package passes, but older failures remain in untouched packages
-  (errors, root file-location tests, example/internal/functions/plugins/registry
-  test builds, TestPluginResourceCreationWithFallback).
-- The tracked binary `plugins/example/build/example` is rebuilt by the e2e tests;
-  it was restored with git checkout after the final run.
+- User decision (discovery): Validate currently does NOT reject unknown
+  attributes for any type (probe: Validate nil, Apply decode error). User chose
+  to add a schema check for ALL resource types (plugins included), not only
+  registered types. Check lives in internal/xcl/gohcl (MPL rules apply).
+- Learned: Apply never calls destroyWalkCallback, so removed blocks are simply
+  dropped from state; state reload uses registry.CreateResource.
+- Architecture locked: RegisterType on PluginRegistry; parser TypeRegistry
+  interface (IsRegisteredType) for lifecycle/destroy skip; checkTypeName shared
+  clash check; Querier.FindResourcesByType(typeName); gohcl.CheckBody schema
+  check in validateStructure; example/{config,resources,configonly,plugin}.
+- Drafting done through phases (3 milestones / 6 phases). Next: open_questions.
+- Assembled docs staged in .spektacular/tmp/{plan,context,research}_template.md. Next: verification.
+- Verification passed (added Project References to context). Next: write steps.
+- All three plan docs committed to store; work dir removed. Now in walkthrough (read docs via spektacular plan file read).
