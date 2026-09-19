@@ -984,7 +984,7 @@ func TestProviderChangingConfiguredValueWarns(t *testing.T) {
 	require.Equal(t, types.StatusCreated, network.Meta.Status)
 
 	require.Equal(t, [][]any{
-		{"resource", lifecycleNetworkID, "field", "subnet"},
+		{"event", "configured_value_changed", "resource", lifecycleNetworkID, "field", "subnet"},
 	}, log.warningsWithMessage(changedConfiguredValueWarning))
 }
 

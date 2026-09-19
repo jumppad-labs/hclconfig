@@ -235,7 +235,7 @@ func TestChangedConfiguredValuesIgnoresMetadata(t *testing.T) {
 	require.Empty(t, changed)
 }
 
-func TestWarnChangedConfiguredValuesLogsResourceAndField(t *testing.T) {
+func TestWarnChangedConfiguredValuesLogsEventResourceAndField(t *testing.T) {
 	body := parseResourceBody(t, `subnet = "10.0.0.0/16"`)
 	log := &recordingLogger{}
 
@@ -247,7 +247,7 @@ func TestWarnChangedConfiguredValuesLogsResourceAndField(t *testing.T) {
 	require.Equal(t, []loggedMessage{
 		{
 			msg:  "provider changed a configured value",
-			args: []any{"resource", "resource.network.one", "field", "subnet"},
+			args: []any{"event", "configured_value_changed", "resource", "resource.network.one", "field", "subnet"},
 		},
 	}, log.warnings())
 }

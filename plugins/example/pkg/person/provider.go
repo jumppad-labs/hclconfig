@@ -32,7 +32,7 @@ func (p *ExampleProvider) Init(state plugins.State, functions plugins.ProviderFu
 
 func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, error) {
 	if p.logger != nil {
-		p.logger.Info("Creating person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Creating person", "event", "create", "resource", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
 	}
 
 	// Check for context cancellation
@@ -51,7 +51,7 @@ func (p *ExampleProvider) Create(ctx context.Context, person *Person) (*Person, 
 
 func (p *ExampleProvider) Destroy(ctx context.Context, person *Person, force bool) error {
 	if p.logger != nil {
-		p.logger.Info("Destroying person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName, "force", force)
+		p.logger.Info("Destroying person", "event", "destroy", "resource", person.Meta.ID, "name", person.FirstName+" "+person.LastName, "force", force)
 	}
 
 	// Check for context cancellation
@@ -73,7 +73,7 @@ const MissingPersonEmail = "missing@example.com"
 
 func (p *ExampleProvider) Read(ctx context.Context, old *Person, new *Person) (*Person, error) {
 	if p.logger != nil {
-		p.logger.Info("Reading person", "id", new.Meta.ID, "name", new.FirstName+" "+new.LastName)
+		p.logger.Info("Reading person", "event", "read", "resource", new.Meta.ID, "name", new.FirstName+" "+new.LastName)
 	}
 
 	// Check for context cancellation
@@ -99,13 +99,13 @@ func (p *ExampleProvider) Update(ctx context.Context, person *Person) (*Person, 
 	// Handle nil person (when no entity data is provided)
 	if person == nil {
 		if p.logger != nil {
-			p.logger.Info("Updating person with no entity data")
+			p.logger.Info("Updating person with no entity data", "event", "update")
 		}
 		return nil, nil
 	}
 
 	if p.logger != nil {
-		p.logger.Info("Updating person", "id", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
+		p.logger.Info("Updating person", "event", "update", "resource", person.Meta.ID, "name", person.FirstName+" "+person.LastName)
 	}
 
 	// Check for context cancellation

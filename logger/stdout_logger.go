@@ -7,7 +7,9 @@ import (
 )
 
 // StdOutLogger implements the Logger interface using charmbracelet/log
-// It provides formatted console output with different log levels
+// It provides formatted console output with different log levels. Every line
+// leads with its event, event=<name>, taken from an "event" argument, and
+// event=log when a message has none
 type StdOutLogger struct {
 	logger *log.Logger
 }
@@ -34,6 +36,7 @@ var _ Logger = (*StdOutLogger)(nil)
 
 // Info logs an informational message
 func (l *StdOutLogger) Info(msg string, args ...interface{}) {
+	msg, args = leadWithEvent(msg, args)
 	if len(args) == 0 {
 		l.logger.Info(msg)
 		return
@@ -43,6 +46,7 @@ func (l *StdOutLogger) Info(msg string, args ...interface{}) {
 
 // Debug logs a debug message
 func (l *StdOutLogger) Debug(msg string, args ...interface{}) {
+	msg, args = leadWithEvent(msg, args)
 	if len(args) == 0 {
 		l.logger.Debug(msg)
 		return
@@ -52,6 +56,7 @@ func (l *StdOutLogger) Debug(msg string, args ...interface{}) {
 
 // Warn logs a warning message
 func (l *StdOutLogger) Warn(msg string, args ...interface{}) {
+	msg, args = leadWithEvent(msg, args)
 	if len(args) == 0 {
 		l.logger.Warn(msg)
 		return
@@ -61,9 +66,17 @@ func (l *StdOutLogger) Warn(msg string, args ...interface{}) {
 
 // Error logs an error message
 func (l *StdOutLogger) Error(msg string, args ...interface{}) {
+	msg, args = leadWithEvent(msg, args)
 	if len(args) == 0 {
 		l.logger.Error(msg)
 		return
 	}
 	l.logger.With(args...).Error(msg)
+}
+
+// leadWithEvent returns msg with its event in front and the remaining
+// arguments
+func leadWithEvent(msg string, args []interface{}) (string, []interface{}) {
+	event, msg, args := splitEvent(msg, args)
+	return joinMessage(event, msg), args
 }

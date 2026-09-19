@@ -71,7 +71,7 @@ func (h *GRPCPluginHost) Start(pluginPath string) error {
 	h.plugin = &grpcPluginWrapper{client: grpcClient}
 
 	if pluginLogger != nil {
-		pluginLogger.Debug("plugin loaded", "block_types", resourceTypeNames(h.GetTypes()))
+		pluginLogger.Debug("plugin loaded", "event", "load", "block_types", resourceTypeNames(h.GetTypes()))
 	}
 
 	return nil

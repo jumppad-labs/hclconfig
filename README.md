@@ -78,7 +78,8 @@ The [`example`](./example) directory holds one configuration,
   example logs every event with `xcl.WithEventHandler`. Everything a
   plugin logs is tagged by xcl with the plugin, and with the provider for
   provider logs, i.e.
-  `DEBU plugin=ExamplePlugin provider=postgres create id=resource.postgres.main`.
+  `DEBU event=create plugin=ExamplePlugin provider=postgres resource=resource.postgres.main`.
+  Every line leads with its event, `event=log` when a message has none.
   Everything in the example logs at debug except a failure, which logs at
   error.
 

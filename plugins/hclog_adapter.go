@@ -66,6 +66,9 @@ func (a *hclogAdapter) Log(level hclog.Level, msg string, args ...interface{}) {
 		args = append(append([]interface{}{}, a.args...), args...)
 	}
 
+	// every line leads with an event, go-plugin's own logs are one kind
+	args = append([]interface{}{"event", "go-plugin"}, args...)
+
 	switch {
 	case level >= hclog.Error:
 		a.logger.Error(msg, args...)

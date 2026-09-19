@@ -20,7 +20,7 @@ func warnChangedConfiguredValues(log logger.Logger, id string, body *hclsyntax.B
 	}
 
 	for _, path := range changedConfiguredValues(body, resourceType, before, after) {
-		log.Warn("provider changed a configured value", "resource", id, "field", path)
+		log.Warn("provider changed a configured value", "event", "configured_value_changed", "resource", id, "field", path)
 	}
 }
 

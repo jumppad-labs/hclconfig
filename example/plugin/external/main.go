@@ -65,25 +65,25 @@ func (p *appProvider) Init(state plugins.State, functions plugins.ProviderFuncti
 // Create receives the app with every reference resolved, including the
 // connection string the in-process postgres provider filled in
 func (p *appProvider) Create(ctx context.Context, app *resources.App) (*resources.App, error) {
-	p.logger.Debug("create", "id", app.Meta.ID, "connection_string", app.ConnectionString)
+	p.logger.Debug("", "event", "create", "resource", app.Meta.ID, "connection_string", app.ConnectionString)
 
 	return app, nil
 }
 
 func (p *appProvider) Read(ctx context.Context, old *resources.App, new *resources.App) (*resources.App, error) {
-	p.logger.Debug("read", "id", new.Meta.ID)
+	p.logger.Debug("", "event", "read", "resource", new.Meta.ID)
 
 	return new, nil
 }
 
 func (p *appProvider) Update(ctx context.Context, app *resources.App) (*resources.App, error) {
-	p.logger.Debug("update", "id", app.Meta.ID)
+	p.logger.Debug("", "event", "update", "resource", app.Meta.ID)
 
 	return app, nil
 }
 
 func (p *appProvider) Destroy(ctx context.Context, app *resources.App, force bool) error {
-	p.logger.Debug("destroy", "id", app.Meta.ID, "force", force)
+	p.logger.Debug("", "event", "destroy", "resource", app.Meta.ID, "force", force)
 
 	return nil
 }

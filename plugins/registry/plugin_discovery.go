@@ -41,7 +41,7 @@ func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
 	for _, dir := range pd.directories {
 		absDir, err := filepath.Abs(dir)
 		if err != nil {
-			pd.logger.Error("Failed to resolve directory", "dir", dir, "error", err)
+			pd.logger.Error("Failed to resolve directory", "event", "discover", "dir", dir, "error", err)
 			continue
 		}
 
@@ -54,7 +54,7 @@ func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
 	for _, dir := range uniqueDirs {
 		found, err := pd.discoverInDirectory(dir)
 		if err != nil {
-			pd.logger.Error("Failed to discover plugins", "dir", dir, "error", err)
+			pd.logger.Error("Failed to discover plugins", "event", "discover", "dir", dir, "error", err)
 			errors = append(errors, err)
 			continue
 		}
@@ -65,7 +65,7 @@ func (pd *PluginDiscovery) DiscoverPlugins() ([]string, error) {
 		return nil, fmt.Errorf("no plugins found, encountered %d errors during discovery", len(errors))
 	}
 
-	pd.logger.Info("Discovered plugins", "count", len(plugins))
+	pd.logger.Info("Discovered plugins", "event", "discover", "count", len(plugins))
 	return plugins, nil
 }
 
@@ -77,7 +77,7 @@ func (pd *PluginDiscovery) discoverInDirectory(dir string) ([]string, error) {
 	info, err := os.Stat(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			pd.logger.Info("Plugin directory does not exist", "dir", dir)
+			pd.logger.Info("Plugin directory does not exist", "event", "discover", "dir", dir)
 			return plugins, nil // Not an error, just no plugins
 		}
 		return nil, err
@@ -93,7 +93,7 @@ func (pd *PluginDiscovery) discoverInDirectory(dir string) ([]string, error) {
 		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
 	}
 
-	pd.logger.Info("Searching for plugins", "dir", dir)
+	pd.logger.Info("Searching for plugins", "event", "discover", "dir", dir)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -103,7 +103,7 @@ func (pd *PluginDiscovery) discoverInDirectory(dir string) ([]string, error) {
 		fullPath := filepath.Join(dir, entry.Name())
 
 		if pd.isPluginBinary(fullPath) {
-			pd.logger.Info("Found plugin", "path", fullPath)
+			pd.logger.Info("Found plugin", "event", "discover", "path", fullPath)
 			plugins = append(plugins, fullPath)
 		}
 	}

@@ -104,11 +104,11 @@ func (a *TypedProviderAdapter[T]) debugCall(operation string, resource any) {
 	}
 
 	if meta, err := types.GetMeta(resource); err == nil {
-		a.logger.Debug("calling provider", "operation", operation, "id", meta.ID)
+		a.logger.Debug("calling provider", "event", operation, "resource", meta.ID)
 		return
 	}
 
-	a.logger.Debug("calling provider", "operation", operation)
+	a.logger.Debug("calling provider", "event", operation)
 }
 
 func (a *TypedProviderAdapter[T]) Validate(ctx context.Context, entityData []byte) error {

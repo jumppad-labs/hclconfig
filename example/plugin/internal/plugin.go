@@ -23,7 +23,7 @@ var _ plugins.Plugin = (*ExamplePlugin)(nil)
 // xcl tags everything the plugin logs with plugin=ExamplePlugin, and
 // everything a provider logs with provider=<block type> as well.
 func (p *ExamplePlugin) Init(logger logger.Logger, state plugins.State) error {
-	logger.Debug("init")
+	logger.Debug("", "event", "init")
 
 	return plugins.RegisterResourceProvider(
 		&p.PluginBase,
@@ -53,7 +53,7 @@ var _ plugins.ResourceProvider[*resources.PostgreSQL] = (*postgresProvider)(nil)
 // plugin=ExamplePlugin provider=postgres.
 func (p *postgresProvider) Init(state plugins.State, functions plugins.ProviderFunctions, logger logger.Logger) error {
 	p.logger = logger
-	p.logger.Debug("init")
+	p.logger.Debug("", "event", "init")
 
 	return nil
 }
@@ -62,7 +62,7 @@ func (p *postgresProvider) Init(state plugins.State, functions plugins.ProviderF
 // changed
 func (p *postgresProvider) Create(ctx context.Context, db *resources.PostgreSQL) (*resources.PostgreSQL, error) {
 	db.ConnectionString = connectionString(db)
-	p.logger.Debug("create", "id", db.Meta.ID, "connection_string", db.ConnectionString)
+	p.logger.Debug("", "event", "create", "resource", db.Meta.ID, "connection_string", db.ConnectionString)
 
 	return db, nil
 }
@@ -70,7 +70,7 @@ func (p *postgresProvider) Create(ctx context.Context, db *resources.PostgreSQL)
 // Read reports the database as configured, xcl has already carried the
 // computed connection string over from the previous state
 func (p *postgresProvider) Read(ctx context.Context, old *resources.PostgreSQL, new *resources.PostgreSQL) (*resources.PostgreSQL, error) {
-	p.logger.Debug("read", "id", new.Meta.ID)
+	p.logger.Debug("", "event", "read", "resource", new.Meta.ID)
 
 	return new, nil
 }
@@ -78,14 +78,14 @@ func (p *postgresProvider) Read(ctx context.Context, old *resources.PostgreSQL, 
 // Update sets the computed connection string for the changed configuration
 func (p *postgresProvider) Update(ctx context.Context, db *resources.PostgreSQL) (*resources.PostgreSQL, error) {
 	db.ConnectionString = connectionString(db)
-	p.logger.Debug("update", "id", db.Meta.ID, "connection_string", db.ConnectionString)
+	p.logger.Debug("", "event", "update", "resource", db.Meta.ID, "connection_string", db.ConnectionString)
 
 	return db, nil
 }
 
 // Destroy would remove the database, there is nothing to remove here
 func (p *postgresProvider) Destroy(ctx context.Context, db *resources.PostgreSQL, force bool) error {
-	p.logger.Debug("destroy", "id", db.Meta.ID, "force", force)
+	p.logger.Debug("", "event", "destroy", "resource", db.Meta.ID, "force", force)
 
 	return nil
 }

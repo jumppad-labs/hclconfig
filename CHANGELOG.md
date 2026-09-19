@@ -8,6 +8,8 @@
 
 Both examples now keep their state in a file, and apply and then destroy the shared configuration.
 
+Every log line now leads with its event, `event=<name>`, ahead of the `plugin=`/`provider=` tags: `StdOutLogger` and `logger.WithTag` move an `event` argument to the front, and a message logged without one is written as `event=log`. The framework's own lines carry events too: `calling provider` logs `event=<operation> resource=<id>` (it used to log `operation=` and `id=`), `plugin loaded` is `event=load`, go-plugin's logs are `event=go-plugin`, plugin discovery is `event=discover` and the changed-configured-value warning is `event=configured_value_changed`.
+
 **Breaking:**
 - Applying a configuration with no blocks fails with `xcl.ErrEmptyConfiguration` and changes nothing. Use `Destroy` to remove everything.
 - `FileStateStore.Load` fails with `state.UnknownTypesError`, naming every saved type that isn't registered. It used to silently drop those resources, so the next save erased them from the state. Register every type and plugin before loading state.

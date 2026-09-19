@@ -29,7 +29,7 @@ func NewDirectPluginHost(log Logger, state State, plugin Plugin) (*DirectPluginH
 	}
 
 	if log != nil {
-		log.Debug("plugin loaded", "block_types", resourceTypeNames(plugin.GetTypes()))
+		log.Debug("plugin loaded", "event", "load", "block_types", resourceTypeNames(plugin.GetTypes()))
 	}
 
 	return &DirectPluginHost{
