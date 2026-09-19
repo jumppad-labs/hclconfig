@@ -10,6 +10,11 @@ import (
 	"github.com/jumppad-labs/xcl/state"
 )
 
+// ErrEmptyConfiguration is returned by Apply when the configuration declares no
+// blocks. Nothing is destroyed, created, changed or saved: use Destroy to
+// remove everything. Check for it with errors.Is.
+var ErrEmptyConfiguration = parser.ErrEmptyConfiguration
+
 // Config defines the stack config
 // It orchestrates high-level operations (Apply, Validate, Destroy)
 // and manages the current state
@@ -18,7 +23,7 @@ type Config struct {
 	pluginRegistry *registry.PluginRegistry // Config owns plugins
 	stateStore     state.StateStore         // Persistence for state
 	variables      map[string]any           // Variables for HCL parsing
-	eventHandler   EventHandler             // Called for every lifecycle event during Apply
+	eventHandler   EventHandler             // Called for every lifecycle event during Apply and Destroy
 }
 
 // NewConfig creates a new Config with functional options
@@ -96,10 +101,17 @@ func (c *Config) Validate(paths ...string) error {
 }
 
 // Apply parses config from paths, loads existing state, and applies changes.
-// Executes plugins for each resource in dependency order and saves the
-// resulting state. When a provider call fails, the progress made so far is
-// saved before the error is returned, so the next apply resumes from it.
-// Nothing is saved when the configuration does not parse or validate.
+// Resources that were applied before but are no longer in the configuration
+// are destroyed first, children before parents, before anything is created or
+// changed. Plugins are then executed for each resource in dependency order and
+// the resulting state is saved. When a provider call fails, the progress made
+// so far is saved before the error is returned, so the next apply resumes from
+// it. A removed resource whose destroy fails stops the apply before anything
+// is created or changed, and is kept as destroy_failed for the next apply to
+// retry first.
+// Nothing is saved when the configuration does not parse or validate, or when
+// it declares no blocks, which returns ErrEmptyConfiguration: use Destroy to
+// remove everything.
 func (c *Config) Apply(paths ...string) error {
 	if len(paths) == 0 {
 		return fmt.Errorf("at least one path is required")
@@ -133,12 +145,49 @@ func (c *Config) Apply(paths ...string) error {
 	return err
 }
 
-// Destroy removes all resources currently in state
-// Executes destroy in reverse dependency order
-// Saves state after each successful destroy for resumability
+// Destroy removes every resource in the saved state, or in the in-memory state
+// when no state store is configured. It needs no configuration: resources are
+// destroyed children first, in the reverse of the order they were created in,
+// using the parents each resource recorded when it was applied. Variables,
+// outputs, modules, disabled blocks and registered types never reach a
+// provider.
+//
+// The state is saved after each resource, so an interrupted destroy resumes
+// from where it stopped. A resource that fails to be destroyed stays in the
+// state as destroy_failed, together with everything it depends on, and is
+// named in the returned error; calling Destroy again retries it. When nothing
+// has been saved Destroy succeeds and writes nothing.
 func (c *Config) Destroy() error {
-	// TODO: Implement destroy logic
-	return nil
+	saved := c.currentState
+
+	if c.stateStore != nil {
+		if !c.stateStore.Exists() {
+			return nil
+		}
+
+		loaded, err := c.stateStore.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load state: %w", err)
+		}
+
+		saved = loaded
+	}
+
+	if saved == nil || saved.ResourceCount() == 0 {
+		return nil
+	}
+
+	// Create parser with StateStore, destroy saves through it after every resource
+	p := parser.NewParser(&parser.ParserOptions{
+		StateStore:     c.stateStore,
+		PluginRegistry: c.pluginRegistry,
+		OnParserEvent:  parserEventHandler(c.eventHandler),
+	})
+
+	remaining, err := p.Destroy(saved)
+	c.currentState = remaining
+
+	return err
 }
 
 // convertVariablesToStringMap converts map[string]any to map[string]string

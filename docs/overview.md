@@ -14,8 +14,11 @@ Config            (repo root, package xcl)
   entry point: NewConfig(opts...), then Apply()/Validate()/Destroy()
 
 Parser            (internal/parser)
-  does one Apply() call: load previous state -> parse HCL -> build DAG
-  -> walk DAG, decoding each resource and calling its provider
+  does one Apply() call: load previous state -> parse HCL -> destroy
+  removed resources -> build DAG -> walk DAG, decoding each resource and
+  calling its provider
+  or one Destroy() call: walk the saved state children first, calling
+  each resource's provider
 
 PluginRegistry    (plugins/registry)
   aggregates PluginHosts, answers "what Go type is resource X" and
@@ -23,10 +26,10 @@ PluginRegistry    (plugins/registry)
 ```
 
 `Config` is the only piece meant to be constructed directly by a library
-user. `Parser` is constructed fresh, internally, on every `Apply`/`Validate`
-call — it is not held onto between calls. `PluginRegistry` and `StateStore`
-are the two pieces of long-lived state `Config` owns and passes into each
-new `Parser` via `ParserOptions`.
+user. `Parser` is constructed fresh, internally, on every
+`Apply`/`Validate`/`Destroy` call — it is not held onto between calls.
+`PluginRegistry` and `StateStore` are the two pieces of long-lived state
+`Config` owns and passes into each new `Parser` via `ParserOptions`.
 
 ## Entry point
 
@@ -39,16 +42,17 @@ cfg := xcl.NewConfig(
 
 err := cfg.Validate("./infra")         // checks only, acts on nothing
 err := cfg.Apply("./infra")            // parses + executes provider lifecycle
+err := cfg.Destroy()                   // destroys everything in the saved state
 ```
 
-[`config.go:23`](../config.go#L23) `NewConfig` applies functional options
+[`config.go:27`](../config.go#L27) `NewConfig` applies functional options
 ([`options.go`](../options.go)) onto a `Config{currentState: state.NewState()}`.
 With no options, you get a config that parses and validates HCL but never
 touches a real provider or disk — useful for testing.
 
 ## What `Apply` actually does
 
-[`config.go:95`](../config.go#L95):
+[`config.go:110`](../config.go#L110):
 
 1. Construct a `parser.Parser` for this call only, handing it `Config`'s
    `StateStore`, `PluginRegistry`, and variables via `ParserOptions`.
@@ -58,16 +62,25 @@ touches a real provider or disk — useful for testing.
 4. If a `StateStore` is configured, `Save` the new state.
 5. Return the error from `p.Apply`, if any.
 
+Before anything is created or changed, `p.Apply` rejects a configuration
+with no blocks (`xcl.ErrEmptyConfiguration`: use `Destroy` to remove
+everything), then destroys the resources in the previous state that are no
+longer in the configuration, children first, saving the state after each one.
+
 State is saved even when the apply failed. When a provider call fails,
 `p.Apply` returns the state the walk reached along with the error: reached
 resources with their new status, the failing resource as `failed` (or
 `destroy_failed`), and the previous entry of resources that were not reached.
+When destroying a removed resource fails, nothing is created or changed, and
+the state returned is the previous state minus what was destroyed, with the
+failures as `destroy_failed`; the next apply retries them first.
 `Config.Apply` saves that state and then returns the error. Only when
 `p.Apply` returns no state at all (the configuration didn't parse or
-validate, or the dependency graph couldn't be built) is nothing saved. See
+validate, declared no blocks, or the dependency graph couldn't be built) is
+nothing saved. See
 [State & Persistence](state.md#state-saved-after-a-failed-apply).
 
-`Config.Validate` ([`config.go`](../config.go)) answers only whether a
+`Config.Validate` ([`config.go:77`](../config.go#L77)) answers only whether a
 configuration is valid, returning `error` alone. It calls `p.Validate(paths...)`,
 which parses every file and then runs validation to completion — **without**
 decoding bodies, walking the DAG or reaching a provider. A nil error means the
@@ -80,18 +93,31 @@ considered. A later stage is skipped when an earlier one found anything, because
 checking properties on a reference that resolves nowhere would only report
 consequences of a problem already reported.
 
-`Config.Destroy` ([`config.go:130`](../config.go#L130)) is currently a stub
-(`// TODO: Implement destroy logic`) — the destroy DAG-walk machinery exists
-in the parser (`destroyWalkCallback`, see [Parser & Resource
-Lifecycle](parser-lifecycle.md#destroy)) but nothing calls it yet. Resources
-removed from the configuration are not destroyed either; the only `Destroy`
-call an apply makes is when it rebuilds a resource saved as `failed` or
-`destroy_failed`.
+## What `Destroy` does
+
+[`config.go:155`](../config.go#L155) needs no configuration:
+
+1. Load the saved state from the `StateStore` (or use the in-memory state
+   when there is none). Nothing saved, or an empty state, returns nil and
+   writes nothing; a load error is returned as `failed to load state: ...`.
+2. Construct a `parser.Parser` and call `p.Destroy(saved)`, which destroys
+   every resource children first, using the parents each resource recorded
+   in `meta.parents` when it was applied. Unrelated resources are destroyed
+   in parallel. Variables, outputs, modules, registered types and disabled
+   blocks never reach a provider.
+3. The state is saved after every resource, so an interrupted destroy
+   resumes from it. A resource whose destroy fails stays as
+   `destroy_failed`, together with everything it depends on, and is named in
+   the returned error; calling `Destroy` again retries it.
+4. Adopt what is left as `c.currentState`.
+
+See [Parser & Resource Lifecycle](parser-lifecycle.md#destroy) and
+[State & Persistence](state.md#state-during-a-destroy).
 
 ## Resource metadata convention
 
 Every resource type — builtin (`resources.Module`, `resources.Output`, ...)
-or plugin-defined — embeds [`types.ResourceBase`](../types/resource.go#L50),
+or plugin-defined — embeds [`types.ResourceBase`](../types/resource.go#L58),
 which in turn embeds [`types.Meta`](../types/resource.go#L5):
 
 ```go
@@ -106,6 +132,7 @@ type Meta struct {
     Line, Column                 int
     Properties                   map[string]any
     Links                        []string // unresolved cross-resource references
+    Parents                      []string // resolved dependencies, orders a destroy
     Status                       string   // see below
 }
 ```
@@ -115,7 +142,8 @@ type Meta struct {
 ([`types/status.go`](../types/status.go)). The status saved by the last apply
 decides what the next apply does with the resource: `created` and `updated`
 resources are read and updated if they changed, `failed` and
-`destroy_failed` resources are destroyed and created again. See
+`destroy_failed` resources are destroyed and created again. `destroyed` is
+never saved: a destroyed resource leaves the state. See
 [State & Persistence](state.md#resource-statuses).
 
 `types.GetMeta(resource any) (*Meta, error)` ([`types/resource_helpers.go`](../types/resource_helpers.go))

@@ -1,0 +1,9 @@
+# Two networks with no dependencies of their own.
+
+resource "network" "one" {
+  subnet = "10.10.0.0/16"
+}
+
+resource "network" "two" {
+  subnet = "10.11.0.0/16"
+}

@@ -1,0 +1,15 @@
+# before with x removed.
+
+resource "network" "y" {
+  subnet = "10.1.0.0/16"
+}
+
+resource "network" "p" {
+  subnet = "10.2.0.0/16"
+}
+
+resource "container" "q" {
+  network {
+    name = resource.network.p.meta.name
+  }
+}

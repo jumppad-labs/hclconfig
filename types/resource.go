@@ -39,6 +39,13 @@ type Meta struct {
 	// this is an internal property that can not be set with hcl
 	Links []string `json:"links,omitempty"`
 
+	// Parents holds the IDs of the resources this resource depends on, resolved
+	// when the create graph is built. It covers explicit depends_on, references,
+	// module-wide references and the module the resource sits in, and is what
+	// orders a destroy from the saved state alone
+	// this is an internal property that can not be set with hcl
+	Parents []string `json:"parents,omitempty"`
+
 	// Status tracks the operational state of the resource
 	// Possible values: "created", "updated", "failed", "destroyed", "destroy_failed"
 	// (see StatusCreated, StatusUpdated, StatusFailed, StatusDestroyed, StatusDestroyFailed)

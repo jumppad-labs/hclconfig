@@ -69,10 +69,6 @@ The [`example`](./example) directory holds one configuration,
 - [`example/configonly`](./example/configonly) uses XCL for configuration
   only. The block types are plain Go types registered on the plugin registry,
   with no plugin and no provider.
-
-Both examples log every event xcl fires, parse events included, through the
-shared [`example/eventlog`](./example/eventlog) handler, at debug unless
-something fails.
 - [`example/plugin`](./example/plugin) applies the same configuration through
   two plugins. `ExamplePlugin` (`internal/`) is an in-process plugin that
   provides `postgres` and fills in the computed `connection_string` that the
@@ -85,6 +81,12 @@ something fails.
   `DEBU plugin=ExamplePlugin provider=postgres create id=resource.postgres.main`.
   Everything in the example logs at debug except a failure, which logs at
   error.
+
+Both examples keep their state in a file, apply the configuration, print the
+resources, then `Destroy` everything and print what is left under
+`## Destroyed`. They log every event xcl fires, parse and destroy events
+included, through the shared [`example/eventlog`](./example/eventlog)
+handler, at debug unless something fails.
 
 Run either one from its directory with `make run`. For `plugin` this builds
 the external plugin into `build/` first. Both have the same Makefile targets:
@@ -158,16 +160,52 @@ db, err := q.FindResource("resource.postgres.main")
 A registered type is returned as the value held in state, so changing it
 changes state. A plugin type is returned as a copy.
 
+### State and Destroy
+
+Keep state between runs with a `StateStore`. `Apply` loads the saved state,
+applies the configuration and saves the result. `Destroy` needs no
+configuration: it destroys everything in the saved state, dependents before
+what they depend on.
+
+```go
+store, err := state.NewFileStateStore("./state.json", r)
+
+c := xcl.NewConfig(
+	xcl.WithPluginRegistry(r),
+	xcl.WithStateStore(store),
+)
+
+err = c.Apply("./config")
+
+// later, remove everything that was applied
+err = c.Destroy()
+```
+
+The state is saved after each resource is destroyed, so an interrupted
+`Destroy` picks up where it stopped. A resource whose destroy fails stays in
+the state, with everything it depends on, and is named in the error; running
+`Destroy` again retries it. Registered and builtin types never reach a
+provider, they are just removed from the state.
+
+A block removed from the configuration is destroyed on the next `Apply`,
+before anything is created or changed. Applying a configuration with no
+blocks fails with `xcl.ErrEmptyConfiguration` and changes nothing, use
+`Destroy` to remove everything.
+
+Register every type and plugin before loading state: saved resources of a
+type the registry does not know fail the load with `state.UnknownTypesError`
+rather than being dropped.
+
 ### Lifecycle events
 
 `WithEventHandler` is called for every step of the resource lifecycle during
-`Apply`. First a `parse` event for each block as it is read, a `success` or
+`Apply` and `Destroy`. First a `parse` event for each block as it is read, a `success` or
 an `error`, with the `File` it was read from. A block that can not be tied to
 a resource, such as a file that is not valid syntax, gets a parse `error`
 with an empty `ResourceID`. Then a `start` before each provider call (create,
 read, changed, update, destroy), and a `success` or an `error` when it
-returns. Builtin and registered types have no provider, they only get a
-`success`. `Validate` passes the parse events to the handler too. Resources
+returns. Builtin and registered types, and disabled blocks on destroy, have
+no provider, they only get a `success`. `Validate` passes the parse events to the handler too. Resources
 that don't depend on each other are processed concurrently, so the handler
 may be called from several goroutines at once.
 

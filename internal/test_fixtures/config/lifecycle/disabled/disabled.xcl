@@ -1,0 +1,12 @@
+# on is a network the TestPlugin provides. off is the same provider type but
+# disabled, so no provider is ever asked to create or destroy it.
+
+resource "network" "on" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "network" "off" {
+  disabled = true
+
+  subnet = "10.1.0.0/16"
+}

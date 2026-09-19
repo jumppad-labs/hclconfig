@@ -258,8 +258,8 @@ blocks decode into the developer's own type and state reload returns that
 type. The parser learns about them through the one-method
 `parser.TypeRegistry` interface (`IsRegisteredType`), which `*PluginRegistry`
 satisfies. The lifecycle and the destroy walk treat a registered type like a
-builtin: it gets a success event, its status is left unchanged, and no
-provider is ever called for it.
+builtin: it gets a success event and no provider is ever called for it. On
+apply its status is left unchanged; on destroy it is removed from the state.
 
 Type names are unique across the registry. `RegisterType`, `RegisterPlugin`,
 `RegisterPluginWithPath` and `DiscoverAndLoadPlugins` all check each incoming

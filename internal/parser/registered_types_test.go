@@ -288,6 +288,34 @@ func TestApplyAfterRemovingRegisteredBlockSucceedsWithoutProvider(t *testing.T) 
 
 	_, err = st.FindResource(registeredRemovedID)
 	require.Error(t, err)
+
+	err = h.store.Save(st)
+	require.NoError(t, err)
+
+	saved, err := h.store.Load()
+	require.NoError(t, err)
+	require.NotContains(t, stateIDs(t, saved), registeredRemovedID)
+	require.Contains(t, stateIDs(t, saved), registeredKeptID)
+}
+
+func TestApplyAfterRemovingRegisteredBlockNeverCallsProvider(t *testing.T) {
+	h := setupRegisteredTypes(t)
+	h.applyAndSave(t, registeredRemovedBeforeConfig)
+
+	options := testOptions(t)
+	options.PluginRegistry = h.registry
+	options.StateStore = h.store
+	// no expectations, any provider lookup fails the test
+	options.ProviderResolver = mocks.NewMockProviderResolver(t)
+
+	p := NewParser(options)
+
+	st, err := p.Apply(registeredRemovedAfterConfig)
+	require.NoError(t, err)
+	require.NotNil(t, st)
+
+	_, err = st.FindResource(registeredRemovedID)
+	require.Error(t, err)
 }
 
 func TestApplyRegisteredTypeInModuleIsStoredUnderModulePath(t *testing.T) {
@@ -418,10 +446,21 @@ func TestDestroyWalkSkipsProviderForRegisteredType(t *testing.T) {
 		Port:     5432,
 	}
 
-	callback := destroyWalkCallback(resolver, h.registry, testOptions(t))
+	working := state.NewState()
+	err := working.AppendResource(db)
+	require.NoError(t, err)
+
+	d := &destroyer{
+		working:  working,
+		resolver: resolver,
+		types:    h.registry,
+		options:  testOptions(t),
+	}
+
+	callback := destroyWalkCallback(d)
 
 	diags := callback(db)
 	require.False(t, diags.HasErrors())
 	require.Empty(t, diags)
-	require.Equal(t, types.StatusDestroyed, db.Meta.Status)
+	require.Equal(t, 0, working.ResourceCount())
 }

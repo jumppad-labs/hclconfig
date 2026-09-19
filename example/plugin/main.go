@@ -1,7 +1,7 @@
 // Command plugin shows XCL used with plugins. It applies the same
 // configuration and the same Go types as the configonly example, but the
 // block types are provided by two plugins whose providers take part in the
-// lifecycle:
+// lifecycle, creating the resources on apply and destroying them at the end:
 //
 //   - ExamplePlugin (./internal) is an in-process plugin, compiled into this
 //     program. It provides postgres, and fills in the computed
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/jumppad-labs/xcl"
 	"github.com/jumppad-labs/xcl/example/eventlog"
@@ -28,6 +29,7 @@ import (
 	"github.com/jumppad-labs/xcl/example/resources"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
+	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/types"
 )
 
@@ -42,17 +44,29 @@ func main() {
 		externalPlugin = os.Args[2]
 	}
 
-	if _, err := run(os.Stdout, logger.NewStdOutLogger(), dir, externalPlugin); err != nil {
+	// Keep the state in a temporary directory, removed when the example ends
+	stateDir, err := os.MkdirTemp("", "xcl-example")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		os.Exit(1)
+	}
+
+	_, err = run(os.Stdout, logger.NewStdOutLogger(), dir, externalPlugin, filepath.Join(stateDir, "state.json"))
+	os.RemoveAll(stateDir)
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }
 
 // run applies the configuration in dir with the in-process ExamplePlugin and
-// the external plugin binary at externalPlugin registered, writes the
-// resources and query results to out, and returns the resources. The plugins
-// log to log, and every lifecycle event is logged to it too.
-func run(out io.Writer, log logger.Logger, dir string, externalPlugin string) ([]any, error) {
+// the external plugin binary at externalPlugin registered, keeping the state
+// in a file at statePath. It writes the resources and query results to out,
+// then destroys everything through the providers and returns the resources
+// that were applied. The plugins log to log, and every lifecycle event is
+// logged to it too.
+func run(out io.Writer, log logger.Logger, dir string, externalPlugin string, statePath string) ([]any, error) {
 	r := registry.NewPluginRegistry(log)
 
 	// The external plugin runs as a separate process, stop it when done
@@ -74,8 +88,15 @@ func run(out io.Writer, log logger.Logger, dir string, externalPlugin string) ([
 		return nil, fmt.Errorf("%w, build it with `make build` in example/plugin", err)
 	}
 
+	// Keep the state in a file, Destroy works from it alone
+	store, err := state.NewFileStateStore(statePath, r)
+	if err != nil {
+		return nil, err
+	}
+
 	c := xcl.NewConfig(
 		xcl.WithPluginRegistry(r),
+		xcl.WithStateStore(store),
 		xcl.WithEventHandler(eventlog.Handler(log)),
 	)
 
@@ -114,5 +135,16 @@ func run(out io.Writer, log logger.Logger, dir string, externalPlugin string) ([
 	fmt.Fprintf(out, "  %s database_location=%s database_user=%s analytics_location=%s connection_string=%q\n",
 		app.Meta.ID, app.DatabaseLocation, app.DatabaseUser, app.AnalyticsLocation, app.ConnectionString)
 
-	return c.GetResources(), nil
+	applied := append([]any{}, c.GetResources()...)
+
+	// Destroy everything that was applied, dependents before what they depend
+	// on, working only from the saved state
+	if err := c.Destroy(); err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintln(out, "## Destroyed")
+	fmt.Fprintf(out, "  %d resources remaining\n", c.ResourceCount())
+
+	return applied, nil
 }

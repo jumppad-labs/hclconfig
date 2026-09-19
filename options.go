@@ -26,8 +26,9 @@ func WithStateStore(ss state.StateStore) ConfigOption {
 }
 
 // WithEventHandler sets a handler that is called for every lifecycle event
-// during Apply, such as a block being parsed or a provider's Create starting
-// or succeeding, and for the parse events during Validate
+// during Apply and Destroy, such as a block being parsed or a provider's
+// Create or Destroy starting or succeeding, and for the parse events during
+// Validate
 func WithEventHandler(handler EventHandler) ConfigOption {
 	return func(c *Config) {
 		c.eventHandler = handler

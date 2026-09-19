@@ -6,8 +6,8 @@ import (
 	"github.com/jumppad-labs/xcl/internal/parser"
 )
 
-// Event describes one step of the resource lifecycle during Apply, such as a
-// provider's Create starting or succeeding for a resource
+// Event describes one step of the resource lifecycle during Apply or Destroy,
+// such as a provider's Create or Destroy starting or succeeding for a resource
 type Event struct {
 	// Operation is the lifecycle operation, one of "parse", "create", "read",
 	// "changed", "update" or "destroy". A parse event is fired for every block
@@ -39,8 +39,8 @@ type Event struct {
 	Data []byte
 }
 
-// EventHandler is called for every lifecycle event during Apply, and for the
-// parse events during Validate. Resources
+// EventHandler is called for every lifecycle event during Apply and Destroy,
+// and for the parse events during Validate. Resources
 // that do not depend on each other are processed concurrently, so a handler
 // may be called from several goroutines at once.
 type EventHandler func(Event)

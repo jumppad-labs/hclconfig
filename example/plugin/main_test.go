@@ -136,7 +136,7 @@ func resourceIDs(t *testing.T, found []any) []string {
 func TestPluginExampleFindsDeclaredResources(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	found, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin)
+	found, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Equal(t, declaredResourceIDs, resourceIDs(t, found))
@@ -145,7 +145,7 @@ func TestPluginExampleFindsDeclaredResources(t *testing.T) {
 func TestPluginExamplePrintsEveryResource(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin)
+	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	for _, id := range declaredResourceIDs {
@@ -156,7 +156,7 @@ func TestPluginExamplePrintsEveryResource(t *testing.T) {
 func TestPluginExampleFillsConnectionString(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin)
+	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Contains(t, out.String(), `resource.postgres.main location=localhost port=5432 connection_string="postgres://admin@localhost:5432/main"`)
@@ -167,7 +167,7 @@ func TestPluginExampleFillsConnectionString(t *testing.T) {
 func TestPluginExamplePassesConnectionStringToReferencingBlock(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin)
+	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Contains(t, out.String(), `resource.app.web database_location=localhost database_user=admin analytics_location=analytics.localhost connection_string="postgres://admin@localhost:5432/main"`)
@@ -179,7 +179,7 @@ func TestPluginExamplePassesConnectionStringToReferencingBlock(t *testing.T) {
 func TestPluginExampleHoldsGeneratedTypes(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	found, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin)
+	found, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	for _, r := range found {
@@ -194,7 +194,7 @@ func TestPluginExampleHoldsGeneratedTypes(t *testing.T) {
 func TestPluginExampleFailsForMissingConfig(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), "./does-not-exist", externalPlugin)
+	_, err := run(out, logger.NewTestLogger(t), "./does-not-exist", externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.Error(t, err)
 }
 
@@ -250,7 +250,7 @@ func TestPluginExampleDefinesNoTypesOrConfig(t *testing.T) {
 func TestPluginExampleLogsInProcessPluginInitAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Len(t, log.withMessage("debug", "plugin=ExamplePlugin init"), 1)
@@ -259,7 +259,7 @@ func TestPluginExampleLogsInProcessPluginInitAtDebug(t *testing.T) {
 func TestPluginExampleLogsInProcessProviderInitAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Len(t, log.withMessage("debug", "plugin=ExamplePlugin provider=postgres init"), 1)
@@ -268,7 +268,7 @@ func TestPluginExampleLogsInProcessProviderInitAtDebug(t *testing.T) {
 func TestPluginExampleLogsInProcessProviderCreateAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.ElementsMatch(t, [][]any{
@@ -283,7 +283,7 @@ func TestPluginExampleLogsInProcessProviderCreateAtDebug(t *testing.T) {
 func TestPluginExampleLogsExternalProviderCreateAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Equal(t, [][]any{
@@ -294,14 +294,14 @@ func TestPluginExampleLogsExternalProviderCreateAtDebug(t *testing.T) {
 func TestPluginExampleFailsWithoutExternalPlugin(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), configDir, "./does-not-exist")
+	_, err := run(out, logger.NewTestLogger(t), configDir, "./does-not-exist", filepath.Join(t.TempDir(), "state.json"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "make build")
 }
 
 // eventPhases returns, for the events at level, the phases logged for each
-// create, keyed by resource id
-func eventPhases(t *testing.T, log *recordingLogger, level string) map[string][]string {
+// resource's operation, keyed by resource id
+func eventPhases(t *testing.T, log *recordingLogger, level string, operation string) map[string][]string {
 	t.Helper()
 
 	phases := map[string][]string{}
@@ -309,7 +309,7 @@ func eventPhases(t *testing.T, log *recordingLogger, level string) map[string][]
 		require.Equal(t, "event", m.args[0])
 		require.Equal(t, "resource", m.args[2])
 
-		if m.args[1] != "create" {
+		if m.args[1] != operation {
 			continue
 		}
 
@@ -328,7 +328,7 @@ func eventPhases(t *testing.T, log *recordingLogger, level string) map[string][]
 func TestPluginExampleLogsEventsAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Equal(t, map[string][]string{
@@ -342,7 +342,7 @@ func TestPluginExampleLogsEventsAtDebug(t *testing.T) {
 		"output.web_database":                          {"success"},
 		"variable.db_password":                         {"success"},
 		"variable.db_username":                         {"success"},
-	}, eventPhases(t, log, "debug"))
+	}, eventPhases(t, log, "debug", "create"))
 }
 
 // TestPluginExampleLogsPluginsLoadedAtDebug asserts loading each plugin, and
@@ -350,7 +350,7 @@ func TestPluginExampleLogsEventsAtDebug(t *testing.T) {
 func TestPluginExampleLogsPluginsLoadedAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Equal(t, [][]any{{"block_types", "postgres"}}, argsOf(log.withMessage("debug", "plugin=ExamplePlugin plugin loaded")))
@@ -360,7 +360,7 @@ func TestPluginExampleLogsPluginsLoadedAtDebug(t *testing.T) {
 func TestPluginExampleLogsNoErrors(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	for _, m := range log.messages {
@@ -373,7 +373,7 @@ func TestPluginExampleLogsNoErrors(t *testing.T) {
 func TestPluginExampleLogsNothingAtInfo(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	for _, m := range log.messages {
@@ -386,7 +386,7 @@ func TestPluginExampleLogsNothingAtInfo(t *testing.T) {
 func TestPluginExampleLogsParseEventWithFileAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin)
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	files := map[string]string{}
@@ -411,4 +411,71 @@ func TestPluginExampleLogsParseEventWithFileAtDebug(t *testing.T) {
 		"module.analytics.resource.postgres.analytics": "db.xcl",
 		"module.analytics.output.location":             "db.xcl",
 	}, files)
+}
+
+// TestPluginExampleDestroysEverythingItApplied asserts the state saved after a run is
+// empty. The raw file is read rather than loaded through a store, loading it
+// would need both plugins registered again, and an empty state is an empty
+// JSON array whatever the plugins provide
+func TestPluginExampleDestroysEverythingItApplied(t *testing.T) {
+	statePath := filepath.Join(t.TempDir(), "state.json")
+
+	_, err := run(&bytes.Buffer{}, logger.NewTestLogger(t), configDir, externalPlugin, statePath)
+	require.NoError(t, err)
+
+	saved, err := os.ReadFile(statePath)
+	require.NoError(t, err)
+	require.JSONEq(t, "[]", string(saved))
+}
+
+func TestPluginExamplePrintsNoResourcesRemaining(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	require.Contains(t, out.String(), "## Destroyed\n  0 resources remaining\n")
+}
+
+// TestPluginExampleProvidersLogDestroyForEveryResource asserts every postgres and app
+// resource is destroyed through its provider, the in-process one for postgres
+// and the external one for app
+func TestPluginExampleProvidersLogDestroyForEveryResource(t *testing.T) {
+	log := &recordingLogger{}
+
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	require.ElementsMatch(t, [][]any{
+		{"id", "resource.postgres.main", "force", false},
+		{"id", "resource.postgres.replica", "force", false},
+		{"id", "module.analytics.resource.postgres.analytics", "force", false},
+	}, argsOf(log.withMessage("debug", "plugin=ExamplePlugin provider=postgres destroy")))
+
+	require.Equal(t, [][]any{
+		{"id", "resource.app.web", "force", false},
+	}, argsOf(log.withMessage("debug", "plugin=external provider=app destroy")))
+}
+
+// TestPluginExampleLogsDestroyEventPhases asserts every resource's destroy events are logged at
+// debug, a start and a success for a resource a provider destroys, only a
+// success for a builtin block, which has no provider
+func TestPluginExampleLogsDestroyEventPhases(t *testing.T) {
+	log := &recordingLogger{}
+
+	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	require.Equal(t, map[string][]string{
+		"resource.postgres.main":                       {"start", "success"},
+		"resource.postgres.replica":                    {"start", "success"},
+		"module.analytics.resource.postgres.analytics": {"start", "success"},
+		"resource.app.web":                             {"start", "success"},
+		"module.analytics":                             {"success"},
+		"module.analytics.output.location":             {"success"},
+		"module.analytics.variable.db_username":        {"success"},
+		"output.web_database":                          {"success"},
+		"variable.db_password":                         {"success"},
+		"variable.db_username":                         {"success"},
+	}, eventPhases(t, log, "debug", "destroy"))
 }

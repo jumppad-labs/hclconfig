@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/resources"
@@ -82,13 +83,31 @@ func buildCreateDAG(rp ResourceProvider) (*dagpkg.AcyclicGraph, error) {
 			return nil, pe
 		}
 
-		// add edges to graph
+		// add edges to graph and record the resolved parents on the resource,
+		// nil entries are references that did not resolve to a resource
+		var parents []string
+		connected := false
 		for d := range deps {
+			if d == nil {
+				continue
+			}
+
 			graph.Connect(dagpkg.BasicEdge(d, resource))
+			connected = true
+
+			parentMeta, err := types.GetMeta(d)
+			if err != nil {
+				continue
+			}
+
+			parents = append(parents, parentMeta.ID)
 		}
 
+		slices.Sort(parents)
+		resourceMeta.Parents = parents
+
 		// if no deps add to root node
-		if len(deps) == 0 {
+		if !connected {
 			graph.Connect(dagpkg.BasicEdge(root, resource))
 		}
 	}
@@ -96,8 +115,12 @@ func buildCreateDAG(rp ResourceProvider) (*dagpkg.AcyclicGraph, error) {
 	return graph, nil
 }
 
-// buildDestroyDAG creates a DAG for destroying resources with reversed dependencies
-// Resources with dependencies must be destroyed before their dependencies
+// buildDestroyDAG creates the graph for destroying toDestroy. It has the same
+// shape as the create graph: edges run from each parent, read from the
+// resource's recorded Meta.Parents, to the resource, and resources with no
+// parent in the set hang off a root. Parents that are not being destroyed are
+// ignored. The graph is walked with Reverse so children are destroyed before
+// their parents.
 func buildDestroyDAG(toDestroy []any) (*dagpkg.AcyclicGraph, error) {
 	graph := &dagpkg.AcyclicGraph{}
 
@@ -109,14 +132,11 @@ func buildDestroyDAG(toDestroy []any) (*dagpkg.AcyclicGraph, error) {
 	root, _ := resources.DefaultResources().CreateResource(resources.TypeRoot, "destroy_root")
 	graph.Add(root)
 
-	// Add all resources to be destroyed to the graph
-	for _, resource := range toDestroy {
-		graph.Add(resource)
-	}
-
-	// Create a map for quick lookup of resources in destroy list
+	// Add all resources to be destroyed to the graph and index them by ID
 	destroyMap := make(map[string]any)
 	for _, resource := range toDestroy {
+		graph.Add(resource)
+
 		meta, err := types.GetMeta(resource)
 		if err != nil {
 			continue // Skip resources without ResourceBase
@@ -124,41 +144,25 @@ func buildDestroyDAG(toDestroy []any) (*dagpkg.AcyclicGraph, error) {
 		destroyMap[meta.ID] = resource
 	}
 
-	// Add REVERSED dependencies between resources to be destroyed
-	// If A depends on B, we want to destroy A before B, so we create edge A -> B
-	resourcesWithDeps := make(map[any]bool)
-
 	for _, resource := range toDestroy {
-		// Get all dependencies for this resource
-		// Note: Dependencies already include both explicit dependencies (from depends_on)
-		// and implicit dependencies (from resource links/interpolations) as they were
-		// appended during the original parse in BuildCreateDAG
-		allDependencies, err := types.GetDependencies(resource)
+		meta, err := types.GetMeta(resource)
 		if err != nil {
-			// this should never happen as we checked this earlier
-			panic(fmt.Sprintf("failed to get dependencies for resource during destroy DAG build: %s", err))
+			continue
 		}
 
-		hasDepsInDestroyList := false
-
-		// For each dependency, if it's also being destroyed, create a dependency edge
-		for _, dependency := range allDependencies {
-			if dependency == "" {
+		hasParentInSet := false
+		for _, parentID := range meta.Parents {
+			parent, exists := destroyMap[parentID]
+			if !exists {
 				continue
 			}
 
-			// Check if the dependency is also in the destroy list
-			if depResource, exists := destroyMap[dependency]; exists {
-				// Create edge: resource -> depResource (destroy resource before depResource)
-				graph.Connect(dagpkg.BasicEdge(resource, depResource))
-				resourcesWithDeps[resource] = true
-				resourcesWithDeps[depResource] = true
-				hasDepsInDestroyList = true
-			}
+			graph.Connect(dagpkg.BasicEdge(parent, resource))
+			hasParentInSet = true
 		}
 
-		// If this resource has no dependencies in the destroy list, connect it to root
-		if !hasDepsInDestroyList {
+		// If this resource has no parent being destroyed, connect it to root
+		if !hasParentInSet {
 			graph.Connect(dagpkg.BasicEdge(root, resource))
 		}
 	}

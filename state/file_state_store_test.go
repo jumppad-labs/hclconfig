@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path"
 	"testing"
@@ -89,4 +90,68 @@ func TestLoadStateContainsResources(t *testing.T) {
 
 	_, err = s.FindResource("variable.example")
 	require.NoError(t, err)
+}
+
+// stateWithUnknownTypes is a saved state holding a known variable alongside
+// resources whose types nothing registers: two postgres databases and a redis
+// cache.
+const stateWithUnknownTypes = `[
+  {
+    "meta": {"id": "variable.example", "type": "variable", "name": "example"}
+  },
+  {
+    "meta": {"id": "resource.redis.cache", "type": "redis", "name": "cache"}
+  },
+  {
+    "meta": {"id": "resource.postgres.main", "type": "postgres", "name": "main"}
+  },
+  {
+    "meta": {"id": "resource.postgres.replica", "type": "postgres", "name": "replica"}
+  }
+]`
+
+// stateWithUnknownType is a saved state holding a known variable alongside a
+// postgres resource whose type nothing registers.
+const stateWithUnknownType = `[
+  {
+    "meta": {"id": "variable.example", "type": "variable", "name": "example"}
+  },
+  {
+    "meta": {"id": "resource.postgres.main", "type": "postgres", "name": "main"}
+  }
+]`
+
+// Loading a state holding a type nobody registered fails naming that type,
+// rather than returning a state that silently drops the resource.
+func TestLoadFailsWhenStateHoldsUnknownType(t *testing.T) {
+	ss, p, _ := testCreateState(t)
+
+	err := os.WriteFile(p, []byte(stateWithUnknownType), 0644)
+	require.NoError(t, err)
+
+	s, err := ss.Load()
+	require.Error(t, err)
+	require.Nil(t, s)
+
+	unknown := UnknownTypesError{}
+	require.True(t, errors.As(err, &unknown))
+	require.Equal(t, []string{"postgres"}, unknown.Types)
+	require.Contains(t, err.Error(), "postgres")
+}
+
+// Every unknown type is named once, in sorted order, however many resources
+// of that type the state holds.
+func TestLoadNamesEachUnknownTypeOnceInSortedOrder(t *testing.T) {
+	ss, p, _ := testCreateState(t)
+
+	err := os.WriteFile(p, []byte(stateWithUnknownTypes), 0644)
+	require.NoError(t, err)
+
+	s, err := ss.Load()
+	require.Error(t, err)
+	require.Nil(t, s)
+
+	unknown := UnknownTypesError{}
+	require.True(t, errors.As(err, &unknown))
+	require.Equal(t, []string{"postgres", "redis"}, unknown.Types)
 }

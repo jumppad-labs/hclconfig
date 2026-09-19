@@ -1,0 +1,9 @@
+# before with p and q removed, q depends on p.
+
+resource "network" "x" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "network" "y" {
+  subnet = "10.1.0.0/16"
+}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/jumppad-labs/xcl/plugins/registry"
 )
@@ -48,6 +49,7 @@ func (fs *FileStateStore) Load() (*State, error) {
 
 	// Phase 2: Create typed resources and unmarshal into them
 	resources := []any{}
+	unknownTypes := []string{}
 	for _, rawMsg := range rawMessages {
 		// Peek at the metadata to get type and name
 		var metadata map[string]any
@@ -79,7 +81,12 @@ func (fs *FileStateStore) Load() (*State, error) {
 		// Create a typed resource reference using the registry
 		typedResource, err := fs.registry.CreateResource(resourceType, resourceName)
 		if err != nil {
-			// Skip unknown resource types (plugin not loaded)
+			// collect unknown resource types (plugin or type not registered), a
+			// state without them must never be returned as it would be saved
+			// without them
+			if !slices.Contains(unknownTypes, resourceType) {
+				unknownTypes = append(unknownTypes, resourceType)
+			}
 			continue
 		}
 
@@ -98,6 +105,11 @@ func (fs *FileStateStore) Load() (*State, error) {
 
 		// Append the typed resource pointer
 		resources = append(resources, typedResource)
+	}
+
+	if len(unknownTypes) > 0 {
+		slices.Sort(unknownTypes)
+		return nil, UnknownTypesError{Types: unknownTypes}
 	}
 
 	s := NewState()

@@ -17,26 +17,37 @@ in order:
    for typing), then **validate the configuration as a whole**. Nothing is
    acted upon unless validation passes, and validation itself decodes no
    bodies and reaches no provider.
-2. Build a DAG from resource dependencies (`internal/parser/dag.go`) —
+2. Reject a configuration that declares no blocks with
+   [`ErrEmptyConfiguration`](../internal/parser/errors.go) ("the configuration
+   declares no blocks, use Destroy to remove everything"). Applying it would
+   remove everything, so nothing is destroyed, created, changed or saved.
+3. Destroy the resources that are in the previous state but no longer in the
+   configuration ([`removedResources`](../internal/parser/parser.go#L332)),
+   children first, before anything is created or changed. This uses the same
+   destroyer as `Destroy`, see [Destroy](#destroy).
+4. Build a DAG from resource dependencies (`internal/parser/dag.go`) —
    explicit `depends_on`, plus implicit edges from cross-resource
-   references discovered during parsing (`Meta.Links`).
-3. Walk the DAG in dependency order.
-4. Decode each resource body (`gohcl.DecodeBody`) once its dependencies'
+   references discovered during parsing (`Meta.Links`). The parents each
+   resource ends up with are recorded in `Meta.Parents`.
+5. Walk the DAG in dependency order.
+6. Decode each resource body (`gohcl.DecodeBody`) once its dependencies'
    values are available.
-5. Look up the resource in the previous state and call
+7. Look up the resource in the previous state and call
    `Create`, or `Read`+`Changed`+`Update`, or `Destroy`+`Create`, on the
    resource's provider.
 
-If a provider call fails, `Apply` returns the state the walk reached
-together with the error, see
-[State saved after a failed apply](#state-saved-after-a-failed-apply).
+If a removal in step 3 fails, `Apply` stops there; if a provider call fails
+in the walk, `Apply` returns the state the walk reached. Either way the error
+comes back with a state to save, see
+[State saved after a failed apply](#state-saved-after-a-failed-apply). An
+apply that removes nothing skips step 3 entirely.
 
 ```go
 func (p *Parser) Validate(paths ...string) error
 ```
 
 is the checking half on its own: it runs `parseAndValidate` and stops there,
-so it never reaches steps 2-5. This is what `Config.Validate` calls.
+so it never reaches steps 2-7. This is what `Config.Validate` calls.
 
 ### The validation gate
 
@@ -62,12 +73,12 @@ Each stage gathers every problem it finds before returning, and a later stage
 is skipped when an earlier one found anything.
 
 `Parser` is stateless across calls — `Config` constructs a new one for
-every `Apply`/`Validate` (see [Overview](overview.md)).
+every `Apply`/`Validate`/`Destroy` (see [Overview](overview.md)).
 
 ## `walkCallback` and `resourceLifecycle`
 
 The DAG walker (`internal/dag`, a copy of `github.com/silas/dag`) invokes one callback per vertex.
-[`walkCallback`](../internal/parser/callbacks.go#L31) is that callback: it
+[`walkCallback`](../internal/parser/callbacks.go#L37) is that callback: it
 decodes the resource's HCL body, handles module-specific evaluation-context
 setup, and then hands the resource to `resourceLifecycle.apply`
 ([`internal/parser/lifecycle.go`](../internal/parser/lifecycle.go)).
@@ -112,13 +123,50 @@ root) are skipped early — see "Instrumentation" below for a subtlety here.
 
 ### Destroy
 
-The only `Destroy` call made today is the one in a rebuild, above.
+```go
+func (p *Parser) Destroy(saved *state.State) (*state.State, error)
+```
 
-Resources removed from the configuration are not destroyed.
-[`destroyWalkCallback`](../internal/parser/callbacks.go#L177) is a separate
-callback written to walk the DAG in *reverse* dependency order and call
-`adapter.Destroy` directly, but nothing runs that walk, and `Config.Destroy`
-is a stub.
+([`internal/parser/parser.go`](../internal/parser/parser.go#L301)) destroys
+every resource in `saved` and needs no configuration. `Config.Destroy`
+([`config.go`](../config.go#L155)) passes it the state loaded from the
+`StateStore` (or the in-memory state when there is no store); when nothing
+has been saved, or the state is empty, it returns nil without calling the
+parser and writes nothing. A load failure is returned as
+`failed to load state: ...`.
+
+The work is done by the
+[`destroyer`](../internal/parser/destroy.go#L22), which the removal phase of
+`Apply` uses too:
+
+- [`buildDestroyDAG`](../internal/parser/dag.go#L124) builds a graph with the
+  same shape as the create graph, from each resource's recorded
+  `Meta.Parents`: an edge from each parent in the set to the resource, and
+  resources with no parent in the set hang off a root. Parents that are not
+  being destroyed are ignored.
+- The graph is walked with `dag.Walker{Reverse: true}`, so every child is
+  destroyed before its parents and unrelated resources are destroyed in
+  parallel. A parent is never visited once one of its children has failed.
+- [`destroyWalkCallback`](../internal/parser/callbacks.go#L188) handles one
+  resource. `variable`, `output`, `module`, registered (config-only) types and
+  disabled blocks never reach a provider: they fire a `destroy` success event
+  and are removed. Every other resource is passed to its provider's `Destroy`
+  as the saved copy, with `force` always false.
+- After each resource the working state is updated and saved through the
+  `StateStore`: a destroyed resource is removed, a failed one is kept and
+  marked `destroy_failed`. The saved state is correct at every step, so an
+  interrupted destroy resumes from it. A failed save fails the step, so that
+  resource's parents are not visited either.
+
+When a destroy fails, the failed resource and everything it depends on (its
+parents, transitively) stay in the state, while unrelated resources are still
+destroyed. The error names every failed resource (`destroy failed for <id>:
+...`), and calling `Destroy` again retries what is left. `Parser.Destroy`
+returns the remaining state, never nil, and `Config.Destroy` adopts it as its
+current state.
+
+Resources saved before `Meta.Parents` was recorded have no parents, so they
+are destroyed with no ordering guarantee between them.
 
 ## Resolving the provider: `ProviderResolver`
 
@@ -205,16 +253,19 @@ Which operations fire depends on the resource's entry in the previous state
 - **Rebuilt resource** (saved as `failed` or `destroy_failed`) — `destroy`
   start/success-or-error, then, if the destroy succeeded, `create`
   start/success-or-error.
-- **Removed resource** — nothing. Resources removed from the configuration
-  are not destroyed, and `destroyWalkCallback`, which also fires `destroy`
-  events, is never run.
+- **Removed resource** (in the previous state, no longer configured) —
+  `destroy` start, then `destroy` success or error, before any other
+  resource is processed.
+- **Destroyed resource** (`Config.Destroy`) — `destroy` start, then
+  `destroy` success or error.
 
 ### Builtin types
 
 `variable`, `output` and `module` resources have no provider. They fire a
-single `create` success event (or `destroy` success on the unused destroy walk) with
-zero duration, no error and no data, and no `start` event. This keeps every
-visited resource in the stream, which matters if you consume events to
+single `create` success event on apply, or `destroy` success when destroyed,
+with zero duration, no error and no data, and no `start` event. Registered
+(config-only) types and disabled blocks do the same on destroy. This keeps
+every visited resource in the stream, which matters if you consume events to
 reconstruct processing order.
 
 ### Errors and control flow
@@ -223,19 +274,29 @@ Events never affect control flow. Every provider error is handled the same
 way, whichever operation it came from:
 
 - An error from `create`, `read`, `changed`, `update` or `destroy` marks the
-  resource `failed` (`destroy_failed` for the rebuild's `destroy`), stops the
-  walk from reaching the resources that depend on it, and is returned from
-  `Apply`. Resources that don't depend on it still complete.
+  resource `failed` (`destroy_failed` for any `destroy`), stops the
+  walk from reaching the resources that depend on it (on a destroy walk, the
+  resources it depends on), and is returned from `Apply` or `Destroy`.
+  Resources that don't depend on it still complete.
 - The one exception is `plugins.ErrNotFound` from `read`: the `error` event
   fires, but the lifecycle creates the resource again instead of failing.
 
 ### Who can subscribe
 
-`Parser` lives under `internal/`, and `Config` has no option that sets
-`OnParserEvent`, so today the stream is only reachable from inside this
-module: tests use it to assert on provider calls and DAG-walk order.
+`Parser` lives under `internal/`, but `Config` forwards the stream to the
+handler set with `xcl.WithEventHandler` ([`events.go`](../events.go)) during
+`Apply`, `Destroy` and, for parse events, `Validate`. Tests inside this module
+also set `OnParserEvent` directly to assert on provider calls and DAG-walk
+order.
 
 ## State saved after a failed apply
+
+When destroying a removed resource fails, nothing is created or changed.
+`Parser.Apply` returns the previous state minus the resources that were
+destroyed, with the failed ones (and, as with `Destroy`, everything they
+depend on) still in it, the failures marked `destroy_failed`. The removal has
+already saved this after each resource, and `Config.Apply` saves it again
+before returning the error. The next apply retries the removal first.
 
 When the walk fails, `Parser.Apply` still returns a state, built by
 `applyProgress.buildState`
@@ -253,7 +314,8 @@ with the error:
 A resource whose error came before any provider call (a decode error, or no
 provider for its type) is treated as not reached.
 
-`Config.Apply` ([`config.go`](../config.go)) saves this state and then
+`Config.Apply` ([`config.go`](../config.go#L110)) saves this state and then
 returns the error, so the next apply picks up where this one stopped. When
-parsing or validation fails, or the dependency graph can't be built,
-`Parser.Apply` returns a nil state and nothing is saved.
+parsing or validation fails, the configuration declares no blocks, or the
+dependency graph can't be built, `Parser.Apply` returns a nil state and
+nothing is saved.

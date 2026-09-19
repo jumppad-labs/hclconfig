@@ -14,6 +14,8 @@ import (
 
 	"github.com/jumppad-labs/xcl/example/resources"
 	"github.com/jumppad-labs/xcl/logger"
+	"github.com/jumppad-labs/xcl/plugins/registry"
+	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
@@ -70,7 +72,7 @@ func findResource(t *testing.T, found []any, id string) any {
 func TestConfigOnlyExampleFindsDeclaredResources(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	found, err := run(out, logger.NewTestLogger(t), configDir)
+	found, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Equal(t, declaredResourceIDs, resourceIDs(t, found))
@@ -79,7 +81,7 @@ func TestConfigOnlyExampleFindsDeclaredResources(t *testing.T) {
 func TestConfigOnlyExampleReturnsRegisteredGoTypes(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	found, err := run(out, logger.NewTestLogger(t), configDir)
+	found, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	db, ok := findResource(t, found, "resource.postgres.main").(*resources.PostgreSQL)
@@ -101,7 +103,7 @@ func TestConfigOnlyExampleReturnsRegisteredGoTypes(t *testing.T) {
 func TestConfigOnlyExamplePrintsEveryResource(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), configDir)
+	_, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	for _, id := range declaredResourceIDs {
@@ -112,7 +114,7 @@ func TestConfigOnlyExamplePrintsEveryResource(t *testing.T) {
 func TestConfigOnlyExamplePrintsQueryResult(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), configDir)
+	_, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	require.Contains(t, out.String(), "## Databases\n")
@@ -126,7 +128,7 @@ func TestConfigOnlyExamplePrintsQueryResult(t *testing.T) {
 func TestConfigOnlyExampleLeavesConnectionStringEmpty(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	found, err := run(out, logger.NewTestLogger(t), configDir)
+	found, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	db, ok := findResource(t, found, "resource.postgres.main").(*resources.PostgreSQL)
@@ -141,7 +143,7 @@ func TestConfigOnlyExampleLeavesConnectionStringEmpty(t *testing.T) {
 func TestConfigOnlyExampleFailsForMissingConfig(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	_, err := run(out, logger.NewTestLogger(t), "./does-not-exist")
+	_, err := run(out, logger.NewTestLogger(t), "./does-not-exist", filepath.Join(t.TempDir(), "state.json"))
 	require.Error(t, err)
 }
 
@@ -220,7 +222,7 @@ func (l *recordingLogger) events(level, operation string) [][]any {
 func TestConfigOnlyExampleLogsParseEventWithFileAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir)
+	_, err := run(&bytes.Buffer{}, log, configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	files := map[string]string{}
@@ -249,7 +251,7 @@ func TestConfigOnlyExampleLogsParseEventWithFileAtDebug(t *testing.T) {
 func TestConfigOnlyExampleLogsCreateSuccessWithoutStartAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir)
+	_, err := run(&bytes.Buffer{}, log, configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	ids := []string{}
@@ -267,7 +269,7 @@ func TestConfigOnlyExampleLogsCreateSuccessWithoutStartAtDebug(t *testing.T) {
 func TestConfigOnlyExampleLogsNothingAtInfo(t *testing.T) {
 	log := &recordingLogger{}
 
-	_, err := run(&bytes.Buffer{}, log, configDir)
+	_, err := run(&bytes.Buffer{}, log, configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
 	for _, m := range log.messages {
@@ -285,11 +287,59 @@ func TestConfigOnlyExampleLogsParseErrorAtError(t *testing.T) {
 
 	log := &recordingLogger{}
 
-	_, err = run(&bytes.Buffer{}, log, dir)
+	_, err = run(&bytes.Buffer{}, log, dir, filepath.Join(t.TempDir(), "state.json"))
 	require.Error(t, err)
 
 	failed := log.events("error", "parse")
 	require.Len(t, failed, 1)
 	require.Equal(t, "resource.nosuchtype.broken", failed[0][3])
 	require.Equal(t, file, failed[0][5])
+}
+
+// TestConfigOnlyExampleDestroysEverythingItApplied asserts the state saved after a run is
+// empty, everything that was applied has been destroyed
+func TestConfigOnlyExampleDestroysEverythingItApplied(t *testing.T) {
+	statePath := filepath.Join(t.TempDir(), "state.json")
+
+	_, err := run(&bytes.Buffer{}, logger.NewTestLogger(t), configDir, statePath)
+	require.NoError(t, err)
+
+	reg := registry.NewPluginRegistry(logger.NewTestLogger(t))
+	require.NoError(t, reg.RegisterType("postgres", &resources.PostgreSQL{}))
+	require.NoError(t, reg.RegisterType("app", &resources.App{}))
+
+	store, err := state.NewFileStateStore(statePath, reg)
+	require.NoError(t, err)
+
+	saved, err := store.Load()
+	require.NoError(t, err)
+	require.Equal(t, 0, saved.ResourceCount())
+}
+
+func TestConfigOnlyExamplePrintsNoResourcesRemaining(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	_, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	require.Contains(t, out.String(), "## Destroyed\n  0 resources remaining\n")
+}
+
+// TestConfigOnlyExampleLogsDestroySuccessWithoutStartAtDebug asserts every
+// applied resource's destroy is logged at debug as a success only, registered
+// types have no provider so there is nothing to start
+func TestConfigOnlyExampleLogsDestroySuccessWithoutStartAtDebug(t *testing.T) {
+	log := &recordingLogger{}
+
+	_, err := run(&bytes.Buffer{}, log, configDir, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	ids := []string{}
+	for _, args := range log.events("debug", "destroy") {
+		require.Equal(t, "success", args[5])
+		ids = append(ids, args[3].(string))
+	}
+	sort.Strings(ids)
+
+	require.Equal(t, declaredResourceIDs, ids)
 }

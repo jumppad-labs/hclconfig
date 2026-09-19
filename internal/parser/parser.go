@@ -188,13 +188,21 @@ func NewParser(options *ParserOptions) *Parser {
 // The parsing process:
 //  1. Load previous state from StateStore (if exists)
 //  2. Parse all HCL files from the given paths
-//  3. Build a DAG based on resource dependencies
-//  4. Walk the DAG in dependency order
-//  5. Decode each resource body (HCL → Go structs)
-//  6. Call the provider lifecycle: resources not in previousState are
+//  3. Reject a configuration that declares no blocks with ErrEmptyConfiguration
+//  4. Destroy the resources in previousState that are no longer in the
+//     configuration, children first, saving the state after each one
+//  5. Build a DAG based on resource dependencies
+//  6. Walk the DAG in dependency order
+//  7. Decode each resource body (HCL → Go structs)
+//  8. Call the provider lifecycle: resources not in previousState are
 //     created, resources in it are read, then updated if they changed
 //
 // Returns the new State containing all parsed resources.
+//
+// When destroying a removed resource fails, nothing is created or changed:
+// Apply returns the previous state minus the resources that were destroyed,
+// with the failed ones marked destroy_failed, together with the error. The
+// next Apply retries them first.
 //
 // When a provider call fails the walk stops processing the resources that
 // depend on the failed one, and Apply returns a partial State together with
@@ -208,7 +216,44 @@ func (p *Parser) Apply(paths ...string) (*state.State, error) {
 		return nil, err
 	}
 
+	// an empty configuration would remove everything, Destroy does that
+	if currentState.ResourceCount() == 0 {
+		return nil, ErrEmptyConfiguration
+	}
+
 	ce := errors.NewConfigError()
+
+	// destroy the resources that are no longer in the configuration before
+	// anything is created or changed, freeing what they held for their
+	// replacements
+	removed := removedResources(currentState, previousState)
+	if len(removed) > 0 {
+		working := state.NewState()
+		for _, r := range previousState.GetResources() {
+			if err := working.AppendResource(r); err != nil {
+				ce.AppendError(err)
+				return nil, ce
+			}
+		}
+
+		d := &destroyer{
+			working:  working,
+			store:    p.stateStore,
+			resolver: p.providerResolver,
+			types:    p.typeRegistry,
+			options:  &p.options,
+		}
+
+		// a failed removal stops the apply, the working state holds the
+		// previous state minus what was destroyed, with the failures marked
+		// destroy_failed so the next apply retries them first
+		if err := d.destroy(removed); err != nil {
+			ce.AppendError(err)
+			return working, ce
+		}
+
+		previousState = working
+	}
 
 	// Get functions for HCL context
 	functions := p.getFunctions
@@ -237,6 +282,71 @@ func (p *Parser) Apply(paths ...string) (*state.State, error) {
 	}
 
 	return currentState, nil
+}
+
+// Destroy destroys every resource in saved, working only from the saved state:
+// it needs no configuration. Resources are destroyed children first, in the
+// reverse of their create order, read from the parents each resource recorded
+// when it was applied. Builtin, registered and disabled resources never reach
+// a provider.
+//
+// The state is saved through the configured StateStore after every resource,
+// so an interrupted destroy resumes from where it stopped. A resource whose
+// destroy fails stays in the state as destroy_failed, together with every
+// resource it depends on, while unrelated resources are still destroyed.
+//
+// Destroy returns what is left, which is empty when everything was destroyed,
+// together with an error naming every resource that failed. The returned state
+// is never nil.
+func (p *Parser) Destroy(saved *state.State) (*state.State, error) {
+	if saved == nil {
+		saved = state.NewState()
+	}
+
+	working := state.NewState()
+	for _, r := range saved.GetResources() {
+		err := working.AppendResource(r)
+		if err != nil {
+			return saved, err
+		}
+	}
+
+	d := &destroyer{
+		working:  working,
+		store:    p.stateStore,
+		resolver: p.providerResolver,
+		types:    p.typeRegistry,
+		options:  &p.options,
+	}
+
+	// copy the targets, destroying a resource removes it from the working
+	// state's backing slice
+	targets := append([]any{}, working.GetResources()...)
+
+	err := d.destroy(targets)
+	return working, err
+}
+
+// removedResources returns the resources in previous that are no longer in
+// current
+func removedResources(current, previous *state.State) []any {
+	if previous == nil {
+		return nil
+	}
+
+	removed := []any{}
+	for _, r := range previous.GetResources() {
+		meta, err := types.GetMeta(r)
+		if err != nil {
+			continue
+		}
+
+		if _, err := current.FindResource(meta.ID); err != nil {
+			removed = append(removed, r)
+		}
+	}
+
+	return removed
 }
 
 // Validate parses and validates the configuration discovered from paths without

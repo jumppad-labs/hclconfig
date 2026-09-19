@@ -178,9 +178,14 @@ func walkCallback(parsedData *parsed, rp ResourceProvider, lifecycle *resourceLi
 	}
 }
 
-// destroyWalkCallback creates a simplified callback for destroying resources
-// Skips complex processing since resources are already fully processed
-func destroyWalkCallback(registry ProviderResolver, typeRegistry TypeRegistry, options *ParserOptions) func(v dag.Vertex) (diags dag.Diagnostics) {
+// destroyWalkCallback creates the callback that destroys one resource during
+// a destroy walk. Builtin, registered and disabled resources have no provider,
+// they fire a destroy success event only. Every other resource is passed to
+// its provider's Destroy as the saved copy. The outcome is reported to the
+// destroyer, which removes a destroyed resource from the working state or
+// keeps a failed one as destroy_failed, and saves the state. A failed save
+// fails the step, so the resource's parents are never visited.
+func destroyWalkCallback(d *destroyer) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 		// v should be a resource (either builtin or schema-generated)
 		r := v
@@ -194,66 +199,88 @@ func destroyWalkCallback(registry ProviderResolver, typeRegistry TypeRegistry, o
 			return nil
 		}
 
-		// Skip builtin and registered resource types, they don't have providers
-		if handledWithoutProvider(typeRegistry, rMeta.Type) {
+		resourceID := rMeta.ID
+		rType := resourceType(rMeta)
 
+		disabled, err := types.GetDisabled(r)
+		if err != nil {
+			return diags.Append(errors.NewParserErrorFromResource(r, err.Error()))
+		}
+
+		// Skip disabled, builtin and registered resource types, they never
+		// reach a provider
+		if disabled || handledWithoutProvider(d.types, rMeta.Type) {
 			// Fire destroy events for provider-less types (always succeed with 0 time)
-			resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
-			fireParserEvent(options, "destroy", resourceType, rMeta.ID, "success", 0, nil, nil)
+			fireParserEvent(d.options, "destroy", rType, resourceID, "success", 0, nil, nil)
 
-			rMeta.Status = types.StatusDestroyed
+			err := d.destroyed(r)
+			if err != nil {
+				return diags.Append(err)
+			}
 
 			return nil
 		}
 
 		// Get the provider for this resource
-		adapter := registry.GetProviderForResource(r)
+		adapter := d.resolver.GetProviderForResource(r)
 		if adapter == nil {
-
-			rMeta.Status = types.StatusDestroyFailed
-
 			pe := errors.NewParserErrorFromResource(
 				r,
 				fmt.Sprintf("no provider found for resource type %s", rMeta.Type),
 			)
-			return diags.Append(pe)
-		}
+			diags = diags.Append(pe)
 
-		ctx := context.Background()
-		resourceID := rMeta.ID
-		resourceType := fmt.Sprintf("%s.%s", rMeta.Type, rMeta.Name)
+			if saveErr := d.failedToDestroy(r); saveErr != nil {
+				diags = diags.Append(saveErr)
+			}
+
+			return diags
+		}
 
 		// Serialize the resource to JSON for provider call
 		resourceJSON, err := json.Marshal(r)
 		if err != nil {
-			rMeta.Status = types.StatusDestroyFailed
-
 			pe := errors.NewParserErrorFromResource(
 				r,
 				fmt.Sprintf("failed to serialize resource for destroy: %s", err),
 			)
-			return diags.Append(pe)
+			diags = diags.Append(pe)
+
+			if saveErr := d.failedToDestroy(r); saveErr != nil {
+				diags = diags.Append(saveErr)
+			}
+
+			return diags
 		}
 
 		// Call destroy on the provider
-		fireParserEvent(options, "destroy", resourceType, resourceID, "start", 0, nil, resourceJSON)
+		fireParserEvent(d.options, "destroy", rType, resourceID, "start", 0, nil, resourceJSON)
 		start := time.Now()
-		err = adapter.Destroy(ctx, resourceJSON, false)
+		err = adapter.Destroy(context.Background(), resourceJSON, false)
 		duration := time.Since(start)
 
 		if err != nil {
-			fireParserEvent(options, "destroy", resourceType, resourceID, "error", duration, err, resourceJSON)
-			rMeta.Status = types.StatusDestroyFailed
+			fireParserEvent(d.options, "destroy", rType, resourceID, "error", duration, err, resourceJSON)
 
 			pe := errors.NewParserErrorFromResource(
 				r,
-				fmt.Sprintf("destroy failed: %s", err),
+				fmt.Sprintf("destroy failed for %s: %s", resourceID, err),
 			)
-			return diags.Append(pe)
+			diags = diags.Append(pe)
+
+			if saveErr := d.failedToDestroy(r); saveErr != nil {
+				diags = diags.Append(saveErr)
+			}
+
+			return diags
 		}
 
-		fireParserEvent(options, "destroy", resourceType, resourceID, "success", duration, nil, resourceJSON)
-		rMeta.Status = types.StatusDestroyed
+		fireParserEvent(d.options, "destroy", rType, resourceID, "success", duration, nil, resourceJSON)
+
+		err = d.destroyed(r)
+		if err != nil {
+			return diags.Append(err)
+		}
 
 		return nil
 	}

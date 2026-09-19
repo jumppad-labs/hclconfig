@@ -1,0 +1,16 @@
+# consumer depends on the whole of module.networks through depends_on, so it
+# depends on every resource inside that module. alone depends on nothing.
+
+module "networks" {
+  source = "./module"
+}
+
+resource "network" "consumer" {
+  depends_on = ["module.networks"]
+
+  subnet = "10.2.0.0/16"
+}
+
+resource "network" "alone" {
+  subnet = "10.3.0.0/16"
+}

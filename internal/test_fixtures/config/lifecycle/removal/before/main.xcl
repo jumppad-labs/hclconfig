@@ -1,0 +1,20 @@
+# x and y are independent networks, q is a container that depends on the
+# network p through a reference.
+
+resource "network" "x" {
+  subnet = "10.0.0.0/16"
+}
+
+resource "network" "y" {
+  subnet = "10.1.0.0/16"
+}
+
+resource "network" "p" {
+  subnet = "10.2.0.0/16"
+}
+
+resource "container" "q" {
+  network {
+    name = resource.network.p.meta.name
+  }
+}

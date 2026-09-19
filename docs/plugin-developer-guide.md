@@ -119,9 +119,11 @@ them itself and makes no provider calls for them.
 ### Removed resources
 
 A resource that is in the previous state but no longer in the configuration
-is **not** destroyed today. There is no removed-resource destroy yet,
-`Config.Destroy` is a stub, and the destroy walk in the parser is never run.
-The only time xcl calls `Destroy` is during a rebuild.
+is destroyed on the next apply, with its saved copy, before anything else is
+created or changed. Removed resources are destroyed children first, and the
+state is saved after each one. If a removal fails, the resource is saved as
+`destroy_failed` and the apply stops without creating or changing anything;
+the next apply tries the removal again first.
 
 ## Methods
 
@@ -211,19 +213,24 @@ Called when `Changed` returned true.
 
 ### `Destroy(ctx, resource, force) error`
 
-Removes the real resource. Today this is only called during a rebuild, with
-the saved copy of a resource saved as `failed` or `destroy_failed`.
+Removes the real resource. It is called:
 
-- **Input**: the saved copy. After a failed `Create`, the saved copy may hold
-  no identity at all, because `Create` never returned one.
+- by `Config.Destroy`, for every resource in the saved state;
+- during an apply, for a resource that was removed from the configuration;
+- during a rebuild, for a resource saved as `failed` or `destroy_failed`.
+
+- **Input**: always the saved copy, never the configured one. After a failed
+  `Create`, the saved copy may hold no identity at all, because `Create`
+  never returned one.
 - **Returns**: only an error. `force` asks for a quick destroy that doesn't
-  wait for graceful shutdown.
+  wait for graceful shutdown; xcl always passes `false` today.
 
 Whether destroying a resource that no longer exists is an error is your
 decision. Any error you return fails the destroy, and the resource is saved
-as `destroy_failed`, which keeps it from being created again. Treating
-"already gone" as success is usually right, since a rebuild only needs the
-resource to be gone.
+as `destroy_failed`: a rebuild does not create it again, and `Config.Destroy`
+keeps it, and everything it depends on, in the state for the next attempt.
+Treating "already gone" as success is usually right, since xcl only needs
+the resource to be gone.
 
 ## Computed fields
 
@@ -364,8 +371,8 @@ xcl records a resource's status in `Meta.Status`
 | `created` | the provider created the resource |
 | `updated` | the provider updated the resource |
 | `failed` | a provider call for the resource failed; it is rebuilt on the next apply |
-| `destroyed` | the provider destroyed the resource |
-| `destroy_failed` | destroying the resource failed; the destroy is tried again on the next apply |
+| `destroyed` | never saved: a destroyed resource is removed from the state |
+| `destroy_failed` | destroying the resource failed; the destroy is tried again by the next `Destroy`, or the next apply (removed again if its block is gone, rebuilt if it is still configured) |
 
 `Meta` belongs to xcl. Don't set it, and don't confuse `Meta.Status` with
 your own observed fields, like a container's `running`.
@@ -375,6 +382,12 @@ your own observed fields, like a container's `running`.
 Resources are processed in dependency order. By the time your provider is
 called for a resource, everything it references has already been through its
 own lifecycle, and the references hold the values those providers returned.
+
+Destroys run in the reverse order: children first, using the parents each
+resource recorded in `meta.parents` when it was applied. `Destroy` is called
+for a resource only after everything that depends on it has been destroyed,
+so it is never called for a parent once a child's destroy has failed.
+Resources that don't depend on each other are destroyed in parallel.
 
 ## Events
 
