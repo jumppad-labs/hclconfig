@@ -9,13 +9,12 @@ import (
 	"github.com/creasty/defaults"
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/resources"
-	"github.com/jumppad-labs/xcl/internal/xcl"
+	hcl "github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/internal/xcl/gohcl"
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/silas/dag"
 	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/function"
 )
 
 // ProviderResolver resolves the provider adapter responsible for a given resource.
@@ -28,7 +27,7 @@ type ProviderResolver interface {
 // walkCallback creates the internal callback that is called when a node in the
 // dag is visited. This callback is responsible for processing the resource and setting
 // any linked values.
-func walkCallback(parsedData *parsed, rp ResourceProvider, lifecycle *resourceLifecycle, options *ParserOptions, functions map[string]function.Function) func(v dag.Vertex) (diags dag.Diagnostics) {
+func walkCallback(parsedData *parsed, rp ResourceProvider, lifecycle *resourceLifecycle, options *ParserOptions, functions functionsForFile) func(v dag.Vertex) (diags dag.Diagnostics) {
 	return func(v dag.Vertex) (diags dag.Diagnostics) {
 
 		// v should be a resource (either builtin or schema-generated)
@@ -143,7 +142,7 @@ func walkCallback(parsedData *parsed, rp ResourceProvider, lifecycle *resourceLi
 			}
 
 			mod.SubContext = &hcl.EvalContext{
-				Functions: functions,
+				Functions: functions(rMeta.File),
 				Variables: map[string]cty.Value{
 					"variable": suppliedVars,
 				},

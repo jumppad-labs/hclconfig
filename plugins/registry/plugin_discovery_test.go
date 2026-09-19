@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/xcl/logger"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
@@ -17,11 +18,8 @@ func TestPluginDiscoverySingleValidPlugin(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "xcl-plugin-test")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{validDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{validDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -53,11 +51,8 @@ func TestPluginDiscoveryMultipleValidPlugins(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "xcl-plugin-two")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{validDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{validDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -88,11 +83,8 @@ func TestPluginDiscoveryPluginNotMatchingPattern(t *testing.T) {
 	setup.copyPlugin(examplePlugin, invalidDir, "not-a-plugin")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{invalidDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{invalidDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -113,11 +105,8 @@ func TestPluginDiscoveryNonExecutableFile(t *testing.T) {
 	setup.createNonExecutable(invalidDir, "xcl-plugin-fake")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{invalidDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{invalidDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -142,11 +131,8 @@ func TestPluginDiscoveryMixedDirectory(t *testing.T) {
 	setup.copyPlugin(examplePlugin, mixedDir, "wrong-pattern")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{mixedDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{mixedDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -175,11 +161,8 @@ func TestPluginDiscoveryEmptyDirectory(t *testing.T) {
 	emptyDir := setup.createPluginDir("empty")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{emptyDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{emptyDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -198,11 +181,8 @@ func TestPluginDiscoveryNonExistentDirectory(t *testing.T) {
 	nonExistentDir := filepath.Join(setup.testDir, "non-existent")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{nonExistentDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{nonExistentDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -227,11 +207,8 @@ func TestPluginDiscoveryMultipleDirectories(t *testing.T) {
 	setup.copyPlugin(examplePlugin, mixedDir, "xcl-plugin-dir2")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{validDir, mixedDir, emptyDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{validDir, mixedDir, emptyDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -263,11 +240,8 @@ func TestPluginDiscoveryCustomPattern(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "xcl-plugin-ignored")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{validDir}, "my-custom-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{validDir}, "my-custom-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -298,11 +272,8 @@ func TestPluginDiscoveryDuplicateDirectories(t *testing.T) {
 	setup.copyPlugin(examplePlugin, validDir, "xcl-plugin-unique")
 
 	testLogger := logger.NewTestLogger(t)
-	loggerFunc := func(msg string) {
-		testLogger.Info(msg)
-	}
 
-	pd := NewPluginDiscovery([]string{validDir, validDir, validDir}, "xcl-plugin-*", loggerFunc)
+	pd := NewPluginDiscovery([]string{validDir, validDir, validDir}, "xcl-plugin-*", testLogger)
 	plugins, err := pd.DiscoverPlugins()
 
 	if err != nil {
@@ -492,133 +463,34 @@ func TestExpandPluginDirectoriesMixedPaths(t *testing.T) {
 	}
 }
 
-func TestParserIntegration_AutoDiscovery(t *testing.T) {
+func TestDiscoverAndLoadPluginsLoadsDiscoveredPlugins(t *testing.T) {
 	setup := newTestPluginSetup(t)
-
-	// Create plugin directory
 	pluginDir := setup.createPluginDir("plugins")
 
-	// Build and copy example plugin
 	examplePlugin := setup.buildExamplePlugin("test-plugin")
 	setup.copyPlugin(examplePlugin, pluginDir, "xcl-plugin-example")
 
-	// Test with auto-discovery enabled
-	t.Run("auto-discovery enabled", func(t *testing.T) {
-		opts := &ParserOptions{
-			PluginDirectories:   []string{pluginDir},
-			AutoDiscoverPlugins: true,
-			PluginNamePattern:   "xcl-plugin-*",
-			Logger:              logger.NewTestLogger(t),
-		}
+	testLogger := logger.NewTestLogger(t)
+	r := NewPluginRegistry(testLogger)
 
-		p := NewParser(opts)
+	err := r.DiscoverAndLoadPlugins(testLogger, []string{pluginDir}, "xcl-plugin-*")
+	require.NoError(t, err)
 
-		// Check that plugin was discovered and loaded by verifying plugin registry
-
-		// Verify plugin is actually loaded by checking registered types
-		if len(p.pluginRegistry.GetPluginHosts()) == 0 {
-			t.Error("Expected at least one plugin host to be registered")
-		}
-	})
-
-	// Test with auto-discovery disabled
-	t.Run("auto-discovery disabled", func(t *testing.T) {
-		opts := &ParserOptions{
-			PluginDirectories:   []string{pluginDir},
-			AutoDiscoverPlugins: false,
-			PluginNamePattern:   "xcl-plugin-*",
-			Logger:              logger.NewTestLogger(t),
-		}
-
-		p := NewParser(opts)
-
-		// Check that no discovery happened by verifying plugin registry is empty
-
-		// Verify no plugins loaded
-		if len(p.pluginRegistry.GetPluginHosts()) != 0 {
-			t.Error("Expected no plugin hosts when auto-discovery is disabled")
-		}
-	})
+	require.Len(t, r.GetPluginHosts(), 1)
 }
 
-func TestParserIntegration_EnvironmentVariables(t *testing.T) {
+func TestDiscoverAndLoadPluginsLoadsNothingWhenNoPluginMatches(t *testing.T) {
 	setup := newTestPluginSetup(t)
+	pluginDir := setup.createPluginDir("plugins")
 
-	// Save original env
-	originalPath := os.Getenv("HCLCONFIG_PLUGIN_PATH")
-	originalDisable := os.Getenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY")
-	defer func() {
-		os.Setenv("HCLCONFIG_PLUGIN_PATH", originalPath)
-		os.Setenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY", originalDisable)
-	}()
-
-	// Create plugin directories
-	envDir1 := setup.createPluginDir("env1")
-	envDir2 := setup.createPluginDir("env2")
-
-	// Build and copy plugins
 	examplePlugin := setup.buildExamplePlugin("test-plugin")
-	setup.copyPlugin(examplePlugin, envDir1, "xcl-plugin-env1")
-	setup.copyPlugin(examplePlugin, envDir2, "xcl-plugin-env2")
+	setup.copyPlugin(examplePlugin, pluginDir, "not-a-matching-name")
 
-	// Test HCLCONFIG_PLUGIN_PATH
-	t.Run("plugin path from environment", func(t *testing.T) {
-		separator := ":"
-		if runtime.GOOS == "windows" {
-			separator = ";"
-		}
-		os.Setenv("HCLCONFIG_PLUGIN_PATH", envDir1+separator+envDir2)
-		os.Setenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY", "")
+	testLogger := logger.NewTestLogger(t)
+	r := NewPluginRegistry(testLogger)
 
-		opts := DefaultOptions()
-		opts.Logger = logger.NewTestLogger(t)
+	err := r.DiscoverAndLoadPlugins(testLogger, []string{pluginDir}, "xcl-plugin-*")
+	require.NoError(t, err)
 
-		// Verify directories were added
-		foundEnv1 := false
-		foundEnv2 := false
-		for _, dir := range opts.PluginDirectories {
-			if filepath.Clean(dir) == filepath.Clean(envDir1) {
-				foundEnv1 = true
-			}
-			if filepath.Clean(dir) == filepath.Clean(envDir2) {
-				foundEnv2 = true
-			}
-		}
-
-		if !foundEnv1 || !foundEnv2 {
-			t.Error("Expected environment directories to be included")
-			t.Logf("Directories: %v", opts.PluginDirectories)
-		}
-
-		// Create parser and verify plugins are discovered
-		p := NewParser(opts)
-
-		// Should find 2 plugins - verify by checking plugin registry
-		if len(p.pluginRegistry.GetPluginHosts()) < 2 {
-			t.Errorf("Expected to load 2 plugins, loaded %d", len(p.pluginRegistry.GetPluginHosts()))
-		}
-
-		_ = p // Use p to avoid unused variable warning
-	})
-
-	// Test HCLCONFIG_DISABLE_PLUGIN_DISCOVERY
-	t.Run("disable discovery from environment", func(t *testing.T) {
-		os.Setenv("HCLCONFIG_PLUGIN_PATH", envDir1)
-		os.Setenv("HCLCONFIG_DISABLE_PLUGIN_DISCOVERY", "true")
-
-		opts := DefaultOptions()
-
-		if opts.AutoDiscoverPlugins {
-			t.Error("Expected AutoDiscoverPlugins to be false when HCLCONFIG_DISABLE_PLUGIN_DISCOVERY=true")
-		}
-
-		opts.Logger = logger.NewTestLogger(t)
-
-		p := NewParser(opts)
-
-		// Verify no plugins were loaded
-		if len(p.pluginRegistry.GetPluginHosts()) != 0 {
-			t.Error("Expected no plugins to be loaded when discovery is disabled")
-		}
-	})
+	require.Empty(t, r.GetPluginHosts())
 }

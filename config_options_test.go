@@ -10,7 +10,7 @@ import (
 func TestNewConfigWithNoOptions(t *testing.T) {
 	cfg := NewConfig()
 	require.NotNil(t, cfg)
-	require.Nil(t, cfg.pluginRegistry)
+	require.NotNil(t, cfg.pluginRegistry)
 	require.Nil(t, cfg.stateStore)
 	require.NotNil(t, cfg.variables)
 	require.Equal(t, 0, len(cfg.variables))

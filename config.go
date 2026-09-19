@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jumppad-labs/xcl/internal/parser"
+	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/state"
 )
@@ -20,7 +21,8 @@ type Config struct {
 }
 
 // NewConfig creates a new Config with functional options
-// If no options are provided, creates a minimal config with no plugins or state
+// If no options are provided, creates a minimal config with only the builtin
+// resource types and no state
 func NewConfig(opts ...ConfigOption) *Config {
 	c := &Config{
 		currentState: state.NewState(),
@@ -30,6 +32,10 @@ func NewConfig(opts ...ConfigOption) *Config {
 	// Apply all options
 	for _, opt := range opts {
 		opt(c)
+	}
+
+	if c.pluginRegistry == nil {
+		c.pluginRegistry = registry.NewPluginRegistry(logger.NewStdOutLogger())
 	}
 
 	return c

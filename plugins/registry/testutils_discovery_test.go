@@ -1,4 +1,4 @@
-package xcl
+package registry
 
 import (
 	"os"

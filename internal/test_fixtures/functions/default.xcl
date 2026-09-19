@@ -31,7 +31,7 @@ resource "container" "default" {
     "len_collection" = len(["one", "two"])
     "env"            = env("MYENV")
     "home"           = home()
-    "file"           = file("./default.hcl")
+    "file"           = file("./default.xcl")
     "dir"            = dir()
     "trim"           = trim("  foo bar  ")
     "template_file" = template_file("template.tmpl", {

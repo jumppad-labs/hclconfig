@@ -9,7 +9,7 @@ import (
 type ConfigOption func(*Config)
 
 // WithPluginRegistry sets the plugin registry to use
-// If not provided, no plugins will be available
+// If not provided, only the builtin resource types will be available
 func WithPluginRegistry(pr *registry.PluginRegistry) ConfigOption {
 	return func(c *Config) {
 		c.pluginRegistry = pr

@@ -13,7 +13,7 @@ func main() {
 	os.RemoveAll(".xcl")
 
 	fmt.Println("## XCL Config Example")
-	fmt.Println("## Parsing config.hcl...\n")
+	fmt.Print("## Parsing config.hcl...\n\n")
 
 	// Create a plugin registry
 	log := logger.NewStdOutLogger()
@@ -32,7 +32,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("## Configuration applied successfully!\n")
+	fmt.Print("## Configuration applied successfully!\n\n")
 
 	// Demonstrate querying resources
 	demonstrateQuerying(config)

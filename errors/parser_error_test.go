@@ -9,7 +9,7 @@ import (
 )
 
 func TestParserErrorOutputsString(t *testing.T) {
-	f, pathErr := filepath.Abs("../internal/test_fixtures/config/simple/container.hcl")
+	f, pathErr := filepath.Abs("../internal/test_fixtures/config/simple/container.xcl")
 	require.NoError(t, pathErr)
 
 	err := ParserError{}
@@ -23,7 +23,7 @@ func TestParserErrorOutputsString(t *testing.T) {
 }
 
 func TestParserErrorHighlightsLine(t *testing.T) {
-	f, pathErr := filepath.Abs("../internal/test_fixtures/config/simple/container.hcl")
+	f, pathErr := filepath.Abs("../internal/test_fixtures/config/simple/container.xcl")
 	require.NoError(t, pathErr)
 
 	err := ParserError{}
@@ -40,7 +40,7 @@ func TestParserErrorHighlightsLine(t *testing.T) {
 }
 
 func TestParserErrorNonErrorLineGrey(t *testing.T) {
-	f, pathErr := filepath.Abs("../internal/test_fixtures/config/simple/container.hcl")
+	f, pathErr := filepath.Abs("../internal/test_fixtures/config/simple/container.xcl")
 	require.NoError(t, pathErr)
 
 	err := ParserError{}

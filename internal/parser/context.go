@@ -5,22 +5,21 @@ import (
 
 	"github.com/jumppad-labs/xcl/internal/convert"
 	"github.com/jumppad-labs/xcl/internal/resources"
-	"github.com/jumppad-labs/xcl/internal/xcl"
+	hcl "github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/function"
 )
 
 // buildContextForResource creates a fresh context for a specific resource
 // by building variables dynamically from config and module sources
-func buildContextForResource(res *parsed, r any, options *ParserOptions, functions map[string]function.Function) (*hcl.EvalContext, error) {
+func buildContextForResource(res *parsed, r any, options *ParserOptions, functions functionsForFile) (*hcl.EvalContext, error) {
 	rMeta, err := types.GetMeta(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource metadata: %w", err)
 	}
 
 	ctx := &hcl.EvalContext{
-		Functions: functions,
+		Functions: functions(rMeta.File),
 		Variables: map[string]cty.Value{},
 	}
 

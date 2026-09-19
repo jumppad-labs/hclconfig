@@ -473,12 +473,9 @@ func TestValidatePropertiesAcceptsFunctionsDefaultFixture(t *testing.T) {
 	// combines a conditional, a function call, a splat and a nested property in
 	// one expression. A checker that mishandled any one of those would break it.
 	//
-	// This fixture is asserted through parseAndValidate rather than Parse
-	// because its env attribute calls `file("./default.hcl")` and
-	// `template_file("template.tmpl", ...)`, both of which resolve against the
-	// process working directory and so fail from this package regardless of
-	// anything validation does. Validation is what this stage owns, and
-	// validation is what is pinned here.
+	// This fixture is asserted through parseAndValidate rather than Apply
+	// because validation is what this stage owns, and validation is what is
+	// pinned here. TestApplyProcessesDefaultFunctionsWithFile covers Apply.
 	_, _, err := p.parseAndValidate(f)
 	require.NoError(t, err)
 

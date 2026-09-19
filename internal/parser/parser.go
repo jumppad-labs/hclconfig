@@ -97,6 +97,8 @@ type ParserOptions struct {
 // VariableEnvPrefix is set to 'HCL_VAR_', should a variable be defined
 // called 'foo' setting the environment variable 'HCL_VAR_foo' will override
 // any default value
+// PluginRegistry is set to a registry containing only the builtin resource
+// types, add plugins to it or replace it to use custom resource types
 func DefaultOptions() *ParserOptions {
 	cacheDir, err := os.UserHomeDir()
 	if err != nil {
@@ -119,6 +121,7 @@ func DefaultOptions() *ParserOptions {
 		ModuleCache:       cacheDir,
 		VariableEnvPrefix: "HCL_VAR_",
 		Logger:            logger,
+		PluginRegistry:    registry.NewPluginRegistry(logger),
 	}
 }
 
@@ -201,7 +204,7 @@ func (p *Parser) Apply(paths ...string) (*state.State, error) {
 	ce := errors.NewConfigError()
 
 	// Get functions for HCL context
-	functions := p.getFunctions()
+	functions := p.getFunctions
 
 	// Always walk the DAG to decode resources (fills in their fields from HCL)
 	// This decodes interpolations and resolves dependencies regardless of plugin execution
@@ -947,7 +950,7 @@ func processDisabled(bdy *hclsyntax.Body, ctx *hcl.EvalContext, r dag.Vertex) (b
 // and calls the provider lifecycle for each resource
 //
 // It returns the progress of the walk, which is nil when the walk did not start.
-func (p *Parser) walk(currentState, previousState *state.State, functions map[string]function.Function) (*applyProgress, []error) {
+func (p *Parser) walk(currentState, previousState *state.State, functions functionsForFile) (*applyProgress, []error) {
 	// Build the DAG using currentState (implements ResourceProvider)
 	d, err := DoYouLikeDags(currentState, false)
 	if err != nil {
@@ -999,10 +1002,16 @@ func (p *Parser) createBuiltinResource(resourceType, resourceName string) (any, 
 	return builtinTypes.CreateResource(resourceType, resourceName)
 }
 
-// getFunctions returns all HCL functions (custom + builtins)
-func (p *Parser) getFunctions() map[string]function.Function {
+// functionsForFile returns the HCL functions available to a resource defined
+// in the given file
+type functionsForFile func(file string) map[string]function.Function
+
+// getFunctions returns all HCL functions (custom + builtins) for a resource
+// defined in file, builtins such as file() and dir() resolve relative paths
+// against the directory containing file
+func (p *Parser) getFunctions(file string) map[string]function.Function {
 	// Start with default built-in functions
-	funcs := functions.GetDefaultFunctions("")
+	funcs := functions.GetDefaultFunctions(file)
 
 	// Override with custom functions from parser options
 	for name, fn := range p.customFunctions {

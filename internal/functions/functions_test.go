@@ -2,11 +2,8 @@ package functions
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -176,98 +173,4 @@ func TestCreateFunctionHandlesStringInputParams(t *testing.T) {
 
 	_, err := CreateCtyFunctionFromGoFunc(myfunc)
 	require.NoError(t, err)
-}
-
-func TestParseProcessesDefaultFunctionsWithFile(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/functions/default.hcl")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	os.Setenv("MYENV", "myvalue")
-	t.Cleanup(func() {
-		os.Unsetenv("MYENV")
-	})
-
-	p, _ := setupParser(t)
-	c, err := p.ParseFile(absoluteFolderPath)
-	require.NoError(t, err)
-
-	q := NewQuerier[structs.Container](c)
-	cont, err := q.FindResource("resource.container.default")
-	require.NoError(t, err)
-
-	home, _ := os.UserHomeDir()
-
-	require.Equal(t, "3", cont.Env["len_string"])
-	require.Equal(t, "2", cont.Env["len_collection"])
-	require.Equal(t, "myvalue", cont.Env["env"])
-	require.Equal(t, home, cont.Env["home"])
-	require.Contains(t, cont.Env["file"], "container")
-	require.Contains(t, cont.Env["dir"], filepath.Dir(absoluteFolderPath))
-	require.Contains(t, cont.Env["trim"], "foo bar")
-	require.Equal(t, "one", cont.DNS[0])
-	require.Equal(t, "two", cont.DNS[1])
-	require.Equal(t, "123", cont.Entrypoint[0])
-	require.Equal(t, "abc", cont.Entrypoint[1])
-	require.Equal(t, "one", cont.Command[0])
-	require.Equal(t, "two", cont.Command[1])
-}
-
-func TestParseProcessesDefaultFunctionsWithDirectory(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/functions")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	os.Setenv("MYENV", "myvalue")
-	t.Cleanup(func() {
-		os.Unsetenv("MYENV")
-	})
-
-	p, _ := setupParser(t)
-	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
-
-	c, err := p.ParseDirectory(absoluteFolderPath)
-	require.NoError(t, err)
-
-	q := NewQuerier[structs.Container](c)
-	cont, err := q.FindResource("resource.container.default")
-	require.NoError(t, err)
-
-	home, _ := os.UserHomeDir()
-
-	require.Equal(t, "3", cont.Env["len_string"])
-	require.Equal(t, "2", cont.Env["len_collection"])
-	require.Equal(t, "myvalue", cont.Env["env"])
-	require.Equal(t, home, cont.Env["home"])
-	require.Contains(t, cont.Env["file"], "container")
-	require.Contains(t, cont.Env["dir"], absoluteFolderPath)
-	require.Contains(t, cont.Env["trim"], "foo bar")
-
-	// template
-	require.Contains(t, cont.Env["template_file"], "Hello Raymond")
-	require.Contains(t, cont.Env["template_file"], "43 is a number")
-	require.Contains(t, cont.Env["template_file"], "cheese\n  ham\n  pineapple")
-	require.Contains(t, cont.Env["template_file"], "foo = bar")
-	require.Contains(t, cont.Env["template_file"], "x = 1")
-}
-
-func TestParseProcessesCustomFunctions(t *testing.T) {
-	absoluteFolderPath, err := filepath.Abs("./internal/test_fixtures/functions/custom.hcl")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p, _ := setupParser(t)
-	p.RegisterFunction("constant_number", func() (int, error) { return 42, nil })
-
-	c, err := p.ParseFile(absoluteFolderPath)
-	require.NoError(t, err)
-
-	q := NewQuerier[structs.Container](c)
-	cont, err := q.FindResource("resource.container.custom")
-	require.NoError(t, err)
-
-	require.Equal(t, "42", cont.Env["len"])
 }
