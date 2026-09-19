@@ -1,0 +1,20 @@
+xclconfig
+Copyright (c) 2023-2026 Jumppad Labs
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE),
+with the exception of the third-party components listed below, which remain
+under their own licenses.
+
+-------------------------------------------------------------------------------
+HashiCorp Configuration Language (HCL)
+-------------------------------------------------------------------------------
+
+The directory internal/xcl contains a modified copy of HCL v2.21.0
+(https://github.com/hashicorp/hcl).
+
+Copyright (c) 2014 HashiCorp, Inc.
+
+These files are licensed under the Mozilla Public License, version 2.0, and
+remain under that license, including any modifications made to them. See
+internal/xcl/LICENSE for the full license text and internal/xcl/UPSTREAM.md
+for details of the origin and the modifications made.

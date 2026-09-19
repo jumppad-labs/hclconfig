@@ -1,7 +1,7 @@
 package resources
 
 import (
-	"github.com/hashicorp/hcl/v2"
+	"github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/types"
 )
 

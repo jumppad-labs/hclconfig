@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 )
 

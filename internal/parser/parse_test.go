@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/parser/mocks"
 	"github.com/jumppad-labs/xcl/internal/resources"
 	"github.com/jumppad-labs/xcl/internal/schema"
 	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
+	"github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/logger"
 	pluginmocks "github.com/jumppad-labs/xcl/plugins/mocks"
 	"github.com/jumppad-labs/xcl/plugins/registry"

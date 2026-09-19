@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/creasty/defaults"
-	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/resources"
+	"github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/gohcl"
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/silas/dag"

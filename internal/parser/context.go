@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/jumppad-labs/xcl/internal/convert"
 	"github.com/jumppad-labs/xcl/internal/resources"
+	"github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"

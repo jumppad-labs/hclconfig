@@ -3,19 +3,25 @@ module github.com/jumppad-labs/xcl
 go 1.25.0
 
 require (
+	github.com/agext/levenshtein v1.2.3
+	github.com/apparentlymart/go-textseg/v15 v15.0.0
 	github.com/charmbracelet/log v0.4.2
 	github.com/creasty/defaults v1.8.0
+	github.com/davecgh/go-spew v1.1.1
 	github.com/fatih/color v1.7.0
 	github.com/flytam/filenamify v1.2.0
+	github.com/go-test/deep v1.0.3
+	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/errwrap v1.1.0
 	github.com/hashicorp/go-getter v1.7.5
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/hashicorp/hcl/v2 v2.21.0
 	github.com/infinytum/raymond/v2 v2.0.5
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.15.0
+	github.com/zclconf/go-cty-debug v0.0.0-20240509010212-0d6042c53940
+	golang.org/x/tools v0.24.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 )
@@ -27,9 +33,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.1.12 // indirect
 	cloud.google.com/go/storage v1.43.0 // indirect
-	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
-	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.55.5 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
@@ -38,14 +42,12 @@ require (
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
@@ -86,7 +88,6 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
-	golang.org/x/tools v0.24.0 // indirect
 	google.golang.org/api v0.190.0 // indirect
 	google.golang.org/genproto v0.0.0-20240805194559-2c9e96a0b5d4 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect

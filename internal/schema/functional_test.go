@@ -3,10 +3,10 @@ package schema
 import (
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/gohcl"
-	"github.com/hashicorp/hcl/v2/hclparse"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/gohcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/hclparse"
+	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )

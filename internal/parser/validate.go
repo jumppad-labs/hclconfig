@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/xcl/errors"
+	"github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/zclconf/go-cty/cty"
 )

@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/jumppad-labs/xcl/internal/resources"
+	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/types"

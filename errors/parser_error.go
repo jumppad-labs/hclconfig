@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hashicorp/hcl/v2"
+	"github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/mitchellh/go-wordwrap"
 )
 
