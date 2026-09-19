@@ -17,10 +17,8 @@ require (
 	github.com/hashicorp/go-plugin v1.6.3
 	github.com/infinytum/raymond/v2 v2.0.5
 	github.com/mitchellh/go-wordwrap v1.0.1
-	github.com/silas/dag v0.0.0-20220518035006-a7e85ada93c5
 	github.com/stretchr/testify v1.10.0
-	github.com/zclconf/go-cty v1.15.0
-	github.com/zclconf/go-cty-debug v0.0.0-20240509010212-0d6042c53940
+	golang.org/x/text v0.23.0
 	golang.org/x/tools v0.24.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
@@ -33,7 +31,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.1.12 // indirect
 	cloud.google.com/go/storage v1.43.0 // indirect
-	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.55.5 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
@@ -86,7 +83,6 @@ require (
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	google.golang.org/api v0.190.0 // indirect
 	google.golang.org/genproto v0.0.0-20240805194559-2c9e96a0b5d4 // indirect
@@ -94,8 +90,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-//replace github.com/zclconf/go-cty => /home/nicj/code/github.com/jumppad-labs/go-cty
-replace github.com/zclconf/go-cty => github.com/jumppad-labs/go-cty v0.0.0-20250728194145-c752ef076e5a
-
-replace github.com/silas/dag => github.com/jumppad-labs/dag v0.0.0-20220518035006-a7e85ada93c5

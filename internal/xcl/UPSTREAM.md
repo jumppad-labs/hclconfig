@@ -15,7 +15,8 @@ This directory contains a modified copy of the HashiCorp Configuration Language
 
 Every file in this directory is licensed under MPL-2.0, including any
 modifications made to it. The rest of this repository is licensed under
-Apache-2.0; the MPL-2.0 boundary is this directory.
+Apache-2.0, except for the other third-party directories listed in the
+repository's NOTICE file; the MPL-2.0 boundary for HCL is this directory.
 
 When working in this directory:
 
@@ -46,6 +47,16 @@ Import paths were rewritten from `github.com/hashicorp/hcl/v2/...` to
 ## Modifications
 
 - `hclparse/parser.go`: `ParseHCLFile` renamed to `ParseXCLFile`.
+- `gohcl`: struct tags are read from the `xcl` key instead of `hcl`, and
+  parsed by the `tags` package. A tag is a name followed by comma separated
+  options, at most one of which is a kind (`attr`, `block`, `label`, `remain`,
+  `body`, `optional`). The XCL options `computed` and `key` are also accepted.
+  `gohcl` uses `internal/cty/gocty` instead of `github.com/zclconf/go-cty/cty/gocty`.
+- `tags`: new package, adapted from the tag handling in `gohcl/schema.go`, so
+  that `gohcl` and `internal/cty/gocty` share one parser for `xcl` struct tags.
+- All packages: go-cty imports rewritten from `github.com/zclconf/go-cty/cty/...`
+  to `github.com/jumppad-labs/xcl/internal/cty/...`.
+- Test files in `gohcl`: struct tags changed from `hcl` to `xcl`.
 - Test files `ops_test.go`, `hclsyntax/parser_test.go`,
   `hclsyntax/structure_at_pos_test.go`, `hclsyntax/walk_test.go`,
   `hclsyntax/expression_static_test.go`: non-constant format strings passed to

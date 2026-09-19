@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-test/deep"
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestTraversalStatic(t *testing.T) {

@@ -625,9 +625,9 @@ func TestValidateAcceptsUnsetComputedField(t *testing.T) {
 // badComputed is a resource type whose computed field is not optional, which no
 // configuration could satisfy since users can not set a computed field
 type badComputed struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Secret string `hcl:"secret" json:"secret" xcl:"computed"`
+	Secret string `xcl:"secret,computed" json:"secret"`
 }
 
 // badComputedProvider is a provider for badComputed that does nothing

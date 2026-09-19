@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestApplyPath(t *testing.T) {

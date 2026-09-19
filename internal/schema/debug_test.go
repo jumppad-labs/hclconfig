@@ -11,7 +11,7 @@ import (
 	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestTemplateSchemaHCLTagPreservation(t *testing.T) {
@@ -50,13 +50,13 @@ func TestTemplateSchemaHCLTagPreservation(t *testing.T) {
 		// Check specific fields we expect
 		switch prop.Name {
 		case "Source":
-			require.Contains(t, prop.Tags, `hcl:"source"`, "Source field should have hcl:\"source\" tag")
+			require.Contains(t, prop.Tags, `xcl:"source"`, "Source field should have xcl:\"source\" tag")
 		case "Destination":
-			require.Contains(t, prop.Tags, `hcl:"destination"`, "Destination field should have hcl:\"destination\" tag")
+			require.Contains(t, prop.Tags, `xcl:"destination"`, "Destination field should have xcl:\"destination\" tag")
 		case "Vars":
-			require.Contains(t, prop.Tags, `hcl:"vars,optional"`, "Vars field should have hcl:\"vars,optional\" tag")
+			require.Contains(t, prop.Tags, `xcl:"vars,optional"`, "Vars field should have xcl:\"vars,optional\" tag")
 		case "AppendFile":
-			require.Contains(t, prop.Tags, `hcl:"append_file,optional"`, "AppendFile field should have hcl:\"append_file,optional\" tag")
+			require.Contains(t, prop.Tags, `xcl:"append_file,optional"`, "AppendFile field should have xcl:\"append_file,optional\" tag")
 		}
 	}
 
@@ -89,13 +89,13 @@ func TestTemplateSchemaHCLTagPreservation(t *testing.T) {
 		// Check that HCL tags are preserved
 		switch field.Name {
 		case "Source":
-			require.Contains(t, string(field.Tag), `hcl:"source"`, "Dynamic Source field should have hcl:\"source\" tag")
+			require.Contains(t, string(field.Tag), `xcl:"source"`, "Dynamic Source field should have xcl:\"source\" tag")
 		case "Destination":
-			require.Contains(t, string(field.Tag), `hcl:"destination"`, "Dynamic Destination field should have hcl:\"destination\" tag")
+			require.Contains(t, string(field.Tag), `xcl:"destination"`, "Dynamic Destination field should have xcl:\"destination\" tag")
 		case "Vars":
-			require.Contains(t, string(field.Tag), `hcl:"vars,optional"`, "Dynamic Vars field should have hcl:\"vars,optional\" tag")
+			require.Contains(t, string(field.Tag), `xcl:"vars,optional"`, "Dynamic Vars field should have xcl:\"vars,optional\" tag")
 		case "AppendFile":
-			require.Contains(t, string(field.Tag), `hcl:"append_file,optional"`, "Dynamic AppendFile field should have hcl:\"append_file,optional\" tag")
+			require.Contains(t, string(field.Tag), `xcl:"append_file,optional"`, "Dynamic AppendFile field should have xcl:\"append_file,optional\" tag")
 		}
 	}
 

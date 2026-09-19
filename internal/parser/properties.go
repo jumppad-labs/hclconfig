@@ -174,7 +174,7 @@ func knowable(t reflect.Type) bool {
 
 	// cty.Value holds a configuration value whose shape is decided when the
 	// configuration is evaluated, so nothing beneath it is knowable now.
-	if t.PkgPath() == "github.com/zclconf/go-cty/cty" && t.Name() == "Value" {
+	if t.PkgPath() == "github.com/jumppad-labs/xcl/internal/cty" && t.Name() == "Value" {
 		return false
 	}
 

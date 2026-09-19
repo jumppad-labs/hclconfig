@@ -10,7 +10,7 @@ import (
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/types"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 // PluginRegistry manages all resource types (builtin and plugin-based) and can create resource instances

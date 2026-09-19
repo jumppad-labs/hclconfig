@@ -13,8 +13,8 @@ import (
 	"github.com/jumppad-labs/xcl/internal/xcl/gohcl"
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/types"
-	"github.com/silas/dag"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/dag"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 // ProviderResolver resolves the provider adapter responsible for a given resource.

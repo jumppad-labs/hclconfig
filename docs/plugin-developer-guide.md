@@ -231,7 +231,7 @@ A computed field is owned by the provider. Mark it with the `computed`
 option in an `xcl` struct tag, and make it optional in its `hcl` tag:
 
 ```go
-PersonID string `hcl:"person_id,optional" json:"person_id,omitempty" xcl:"computed"`
+PersonID string `xcl:"person_id,optional,computed" json:"person_id,omitempty"`
 ```
 
 The option lives in its own `xcl` tag because `gohcl` rejects options it
@@ -244,7 +244,7 @@ What xcl does with computed fields
   validation error naming the resource and the field path, for example
   `resource 'resource.container.web' sets computed field 'network.assigned_address'`.
   It is reported before any provider is called.
-- **They must be optional.** A computed field without `hcl:",optional"` is a
+- **They must be optional.** A computed field without `xcl:",optional"` is a
   validation error, since no configuration could satisfy it.
 - **Saved values are carried over.** Before `Read`, xcl copies the computed
   values from the saved copy onto the configured copy. This works at any
@@ -270,23 +270,23 @@ by the network:
 
 ```go
 type Container struct {
-    types.ResourceBase `hcl:",remain"`
+    types.ResourceBase `xcl:",remain"`
 
-    Image string `hcl:"image" json:"image"`
+    Image string `xcl:"image" json:"image"`
 
     // set by the provider in Create
-    ContainerID string `hcl:"container_id,optional" json:"container_id,omitempty" xcl:"computed"`
+    ContainerID string `xcl:"container_id,optional,computed" json:"container_id,omitempty"`
 
-    Networks []NetworkAttachment `hcl:"network,block" json:"networks,omitempty"`
+    Networks []NetworkAttachment `xcl:"network,block" json:"networks,omitempty"`
 }
 
 type NetworkAttachment struct {
     // identifies the attachment, so saved and configured elements pair up
     // even when the user reorders the blocks
-    Name string `hcl:"name" json:"name" xcl:"key"`
+    Name string `xcl:"name,key" json:"name"`
 
     // set by the provider when the container joins the network
-    AssignedAddress string `hcl:"assigned_address,optional" json:"assigned_address,omitempty" xcl:"computed"`
+    AssignedAddress string `xcl:"assigned_address,optional,computed" json:"assigned_address,omitempty"`
 }
 ```
 

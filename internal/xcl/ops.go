@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package hcl
 
@@ -7,8 +8,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/convert"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/convert"
 )
 
 // Index is a helper function that performs the same operation as the index

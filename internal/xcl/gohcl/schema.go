@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package gohcl
 
@@ -7,9 +8,9 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/xcl/tags"
 )
 
 // ImpliedBodySchema produces a hcl.BodySchema derived from the type of the
@@ -135,48 +136,42 @@ func getFieldTags(ty reflect.Type) *fieldTags {
 	ct := ty.NumField()
 	for i := 0; i < ct; i++ {
 		field := ty.Field(i)
-		tag := field.Tag.Get("hcl")
-		if tag == "" {
+		tag, ok := field.Tag.Lookup(tags.Name)
+		if !ok || tag == "" {
 			continue
 		}
 
-		comma := strings.Index(tag, ",")
-		var name, kind string
-		if comma != -1 {
-			name = tag[:comma]
-			kind = tag[comma+1:]
-		} else {
-			name = tag
-			kind = "attr"
+		ft, err := tags.Parse(tag)
+		if err != nil {
+			panic(fmt.Sprintf("%s on %s %q", err, field.Type.String(), field.Name))
 		}
 
-		switch kind {
-		case "attr":
+		name := ft.Name
+		switch ft.Kind {
+		case tags.KindAttr:
 			ret.Attributes[name] = i
-		case "block":
+		case tags.KindBlock:
 			ret.Blocks[name] = i
-		case "label":
+		case tags.KindLabel:
 			ret.Labels = append(ret.Labels, labelField{
 				FieldIndex: i,
 				Name:       name,
 			})
-		case "remain":
+		case tags.KindRemain:
 			if ret.Remain != nil {
 				panic("only one 'remain' tag is permitted")
 			}
 			idx := i // copy, because this loop will continue assigning to i
 			ret.Remain = &idx
-		case "body":
+		case tags.KindBody:
 			if ret.Body != nil {
 				panic("only one 'body' tag is permitted")
 			}
 			idx := i // copy, because this loop will continue assigning to i
 			ret.Body = &idx
-		case "optional":
+		case tags.KindOptional:
 			ret.Attributes[name] = i
 			ret.Optional[name] = true
-		default:
-			panic(fmt.Sprintf("invalid hcl field tag kind %q on %s %q", kind, field.Type.String(), field.Name))
 		}
 	}
 

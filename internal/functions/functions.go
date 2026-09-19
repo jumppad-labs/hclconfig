@@ -9,9 +9,9 @@ import (
 
 	"github.com/infinytum/raymond/v2"
 	"github.com/jumppad-labs/xcl/internal/utils"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/function"
-	"github.com/zclconf/go-cty/cty/function/stdlib"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty/function/stdlib"
 )
 
 func CreateCtyFunctionFromGoFunc(f any) (function.Function, error) {

@@ -7,7 +7,7 @@ import (
 	"github.com/jumppad-labs/xcl/internal/resources"
 	hcl "github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/types"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 // buildContextForResource creates a fresh context for a specific resource

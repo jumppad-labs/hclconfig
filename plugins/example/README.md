@@ -75,16 +75,16 @@ This will:
 ### Resource Definition (`pkg/person/resource.go`)
 ```go
 type Person struct {
-    types.ResourceBase `hcl:",remain"`
-    FirstName string `hcl:"first_name" json:"first_name"`
-    LastName  string `hcl:"last_name" json:"last_name"`
-    Age       int    `hcl:"age,optional" json:"age,omitempty"`
-    Email     string `hcl:"email,optional" json:"email,omitempty"`
-    Address   string `hcl:"address,optional" json:"address,omitempty"`
-    Description string `hcl:"description,optional" json:"description,omitempty"`
+    types.ResourceBase `xcl:",remain"`
+    FirstName string `xcl:"first_name" json:"first_name"`
+    LastName  string `xcl:"last_name" json:"last_name"`
+    Age       int    `xcl:"age,optional" json:"age,omitempty"`
+    Email     string `xcl:"email,optional" json:"email,omitempty"`
+    Address   string `xcl:"address,optional" json:"address,omitempty"`
+    Description string `xcl:"description,optional" json:"description,omitempty"`
 
     // set by the provider in Create, can not be set in configuration
-    PersonID string `hcl:"person_id,optional" json:"person_id,omitempty" xcl:"computed"`
+    PersonID string `xcl:"person_id,optional,computed" json:"person_id,omitempty"`
 }
 ```
 
@@ -164,10 +164,10 @@ resource "person" "john_doe" {
 1. **Define the resource struct**:
 ```go
 type Company struct {
-    types.ResourceBase `hcl:",remain"`
-    Name     string `hcl:"name"`
-    Industry string `hcl:"industry"`
-    Size     int    `hcl:"size,optional"`
+    types.ResourceBase `xcl:",remain"`
+    Name     string `xcl:"name"`
+    Industry string `xcl:"industry"`
+    Size     int    `xcl:"size,optional"`
 }
 ```
 

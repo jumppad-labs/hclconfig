@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package hclsyntax
 
@@ -9,9 +10,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/function"
-	"github.com/zclconf/go-cty/cty/function/stdlib"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty/function/stdlib"
 )
 
 func TestExpressionParseAndValue(t *testing.T) {

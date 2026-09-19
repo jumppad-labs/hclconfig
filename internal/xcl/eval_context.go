@@ -1,11 +1,12 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package hcl
 
 import (
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
 )
 
 // An EvalContext provides the variables and functions that should be used

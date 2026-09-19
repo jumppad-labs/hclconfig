@@ -14,7 +14,7 @@ import (
 	"github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/internal/xcl/hclparse"
 	"github.com/jumppad-labs/xcl/types"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 // canonicalPath resolves a path to an absolute form with any symlinks

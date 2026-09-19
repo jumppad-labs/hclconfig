@@ -11,10 +11,10 @@ const TypeModule = "module"
 // Module allows Shipyard configuration to be imported from external folder or
 // GitHub repositories
 type Module struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Source  string `hcl:"source" json:"source"`
-	Version string `hcl:"version,optional" json:"version,omitempty"`
+	Source  string `xcl:"source" json:"source"`
+	Version string `xcl:"version,optional" json:"version,omitempty"`
 
 	// Variables is captured as a raw expression rather than decoded to a
 	// concrete Go type: gocty's implied-type decode can't represent a
@@ -22,7 +22,7 @@ type Module struct {
 	// type, since it forces every map value to share one element type. The
 	// expression is evaluated manually into a cty.Value during the walk
 	// callback, once a full context is available.
-	Variables hcl.Expression `hcl:"variables,optional" json:"-"`
+	Variables hcl.Expression `xcl:"variables,optional" json:"-"`
 
 	// SubContext is used to store the variables as a context that can be
 	// passed to child resources

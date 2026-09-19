@@ -13,7 +13,7 @@ import (
 	// jumppad-labs fork. The fork reads the `hcl` struct tag where upstream
 	// reads `cty`, and it is the fork that the runtime uses when a
 	// configuration is applied.
-	"github.com/zclconf/go-cty/cty/gocty"
+	"github.com/jumppad-labs/xcl/internal/cty/gocty"
 )
 
 // sortedNames returns the keys of a property set in a stable order so a failure
@@ -35,8 +35,8 @@ func sortedNames(properties map[string]reflect.Type) []string {
 // -----------------------------------------------------------------------------
 
 type plainStruct struct {
-	Subnet string `hcl:"subnet,optional"`
-	Name   string `hcl:"name"`
+	Subnet string `xcl:"subnet,optional"`
+	Name   string `xcl:"name"`
 }
 
 func TestPropertyNamesReadsNameBeforeFirstComma(t *testing.T) {
@@ -53,7 +53,7 @@ func TestPropertyNamesRecordsFieldTypeAgainstName(t *testing.T) {
 }
 
 type untaggedFieldStruct struct {
-	Tagged   string `hcl:"tagged,optional"`
+	Tagged   string `xcl:"tagged,optional"`
 	Untagged string
 	JSONOnly string `json:"json_only"`
 }
@@ -74,14 +74,14 @@ func TestPropertyNamesOmitsFieldWithNoHCLTag(t *testing.T) {
 }
 
 type embeddedInner struct {
-	InnerOne string `hcl:"inner_one,optional"`
-	InnerTwo string `hcl:"inner_two,optional"`
+	InnerOne string `xcl:"inner_one,optional"`
+	InnerTwo string `xcl:"inner_two,optional"`
 }
 
 type anonymousRemainStruct struct {
-	embeddedInner `hcl:",remain"`
+	embeddedInner `xcl:",remain"`
 
-	Own string `hcl:"own,optional"`
+	Own string `xcl:"own,optional"`
 }
 
 func TestPropertyNamesFlattensEmbeddedProperties(t *testing.T) {
@@ -93,16 +93,16 @@ func TestPropertyNamesFlattensEmbeddedProperties(t *testing.T) {
 func TestPropertyNamesEmptyFirstSegmentContributesNoName(t *testing.T) {
 	properties := propertyNames(reflect.TypeOf(anonymousRemainStruct{}))
 
-	// `hcl:",remain"` flattens but names nothing of its own, so neither the
+	// `xcl:",remain"` flattens but names nothing of its own, so neither the
 	// empty string nor the Go field name is addressable.
 	require.NotContains(t, properties, "")
 	require.NotContains(t, properties, "embeddedInner")
 }
 
 type namedRemainStruct struct {
-	embeddedInner `hcl:"rm,remain"`
+	embeddedInner `xcl:"rm,remain"`
 
-	Own string `hcl:"own,optional"`
+	Own string `xcl:"own,optional"`
 }
 
 func TestPropertyNamesNamedEmbeddedIsReachableByItsOwnName(t *testing.T) {
@@ -115,21 +115,21 @@ func TestPropertyNamesNamedEmbeddedIsReachableByItsOwnName(t *testing.T) {
 func TestPropertyNamesNamedEmbeddedAlsoFlattens(t *testing.T) {
 	properties := propertyNames(reflect.TypeOf(namedRemainStruct{}))
 
-	// `hcl:"rm,remain"` does both: it registers `rm` and flattens the
+	// `xcl:"rm,remain"` does both: it registers `rm` and flattens the
 	// embedded properties into the containing type.
 	require.Equal(t, []string{"inner_one", "inner_two", "own", "rm"}, sortedNames(properties))
 }
 
 type embeddedMiddle struct {
-	embeddedInner `hcl:",remain"`
+	embeddedInner `xcl:",remain"`
 
-	Middle string `hcl:"middle,optional"`
+	Middle string `xcl:"middle,optional"`
 }
 
 type embeddedOuter struct {
-	embeddedMiddle `hcl:",remain"`
+	embeddedMiddle `xcl:",remain"`
 
-	Outer string `hcl:"outer,optional"`
+	Outer string `xcl:"outer,optional"`
 }
 
 func TestPropertyNamesFlattensEmbeddingRecursively(t *testing.T) {
@@ -139,9 +139,9 @@ func TestPropertyNamesFlattensEmbeddingRecursively(t *testing.T) {
 }
 
 type pointerEmbeddedStruct struct {
-	*embeddedInner `hcl:"ptr,remain"`
+	*embeddedInner `xcl:"ptr,remain"`
 
-	Own string `hcl:"own,optional"`
+	Own string `xcl:"own,optional"`
 }
 
 func TestPropertyNamesDereferencesPointerEmbeddedField(t *testing.T) {
@@ -157,9 +157,9 @@ func TestPropertyNamesAcceptsPointerToStruct(t *testing.T) {
 }
 
 type selfEmbeddingStruct struct {
-	*selfEmbeddingStruct `hcl:"self,remain"`
+	*selfEmbeddingStruct `xcl:"self,remain"`
 
-	Own string `hcl:"own,optional"`
+	Own string `xcl:"own,optional"`
 }
 
 func TestPropertyNamesTerminatesOnSelfEmbeddingType(t *testing.T) {
@@ -216,7 +216,7 @@ func TestPropertyNamesForNetwork(t *testing.T) {
 func TestPropertyNamesForNetworkFlattensResourceBaseWithoutNamingIt(t *testing.T) {
 	properties := propertyNames(reflect.TypeOf(structs.Network{}))
 
-	// structs.Network embeds types.ResourceBase as `hcl:",remain"`, so its
+	// structs.Network embeds types.ResourceBase as `xcl:",remain"`, so its
 	// properties flatten in but the embed itself contributes no name.
 	require.Contains(t, properties, "depends_on")
 	require.Contains(t, properties, "disabled")
@@ -268,7 +268,7 @@ func TestPropertyNamesForContainer(t *testing.T) {
 func TestPropertyNamesForContainerReachesNamedEmbedBothWays(t *testing.T) {
 	properties := propertyNames(reflect.TypeOf(structs.Container{}))
 
-	// structs.ContainerBase embeds types.ResourceBase as `hcl:"rm,remain"`, so
+	// structs.ContainerBase embeds types.ResourceBase as `xcl:"rm,remain"`, so
 	// the same embed is reachable under its own name and through its flattened
 	// properties. Container reaches both through a second, unnamed embed of
 	// ContainerBase.
@@ -288,24 +288,24 @@ func TestPropertyNamesForContainerReachesNamedEmbedBothWays(t *testing.T) {
 
 // pluginStyleType builds an anonymous struct the way
 // internal/schema/deserialize.go does: named fields carrying reconstructed
-// `hcl` tags, plus an anonymous embedded field tagged `hcl:"rm,remain"`.
+// `hcl` tags, plus an anonymous embedded field tagged `xcl:"rm,remain"`.
 func pluginStyleType() reflect.Type {
 	return reflect.StructOf([]reflect.StructField{
 		{
 			Name:      "ResourceBase",
 			Type:      reflect.TypeOf(types.ResourceBase{}),
-			Tag:       reflect.StructTag(`hcl:"rm,remain" json:"resource_base,omitempty"`),
+			Tag:       reflect.StructTag(`xcl:"rm,remain" json:"resource_base,omitempty"`),
 			Anonymous: true,
 		},
 		{
 			Name: "Subnet",
 			Type: reflect.TypeOf(""),
-			Tag:  reflect.StructTag(`hcl:"subnet,optional" json:"subnet,omitempty"`),
+			Tag:  reflect.StructTag(`xcl:"subnet,optional" json:"subnet,omitempty"`),
 		},
 		{
 			Name: "Ports",
 			Type: reflect.SliceOf(reflect.TypeOf(0)),
-			Tag:  reflect.StructTag(`hcl:"port,block" json:"port,omitempty"`),
+			Tag:  reflect.StructTag(`xcl:"port,block" json:"port,omitempty"`),
 		},
 	})
 }
@@ -330,10 +330,10 @@ func TestPropertyNamesForPluginSuppliedTypeMatchesEquivalentNamedType(t *testing
 
 // namedRemainEquivalent is the named-type twin of pluginStyleType.
 type namedRemainEquivalent struct {
-	types.ResourceBase `hcl:"rm,remain" json:"resource_base,omitempty"`
+	types.ResourceBase `xcl:"rm,remain" json:"resource_base,omitempty"`
 
-	Subnet string `hcl:"subnet,optional" json:"subnet,omitempty"`
-	Ports  []int  `hcl:"port,block" json:"port,omitempty"`
+	Subnet string `xcl:"subnet,optional" json:"subnet,omitempty"`
+	Ports  []int  `xcl:"port,block" json:"port,omitempty"`
 }
 
 // -----------------------------------------------------------------------------

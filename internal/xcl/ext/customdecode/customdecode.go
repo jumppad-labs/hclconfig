@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 // Package customdecode contains a HCL extension that allows, in certain
 // contexts, expression evaluation to be overridden by custom static analysis.
@@ -11,7 +12,7 @@ package customdecode
 
 import (
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 type customDecoderImpl int

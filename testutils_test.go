@@ -6,7 +6,7 @@ import (
 
 	"github.com/jumppad-labs/xcl/internal/utils"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestProcessesTypes(t *testing.T) {

@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package gohcl_test
 
@@ -12,18 +13,18 @@ import (
 
 func ExampleEncodeIntoBody() {
 	type Service struct {
-		Name string   `hcl:"name,label"`
-		Exe  []string `hcl:"executable"`
+		Name string   `xcl:"name,label"`
+		Exe  []string `xcl:"executable"`
 	}
 	type Constraints struct {
-		OS   string `hcl:"os"`
-		Arch string `hcl:"arch"`
+		OS   string `xcl:"os"`
+		Arch string `xcl:"arch"`
 	}
 	type App struct {
-		Name        string       `hcl:"name"`
-		Desc        string       `hcl:"description"`
-		Constraints *Constraints `hcl:"constraints,block"`
-		Services    []Service    `hcl:"service,block"`
+		Name        string       `xcl:"name"`
+		Desc        string       `xcl:"description"`
+		Constraints *Constraints `xcl:"constraints,block"`
+		Services    []Service    `xcl:"service,block"`
 	}
 
 	app := App{

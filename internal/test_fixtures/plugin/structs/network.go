@@ -7,13 +7,13 @@ const TypeNetwork = "network"
 
 // Network defines a Docker network
 type Network struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Subnet string `hcl:"subnet" json:"subnet"`
+	Subnet string `xcl:"subnet" json:"subnet"`
 
 	// ProviderID is set by the provider when the network is created
-	ProviderID string `hcl:"provider_id,optional" json:"provider_id,omitempty" xcl:"computed"`
+	ProviderID string `xcl:"provider_id,optional,computed" json:"provider_id,omitempty"`
 
 	// Observed is set by the provider when it reads the real network
-	Observed string `hcl:"observed,optional" json:"observed,omitempty" xcl:"computed"`
+	Observed string `xcl:"observed,optional,computed" json:"observed,omitempty"`
 }

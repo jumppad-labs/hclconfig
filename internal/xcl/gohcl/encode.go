@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package gohcl
 
@@ -8,8 +9,8 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/jumppad-labs/xcl/internal/cty/gocty"
 	"github.com/jumppad-labs/xcl/internal/xcl/hclwrite"
-	"github.com/zclconf/go-cty/cty/gocty"
 )
 
 // EncodeIntoBody replaces the contents of the given hclwrite Body with

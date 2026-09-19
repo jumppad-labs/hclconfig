@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package gohcl
 
@@ -32,8 +33,8 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Attr1 bool `hcl:"attr1"`
-				Attr2 bool `hcl:"attr2"`
+				Attr1 bool `xcl:"attr1"`
+				Attr2 bool `xcl:"attr2"`
 			}{},
 			&hcl.BodySchema{
 				Attributes: []hcl.AttributeSchema{
@@ -51,7 +52,7 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Attr *bool `hcl:"attr,attr"`
+				Attr *bool `xcl:"attr,attr"`
 			}{},
 			&hcl.BodySchema{
 				Attributes: []hcl.AttributeSchema{
@@ -65,7 +66,7 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Thing struct{} `hcl:"thing,block"`
+				Thing struct{} `xcl:"thing,block"`
 			}{},
 			&hcl.BodySchema{
 				Blocks: []hcl.BlockHeaderSchema{
@@ -79,9 +80,9 @@ func TestImpliedBodySchema(t *testing.T) {
 		{
 			struct {
 				Thing struct {
-					Type string `hcl:"type,label"`
-					Name string `hcl:"name,label"`
-				} `hcl:"thing,block"`
+					Type string `xcl:"type,label"`
+					Name string `xcl:"name,label"`
+				} `xcl:"thing,block"`
 			}{},
 			&hcl.BodySchema{
 				Blocks: []hcl.BlockHeaderSchema{
@@ -96,9 +97,9 @@ func TestImpliedBodySchema(t *testing.T) {
 		{
 			struct {
 				Thing []struct {
-					Type string `hcl:"type,label"`
-					Name string `hcl:"name,label"`
-				} `hcl:"thing,block"`
+					Type string `xcl:"type,label"`
+					Name string `xcl:"name,label"`
+				} `xcl:"thing,block"`
 			}{},
 			&hcl.BodySchema{
 				Blocks: []hcl.BlockHeaderSchema{
@@ -113,9 +114,9 @@ func TestImpliedBodySchema(t *testing.T) {
 		{
 			struct {
 				Thing *struct {
-					Type string `hcl:"type,label"`
-					Name string `hcl:"name,label"`
-				} `hcl:"thing,block"`
+					Type string `xcl:"type,label"`
+					Name string `xcl:"name,label"`
+				} `xcl:"thing,block"`
 			}{},
 			&hcl.BodySchema{
 				Blocks: []hcl.BlockHeaderSchema{
@@ -130,9 +131,9 @@ func TestImpliedBodySchema(t *testing.T) {
 		{
 			struct {
 				Thing struct {
-					Name      string `hcl:"name,label"`
-					Something string `hcl:"something"`
-				} `hcl:"thing,block"`
+					Name      string `xcl:"name,label"`
+					Something string `xcl:"something"`
+				} `xcl:"thing,block"`
 			}{},
 			&hcl.BodySchema{
 				Blocks: []hcl.BlockHeaderSchema{
@@ -146,10 +147,10 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Doodad string `hcl:"doodad"`
+				Doodad string `xcl:"doodad"`
 				Thing  struct {
-					Name string `hcl:"name,label"`
-				} `hcl:"thing,block"`
+					Name string `xcl:"name,label"`
+				} `xcl:"thing,block"`
 			}{},
 			&hcl.BodySchema{
 				Attributes: []hcl.AttributeSchema{
@@ -169,8 +170,8 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Doodad string `hcl:"doodad"`
-				Config string `hcl:",remain"`
+				Doodad string `xcl:"doodad"`
+				Config string `xcl:",remain"`
 			}{},
 			&hcl.BodySchema{
 				Attributes: []hcl.AttributeSchema{
@@ -184,7 +185,7 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Expr hcl.Expression `hcl:"expr"`
+				Expr hcl.Expression `xcl:"expr"`
 			}{},
 			&hcl.BodySchema{
 				Attributes: []hcl.AttributeSchema{
@@ -198,7 +199,7 @@ func TestImpliedBodySchema(t *testing.T) {
 		},
 		{
 			struct {
-				Meh string `hcl:"meh,optional"`
+				Meh string `xcl:"meh,optional"`
 			}{},
 			&hcl.BodySchema{
 				Attributes: []hcl.AttributeSchema{

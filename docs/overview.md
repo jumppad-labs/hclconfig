@@ -96,9 +96,9 @@ which in turn embeds [`types.Meta`](../types/resource.go#L5):
 
 ```go
 type ResourceBase struct {
-    DependsOn []string `hcl:"depends_on,optional"`
-    Disabled  bool     `hcl:"disabled,optional"`
-    Meta      Meta     `hcl:"meta,optional"`
+    DependsOn []string `xcl:"depends_on,optional"`
+    Disabled  bool     `xcl:"disabled,optional"`
+    Meta      Meta     `xcl:"meta,optional"`
 }
 
 type Meta struct {

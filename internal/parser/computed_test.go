@@ -40,13 +40,13 @@ func computedPaths(t reflect.Type) []string {
 // unkeyedPort is a list element type with no key fields, its elements are
 // paired by position
 type unkeyedPort struct {
-	Name     string `hcl:"name" json:"name"`
-	Assigned string `hcl:"assigned,optional" json:"assigned,omitempty" xcl:"computed"`
+	Name     string `xcl:"name" json:"name"`
+	Assigned string `xcl:"assigned,optional,computed" json:"assigned,omitempty"`
 }
 
 // unkeyedHolder holds a list of blocks whose element type has no key fields
 type unkeyedHolder struct {
-	Ports []unkeyedPort `hcl:"port,block" json:"ports,omitempty"`
+	Ports []unkeyedPort `xcl:"port,block" json:"ports,omitempty"`
 }
 
 func TestComputedFieldsFindsTaggedFieldsOnSchemaRebuiltType(t *testing.T) {

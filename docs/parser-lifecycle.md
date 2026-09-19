@@ -66,7 +66,7 @@ every `Apply`/`Validate` (see [Overview](overview.md)).
 
 ## `walkCallback` and `resourceLifecycle`
 
-The DAG walker (`github.com/silas/dag`) invokes one callback per vertex.
+The DAG walker (`internal/dag`, a copy of `github.com/silas/dag`) invokes one callback per vertex.
 [`walkCallback`](../internal/parser/callbacks.go#L31) is that callback: it
 decodes the resource's HCL body, handles module-specific evaluation-context
 setup, and then hands the resource to `resourceLifecycle.apply`

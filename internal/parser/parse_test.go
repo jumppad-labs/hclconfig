@@ -24,7 +24,7 @@ import (
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 // findResource is a test helper that finds and converts a resource to the given type.

@@ -5,24 +5,21 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/jumppad-labs/xcl/internal/xcl/tags"
 	"github.com/jumppad-labs/xcl/types"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
-// Resource types mark fields with options in an `xcl` struct tag, separate from
-// the `hcl` tag because gohcl rejects options it does not know:
+// Resource types mark fields with options in their `xcl` struct tag, after the
+// field's name and kind:
 //
 //   - computed: the field is owned by the provider. Users can not set it, and
 //     the value saved by the last apply is carried onto the configured resource
-//     before it is read. A computed field must also be `hcl:",optional"`.
+//     before it is read. A computed field must also be optional, for example
+//     `xcl:"address,optional,computed"`.
 //   - key: the field identifies an element in a list of blocks. Elements of the
 //     saved and configured copies are paired by their key fields, or by position
 //     when the element type has none.
-const (
-	xclTagComputed = "computed"
-	xclTagKey      = "key"
-)
-
 var (
 	resourceBaseType = reflect.TypeOf(types.ResourceBase{})
 	ctyValueType     = reflect.TypeOf(cty.Value{})
@@ -39,41 +36,22 @@ type structField struct {
 	field reflect.StructField
 }
 
-// hasXclOption returns true when the field's `xcl` tag has the given option
-func hasXclOption(field reflect.StructField, option string) bool {
-	tag, ok := field.Tag.Lookup("xcl")
-	if !ok {
-		return false
-	}
-
-	for _, o := range strings.Split(tag, ",") {
-		if strings.TrimSpace(o) == option {
-			return true
-		}
-	}
-
-	return false
-}
-
 // isComputed returns true when the field is owned by the provider
 func isComputed(field reflect.StructField) bool {
-	return hasXclOption(field, xclTagComputed)
+	tag, ok := parseXclTag(field)
+	return ok && tag.Computed
 }
 
 // isKey returns true when the field identifies an element in a list of blocks
 func isKey(field reflect.StructField) bool {
-	return hasXclOption(field, xclTagKey)
+	tag, ok := parseXclTag(field)
+	return ok && tag.Key
 }
 
-// isOptional returns true when the field's `hcl` tag kind is optional
+// isOptional returns true when the field's `xcl` tag kind is optional
 func isOptional(field reflect.StructField) bool {
-	tag, ok := field.Tag.Lookup("hcl")
-	if !ok {
-		return false
-	}
-
-	_, kind, _ := strings.Cut(tag, ",")
-	return kind == "optional"
+	tag, ok := parseXclTag(field)
+	return ok && tag.Kind == tags.KindOptional
 }
 
 // structFields returns the fields of a struct type that configuration can name.
@@ -113,7 +91,7 @@ func collectStructFields(t reflect.Type, prefix []int, fields *[]structField, vi
 			continue
 		}
 
-		name := hclTagName(field)
+		name := xclTagName(field)
 		if name == "" {
 			continue
 		}

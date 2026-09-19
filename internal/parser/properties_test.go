@@ -249,7 +249,7 @@ func TestCheckPropertyPathAcceptsPropertyBeneathAnInterface(t *testing.T) {
 	// an interface carries anything at all, so it cannot say what properties it
 	// has until it holds something.
 	type holder struct {
-		Value any `hcl:"value,optional"`
+		Value any `xcl:"value,optional"`
 	}
 
 	missing := checkPropertyPath(reflect.TypeOf(holder{}), "value.anything")

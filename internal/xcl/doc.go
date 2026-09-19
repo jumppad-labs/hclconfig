@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 // Package hcl contains the main modelling types and general utility functions
 // for HCL.
@@ -17,7 +18,7 @@
 //     )
 //
 //     type Config struct {
-//     	LogLevel string `hcl:"log_level"`
+//     	LogLevel string `xcl:"log_level"`
 //     }
 //
 //     func main() {

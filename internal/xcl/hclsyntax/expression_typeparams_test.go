@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 //go:build go1.18
 // +build go1.18
@@ -11,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
 )
 
 // This file contains some additional tests that only make sense when using

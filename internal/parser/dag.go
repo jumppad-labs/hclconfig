@@ -6,7 +6,7 @@ import (
 	"github.com/jumppad-labs/xcl/errors"
 	"github.com/jumppad-labs/xcl/internal/resources"
 	"github.com/jumppad-labs/xcl/types"
-	dagpkg "github.com/silas/dag"
+	dagpkg "github.com/jumppad-labs/xcl/internal/dag"
 )
 
 // ConfigProvider defines the interface for config operations needed by DAG building

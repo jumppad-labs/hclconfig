@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package json
 
@@ -12,7 +13,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/go-test/deep"
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestBodyPartialContent(t *testing.T) {

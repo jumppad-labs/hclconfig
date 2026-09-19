@@ -20,8 +20,8 @@ import (
 	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/state"
 	"github.com/jumppad-labs/xcl/types"
-	"github.com/silas/dag"
-	"github.com/zclconf/go-cty/cty/function"
+	"github.com/jumppad-labs/xcl/internal/dag"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
 )
 
 type ResourceTypeNotExistError struct {

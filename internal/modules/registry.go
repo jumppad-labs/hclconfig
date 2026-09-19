@@ -36,7 +36,7 @@ type Config struct {
 }
 
 type Credential struct {
-	Token string `hcl:"token,optional" json:"token,omitempty"`
+	Token string `xcl:"token,optional" json:"token,omitempty"`
 }
 
 type Module struct {

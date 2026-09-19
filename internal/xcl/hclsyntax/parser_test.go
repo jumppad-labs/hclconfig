@@ -12,8 +12,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty-debug/ctydebug"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/ctydebug"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestParseConfig(t *testing.T) {

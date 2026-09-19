@@ -2,7 +2,8 @@ package parser
 
 import (
 	"reflect"
-	"strings"
+
+	"github.com/jumppad-labs/xcl/internal/xcl/tags"
 )
 
 // propertyNames reports the properties a type exposes to configuration, keyed
@@ -19,12 +20,12 @@ import (
 // The rules, in full:
 //
 //   - the configuration name is the part of the `hcl` tag before the first
-//     comma, so `hcl:"subnet,optional"` is addressed as `subnet`;
+//     comma, so `xcl:"subnet,optional"` is addressed as `subnet`;
 //   - an empty first segment contributes no name of its own, so
-//     `hcl:",remain"` names nothing;
+//     `xcl:",remain"` names nothing;
 //   - an anonymous embedded field flattens its own properties into the
 //     containing type, recursively;
-//   - an embedded field may do both at once - `hcl:"rm,remain"` registers the
+//   - an embedded field may do both at once - `xcl:"rm,remain"` registers the
 //     name `rm` *and* flattens - so the two rules are applied independently
 //     rather than as alternatives;
 //   - a field carrying no `hcl` tag is invisible to configuration and is
@@ -66,7 +67,7 @@ func collectPropertyNames(t reflect.Type, names map[string]reflect.Type, visited
 			}
 		}
 
-		name := hclTagName(field)
+		name := xclTagName(field)
 		if name == "" {
 			continue
 		}
@@ -75,18 +76,32 @@ func collectPropertyNames(t reflect.Type, names map[string]reflect.Type, visited
 	}
 }
 
-// hclTagName returns the name configuration uses for a field, which is the part
-// of its `hcl` tag before the first comma. It returns an empty string when the
-// field has no `hcl` tag, or when the tag contributes no name of its own.
-func hclTagName(field reflect.StructField) string {
-	tag, ok := field.Tag.Lookup("hcl")
+// xclTagName returns the name configuration uses for a field, which is the part
+// of its `xcl` tag before the first comma. It returns an empty string when the
+// field has no valid `xcl` tag, or when the tag contributes no name of its own.
+func xclTagName(field reflect.StructField) string {
+	tag, ok := parseXclTag(field)
 	if !ok {
 		return ""
 	}
 
-	name, _, _ := strings.Cut(tag, ",")
+	return tag.Name
+}
 
-	return name
+// parseXclTag returns the field's parsed `xcl` tag, ok is false when the field
+// has no tag or the tag is not valid
+func parseXclTag(field reflect.StructField) (tags.Field, bool) {
+	tag, ok := field.Tag.Lookup(tags.Name)
+	if !ok {
+		return tags.Field{}, false
+	}
+
+	ft, err := tags.Parse(tag)
+	if err != nil {
+		return tags.Field{}, false
+	}
+
+	return ft, true
 }
 
 // dereference follows pointers to the type they point at.

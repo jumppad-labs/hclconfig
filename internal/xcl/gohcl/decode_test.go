@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package gohcl
 
@@ -12,7 +13,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/jumppad-labs/xcl/internal/xcl"
 	hclJSON "github.com/jumppad-labs/xcl/internal/xcl/json"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestDecodeBody(t *testing.T) {
@@ -23,25 +24,25 @@ func TestDecodeBody(t *testing.T) {
 	}
 
 	type withNameExpression struct {
-		Name hcl.Expression `hcl:"name"`
+		Name hcl.Expression `xcl:"name"`
 	}
 
 	type withTwoAttributes struct {
-		A string `hcl:"a,optional"`
-		B string `hcl:"b,optional"`
+		A string `xcl:"a,optional"`
+		B string `xcl:"b,optional"`
 	}
 
 	type withNestedBlock struct {
-		Plain  string             `hcl:"plain,optional"`
-		Nested *withTwoAttributes `hcl:"nested,block"`
+		Plain  string             `xcl:"plain,optional"`
+		Nested *withTwoAttributes `xcl:"nested,block"`
 	}
 
 	type withListofNestedBlocks struct {
-		Nested []*withTwoAttributes `hcl:"nested,block"`
+		Nested []*withTwoAttributes `xcl:"nested,block"`
 	}
 
 	type withListofNestedBlocksNoPointers struct {
-		Nested []withTwoAttributes `hcl:"nested,block"`
+		Nested []withTwoAttributes `xcl:"nested,block"`
 	}
 
 	tests := []struct {
@@ -59,30 +60,30 @@ func TestDecodeBody(t *testing.T) {
 		{
 			map[string]interface{}{},
 			makeInstantiateType(struct {
-				Name string `hcl:"name"`
+				Name string `xcl:"name"`
 			}{}),
 			deepEquals(struct {
-				Name string `hcl:"name"`
+				Name string `xcl:"name"`
 			}{}),
 			1, // name is required
 		},
 		{
 			map[string]interface{}{},
 			makeInstantiateType(struct {
-				Name *string `hcl:"name"`
+				Name *string `xcl:"name"`
 			}{}),
 			deepEquals(struct {
-				Name *string `hcl:"name"`
+				Name *string `xcl:"name"`
 			}{}),
 			0,
 		}, // name nil
 		{
 			map[string]interface{}{},
 			makeInstantiateType(struct {
-				Name string `hcl:"name,optional"`
+				Name string `xcl:"name,optional"`
 			}{}),
 			deepEquals(struct {
-				Name string `hcl:"name,optional"`
+				Name string `xcl:"name,optional"`
 			}{}),
 			0,
 		}, // name optional
@@ -145,10 +146,10 @@ func TestDecodeBody(t *testing.T) {
 				"name": "Ermintrude",
 			},
 			makeInstantiateType(struct {
-				Name string `hcl:"name"`
+				Name string `xcl:"name"`
 			}{}),
 			deepEquals(struct {
-				Name string `hcl:"name"`
+				Name string `xcl:"name"`
 			}{"Ermintrude"}),
 			0,
 		},
@@ -158,10 +159,10 @@ func TestDecodeBody(t *testing.T) {
 				"age":  23,
 			},
 			makeInstantiateType(struct {
-				Name string `hcl:"name"`
+				Name string `xcl:"name"`
 			}{}),
 			deepEquals(struct {
-				Name string `hcl:"name"`
+				Name string `xcl:"name"`
 			}{"Ermintrude"}),
 			1, // Extraneous "age" property
 		},
@@ -171,13 +172,13 @@ func TestDecodeBody(t *testing.T) {
 				"age":  50,
 			},
 			makeInstantiateType(struct {
-				Name  string         `hcl:"name"`
-				Attrs hcl.Attributes `hcl:",remain"`
+				Name  string         `xcl:"name"`
+				Attrs hcl.Attributes `xcl:",remain"`
 			}{}),
 			func(gotI interface{}) bool {
 				got := gotI.(struct {
-					Name  string         `hcl:"name"`
-					Attrs hcl.Attributes `hcl:",remain"`
+					Name  string         `xcl:"name"`
+					Attrs hcl.Attributes `xcl:",remain"`
 				})
 				return got.Name == "Ermintrude" && len(got.Attrs) == 1 && got.Attrs["age"] != nil
 			},
@@ -189,13 +190,13 @@ func TestDecodeBody(t *testing.T) {
 				"age":  50,
 			},
 			makeInstantiateType(struct {
-				Name   string   `hcl:"name"`
-				Remain hcl.Body `hcl:",remain"`
+				Name   string   `xcl:"name"`
+				Remain hcl.Body `xcl:",remain"`
 			}{}),
 			func(gotI interface{}) bool {
 				got := gotI.(struct {
-					Name   string   `hcl:"name"`
-					Remain hcl.Body `hcl:",remain"`
+					Name   string   `xcl:"name"`
+					Remain hcl.Body `xcl:",remain"`
 				})
 
 				attrs, _ := got.Remain.JustAttributes()
@@ -210,12 +211,12 @@ func TestDecodeBody(t *testing.T) {
 				"living": true,
 			},
 			makeInstantiateType(struct {
-				Name   string               `hcl:"name"`
-				Remain map[string]cty.Value `hcl:",remain"`
+				Name   string               `xcl:"name"`
+				Remain map[string]cty.Value `xcl:",remain"`
 			}{}),
 			deepEquals(struct {
-				Name   string               `hcl:"name"`
-				Remain map[string]cty.Value `hcl:",remain"`
+				Name   string               `xcl:"name"`
+				Remain map[string]cty.Value `xcl:",remain"`
 			}{
 				Name: "Ermintrude",
 				Remain: map[string]cty.Value{
@@ -230,15 +231,15 @@ func TestDecodeBody(t *testing.T) {
 				"age":  50,
 			},
 			makeInstantiateType(struct {
-				Name   string   `hcl:"name"`
-				Body   hcl.Body `hcl:",body"`
-				Remain hcl.Body `hcl:",remain"`
+				Name   string   `xcl:"name"`
+				Body   hcl.Body `xcl:",body"`
+				Remain hcl.Body `xcl:",remain"`
 			}{}),
 			func(gotI interface{}) bool {
 				got := gotI.(struct {
-					Name   string   `hcl:"name"`
-					Body   hcl.Body `hcl:",body"`
-					Remain hcl.Body `hcl:",remain"`
+					Name   string   `xcl:"name"`
+					Body   hcl.Body `xcl:",body"`
+					Remain hcl.Body `xcl:",remain"`
 				})
 
 				attrs, _ := got.Body.JustAttributes()
@@ -253,7 +254,7 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": map[string]interface{}{},
 			},
 			makeInstantiateType(struct {
-				Noodle struct{} `hcl:"noodle,block"`
+				Noodle struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating no diagnostics is good enough for this one.
@@ -266,7 +267,7 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{{}},
 			},
 			makeInstantiateType(struct {
-				Noodle struct{} `hcl:"noodle,block"`
+				Noodle struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating no diagnostics is good enough for this one.
@@ -279,7 +280,7 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{{}, {}},
 			},
 			makeInstantiateType(struct {
-				Noodle struct{} `hcl:"noodle,block"`
+				Noodle struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating one diagnostic is good enough for this one.
@@ -290,7 +291,7 @@ func TestDecodeBody(t *testing.T) {
 		{
 			map[string]interface{}{},
 			makeInstantiateType(struct {
-				Noodle struct{} `hcl:"noodle,block"`
+				Noodle struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating one diagnostic is good enough for this one.
@@ -303,7 +304,7 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{},
 			},
 			makeInstantiateType(struct {
-				Noodle struct{} `hcl:"noodle,block"`
+				Noodle struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating one diagnostic is good enough for this one.
@@ -316,11 +317,11 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": map[string]interface{}{},
 			},
 			makeInstantiateType(struct {
-				Noodle *struct{} `hcl:"noodle,block"`
+				Noodle *struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				return gotI.(struct {
-					Noodle *struct{} `hcl:"noodle,block"`
+					Noodle *struct{} `xcl:"noodle,block"`
 				}).Noodle != nil
 			},
 			0,
@@ -330,11 +331,11 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{{}},
 			},
 			makeInstantiateType(struct {
-				Noodle *struct{} `hcl:"noodle,block"`
+				Noodle *struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				return gotI.(struct {
-					Noodle *struct{} `hcl:"noodle,block"`
+					Noodle *struct{} `xcl:"noodle,block"`
 				}).Noodle != nil
 			},
 			0,
@@ -344,11 +345,11 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{},
 			},
 			makeInstantiateType(struct {
-				Noodle *struct{} `hcl:"noodle,block"`
+				Noodle *struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				return gotI.(struct {
-					Noodle *struct{} `hcl:"noodle,block"`
+					Noodle *struct{} `xcl:"noodle,block"`
 				}).Noodle == nil
 			},
 			0,
@@ -358,7 +359,7 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{{}, {}},
 			},
 			makeInstantiateType(struct {
-				Noodle *struct{} `hcl:"noodle,block"`
+				Noodle *struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating one diagnostic is good enough for this one.
@@ -371,11 +372,11 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{},
 			},
 			makeInstantiateType(struct {
-				Noodle []struct{} `hcl:"noodle,block"`
+				Noodle []struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				noodle := gotI.(struct {
-					Noodle []struct{} `hcl:"noodle,block"`
+					Noodle []struct{} `xcl:"noodle,block"`
 				}).Noodle
 				return len(noodle) == 0
 			},
@@ -386,11 +387,11 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{{}},
 			},
 			makeInstantiateType(struct {
-				Noodle []struct{} `hcl:"noodle,block"`
+				Noodle []struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				noodle := gotI.(struct {
-					Noodle []struct{} `hcl:"noodle,block"`
+					Noodle []struct{} `xcl:"noodle,block"`
 				}).Noodle
 				return len(noodle) == 1
 			},
@@ -401,11 +402,11 @@ func TestDecodeBody(t *testing.T) {
 				"noodle": []map[string]interface{}{{}, {}},
 			},
 			makeInstantiateType(struct {
-				Noodle []struct{} `hcl:"noodle,block"`
+				Noodle []struct{} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				noodle := gotI.(struct {
-					Noodle []struct{} `hcl:"noodle,block"`
+					Noodle []struct{} `xcl:"noodle,block"`
 				}).Noodle
 				return len(noodle) == 2
 			},
@@ -417,8 +418,8 @@ func TestDecodeBody(t *testing.T) {
 			},
 			makeInstantiateType(struct {
 				Noodle struct {
-					Name string `hcl:"name,label"`
-				} `hcl:"noodle,block"`
+					Name string `xcl:"name,label"`
+				} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// Generating two diagnostics is good enough for this one.
@@ -437,14 +438,14 @@ func TestDecodeBody(t *testing.T) {
 			},
 			makeInstantiateType(struct {
 				Noodle struct {
-					Name string `hcl:"name,label"`
-				} `hcl:"noodle,block"`
+					Name string `xcl:"name,label"`
+				} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				noodle := gotI.(struct {
 					Noodle struct {
-						Name string `hcl:"name,label"`
-					} `hcl:"noodle,block"`
+						Name string `xcl:"name,label"`
+					} `xcl:"noodle,block"`
 				}).Noodle
 				return noodle.Name == "foo_foo"
 			},
@@ -459,8 +460,8 @@ func TestDecodeBody(t *testing.T) {
 			},
 			makeInstantiateType(struct {
 				Noodle struct {
-					Name string `hcl:"name,label"`
-				} `hcl:"noodle,block"`
+					Name string `xcl:"name,label"`
+				} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				// One diagnostic is enough for this one.
@@ -477,14 +478,14 @@ func TestDecodeBody(t *testing.T) {
 			},
 			makeInstantiateType(struct {
 				Noodles []struct {
-					Name string `hcl:"name,label"`
-				} `hcl:"noodle,block"`
+					Name string `xcl:"name,label"`
+				} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				noodles := gotI.(struct {
 					Noodles []struct {
-						Name string `hcl:"name,label"`
-					} `hcl:"noodle,block"`
+						Name string `xcl:"name,label"`
+					} `xcl:"noodle,block"`
 				}).Noodles
 				return len(noodles) == 2 && (noodles[0].Name == "foo_foo" || noodles[0].Name == "bar_baz") && (noodles[1].Name == "foo_foo" || noodles[1].Name == "bar_baz") && noodles[0].Name != noodles[1].Name
 			},
@@ -500,16 +501,16 @@ func TestDecodeBody(t *testing.T) {
 			},
 			makeInstantiateType(struct {
 				Noodle struct {
-					Name string `hcl:"name,label"`
-					Type string `hcl:"type"`
-				} `hcl:"noodle,block"`
+					Name string `xcl:"name,label"`
+					Type string `xcl:"type"`
+				} `xcl:"noodle,block"`
 			}{}),
 			func(gotI interface{}) bool {
 				noodle := gotI.(struct {
 					Noodle struct {
-						Name string `hcl:"name,label"`
-						Type string `hcl:"type"`
-					} `hcl:"noodle,block"`
+						Name string `xcl:"name,label"`
+						Type string `xcl:"type"`
+					} `xcl:"noodle,block"`
 				}).Noodle
 				return noodle.Name == "foo_foo" && noodle.Type == "rice"
 			},

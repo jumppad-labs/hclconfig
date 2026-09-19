@@ -3,8 +3,8 @@ package fixtures
 import "github.com/jumppad-labs/xcl/types"
 
 type Embedded struct {
-	types.ResourceBase `hcl:",remain"`
-	Name               string `json:"name" hcl:"name"`
+	types.ResourceBase `xcl:",remain"`
+	Name               string `json:"name" xcl:"name"`
 }
 
 var EmbeddedJson = `{
@@ -12,58 +12,58 @@ var EmbeddedJson = `{
   "properties": [
    {
     "type": "types.ResourceBase",
-    "tags": "hcl:\",remain\"",  
+    "tags": "xcl:\",remain\"",  
     "anonymous": true,
     "properties": [
      {
       "name": "DependsOn",
       "type": "[]string",
-      "tags": "hcl:\"depends_on,optional\" json:\"depends_on,omitempty\""
+      "tags": "xcl:\"depends_on,optional\" json:\"depends_on,omitempty\""
      },
      {
       "name": "Disabled",
       "type": "bool",
-      "tags": "hcl:\"disabled,optional\" json:\"disabled,omitempty\""
+      "tags": "xcl:\"disabled,optional\" json:\"disabled,omitempty\""
      },
      {
       "name": "Meta",
       "type": "types.Meta",
-      "tags": "hcl:\"meta,optional\" json:\"meta,omitempty\"",
+      "tags": "xcl:\"meta,optional\" json:\"meta,omitempty\"",
       "properties": [
        {
         "name": "ID",
         "type": "string",
-        "tags": "hcl:\"id,optional\" json:\"id\""
+        "tags": "xcl:\"id,optional\" json:\"id\""
        },
        {
         "name": "Name",
         "type": "string",
-        "tags": "hcl:\"name,optional\" json:\"name\""
+        "tags": "xcl:\"name,optional\" json:\"name\""
        },
        {
         "name": "Type",
         "type": "string",
-        "tags": "hcl:\"type,optional\" json:\"type\""
+        "tags": "xcl:\"type,optional\" json:\"type\""
        },
        {
         "name": "Module",
         "type": "string",
-        "tags": "hcl:\"module,optional\" json:\"module,omitempty\""
+        "tags": "xcl:\"module,optional\" json:\"module,omitempty\""
        },
        {
         "name": "File",
         "type": "string",
-        "tags": "hcl:\"file,optional\" json:\"file\""
+        "tags": "xcl:\"file,optional\" json:\"file\""
        },
        {
         "name": "Line",
         "type": "int",
-        "tags": "hcl:\"line,optional\" json:\"line\""
+        "tags": "xcl:\"line,optional\" json:\"line\""
        },
        {
         "name": "Column",
         "type": "int",
-        "tags": "hcl:\"column,optional\" json:\"column\""
+        "tags": "xcl:\"column,optional\" json:\"column\""
        },
        {
         "name": "Properties",
@@ -87,14 +87,14 @@ var EmbeddedJson = `{
    {
     "name": "Name",
     "type": "string",
-    "tags": "json:\"name\" hcl:\"name\""
+    "tags": "json:\"name\" xcl:\"name\""
    }
   ]
  }`
 
 type EmbeddedInEmbedded struct {
-	Embedded  `hcl:",remain"`
-	ChildName string `json:"child_name" hcl:"child_name"`
+	Embedded  `xcl:",remain"`
+	ChildName string `json:"child_name" xcl:"child_name"`
 }
 
 var EmbeddedInEmbeddedJson = `{
@@ -102,63 +102,63 @@ var EmbeddedInEmbeddedJson = `{
   "properties": [
    {
     "type": "fixtures.Embedded",
-    "tags": "hcl:\",remain\"",
+    "tags": "xcl:\",remain\"",
     "anonymous": true,
     "properties": [
      {
       "type": "types.ResourceBase",
-      "tags": "hcl:\",remain\"",
+      "tags": "xcl:\",remain\"",
       "anonymous": true,
       "properties": [
        {
         "name": "DependsOn",
         "type": "[]string",
-        "tags": "hcl:\"depends_on,optional\" json:\"depends_on,omitempty\""
+        "tags": "xcl:\"depends_on,optional\" json:\"depends_on,omitempty\""
        },
        {
         "name": "Disabled",
         "type": "bool",
-        "tags": "hcl:\"disabled,optional\" json:\"disabled,omitempty\""
+        "tags": "xcl:\"disabled,optional\" json:\"disabled,omitempty\""
        },
        {
         "name": "Meta",
         "type": "types.Meta",
-        "tags": "hcl:\"meta,optional\" json:\"meta,omitempty\"",
+        "tags": "xcl:\"meta,optional\" json:\"meta,omitempty\"",
         "properties": [
          {
           "name": "ID",
           "type": "string",
-          "tags": "hcl:\"id,optional\" json:\"id\""
+          "tags": "xcl:\"id,optional\" json:\"id\""
          },
          {
           "name": "Name",
           "type": "string",
-          "tags": "hcl:\"name,optional\" json:\"name\""
+          "tags": "xcl:\"name,optional\" json:\"name\""
          },
          {
           "name": "Type",
           "type": "string",
-          "tags": "hcl:\"type,optional\" json:\"type\""
+          "tags": "xcl:\"type,optional\" json:\"type\""
          },
          {
           "name": "Module",
           "type": "string",
-          "tags": "hcl:\"module,optional\" json:\"module,omitempty\""
+          "tags": "xcl:\"module,optional\" json:\"module,omitempty\""
          },
          {
           "name": "File",
           "type": "string",
-          "tags": "hcl:\"file,optional\" json:\"file\""
+          "tags": "xcl:\"file,optional\" json:\"file\""
          },
          {
           "name": "Line",
           "type": "int",
-          "tags": "hcl:\"line,optional\" json:\"line\""
+          "tags": "xcl:\"line,optional\" json:\"line\""
          },
          {
           "name": "Column",
           "type": "int",
-          "tags": "hcl:\"column,optional\" json:\"column\""
+          "tags": "xcl:\"column,optional\" json:\"column\""
          },
          {
           "name": "Properties",
@@ -182,14 +182,14 @@ var EmbeddedInEmbeddedJson = `{
      {
       "name": "Name",
       "type": "string",
-      "tags": "json:\"name\" hcl:\"name\""
+      "tags": "json:\"name\" xcl:\"name\""
      }
     ]
    },
    {
     "name": "ChildName",
     "type": "string",
-    "tags": "json:\"child_name\" hcl:\"child_name\""
+    "tags": "json:\"child_name\" xcl:\"child_name\""
    }
   ]
  }`

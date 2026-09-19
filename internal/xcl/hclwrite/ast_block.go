@@ -1,11 +1,12 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package hclwrite
 
 import (
 	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 type Block struct {

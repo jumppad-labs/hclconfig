@@ -9,7 +9,7 @@ import (
 	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 func TestGoStructToCtyValue(t *testing.T) {

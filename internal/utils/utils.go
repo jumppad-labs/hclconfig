@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/convert"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/convert"
 )
 
 // EnsureAbsolute ensure that the given path is either absolute or

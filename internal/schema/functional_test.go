@@ -8,36 +8,36 @@ import (
 	"github.com/jumppad-labs/xcl/internal/xcl/hclparse"
 	"github.com/jumppad-labs/xcl/internal/xcl/hclsyntax"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 type Network struct {
-	Name    string `hcl:"name"`
-	Enabled bool   `hcl:"enabled"`
+	Name    string `xcl:"name"`
+	Enabled bool   `xcl:"enabled"`
 }
 
 type Nested struct {
-	Name  string  `hcl:"name"`
-	Inner *Nested `hcl:"inner,block"`
+	Name  string  `xcl:"name"`
+	Inner *Nested `xcl:"inner,block"`
 }
 
 type MyEntity struct {
-	Foo      string            `hcl:"foo"`
-	Count    int               `hcl:"count"`
-	Float    float64           `hcl:"float"`
-	FooRef   *string           `hcl:"foo_ref"`
-	CountRef *int              `hcl:"count_ref"`
-	FloatRef *float64          `hcl:"float_ref"`
-	Map      map[string]string `hcl:"map"`
-	Slice    []string          `hcl:"slice"`
+	Foo      string            `xcl:"foo"`
+	Count    int               `xcl:"count"`
+	Float    float64           `xcl:"float"`
+	FooRef   *string           `xcl:"foo_ref"`
+	CountRef *int              `xcl:"count_ref"`
+	FloatRef *float64          `xcl:"float_ref"`
+	Map      map[string]string `xcl:"map"`
+	Slice    []string          `xcl:"slice"`
 
-	NetworkMap    map[string]Network `hcl:"network_map"`
-	Networks      []*Network         `hcl:"network,block"`
-	NetworkStruct Network            `hcl:"network_struct,block"`
-	NetworkRef    *Network           `hcl:"network_ref,block"`
+	NetworkMap    map[string]Network `xcl:"network_map"`
+	Networks      []*Network         `xcl:"network,block"`
+	NetworkStruct Network            `xcl:"network_struct,block"`
+	NetworkRef    *Network           `xcl:"network_ref,block"`
 
-	Nested1 *Nested `hcl:"nested_1,block"`
-	Nested2 *Nested `hcl:"nested_2,block"`
+	Nested1 *Nested `xcl:"nested_1,block"`
+	Nested2 *Nested `xcl:"nested_2,block"`
 }
 
 func TestEnd2EndTestConfigToStruct(t *testing.T) {

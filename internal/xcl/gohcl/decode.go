@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package gohcl
 
@@ -7,11 +8,11 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 
-	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty/convert"
-	"github.com/zclconf/go-cty/cty/gocty"
+	hcl "github.com/jumppad-labs/xcl/internal/xcl"
+	"github.com/jumppad-labs/xcl/internal/cty/gocty"
+	"github.com/jumppad-labs/xcl/internal/cty/convert"
 )
 
 // DecodeBody extracts the configuration within the given body into the given

@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 // Package gohcl allows decoding HCL configurations into Go data structures.
 //
@@ -10,7 +11,7 @@
 // A struct field tag scheme is used, similar to other decoding and
 // unmarshalling libraries. The tags are formatted as in the following example:
 //
-//    ThingType string `hcl:"thing_type,attr"`
+//    ThingType string `xcl:"thing_type,attr"`
 //
 // Within each tag there are two comma-separated tokens. The first is the
 // name of the corresponding construct in configuration, while the second

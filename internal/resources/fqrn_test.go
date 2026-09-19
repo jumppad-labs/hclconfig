@@ -11,7 +11,7 @@ var typeTestContainer = "container"
 
 type testContainer struct {
 	// embedded type holding name, etc
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 }
 
 func TestParseFQRNParsesComponents(t *testing.T) {

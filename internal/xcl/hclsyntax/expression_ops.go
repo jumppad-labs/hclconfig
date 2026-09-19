@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package hclsyntax
 
@@ -7,10 +8,10 @@ import (
 	"fmt"
 
 	"github.com/jumppad-labs/xcl/internal/xcl"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/convert"
-	"github.com/zclconf/go-cty/cty/function"
-	"github.com/zclconf/go-cty/cty/function/stdlib"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/convert"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty/function/stdlib"
 )
 
 type Operation struct {

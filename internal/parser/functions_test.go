@@ -8,7 +8,7 @@ import (
 	"github.com/jumppad-labs/xcl/internal/functions"
 	"github.com/jumppad-labs/xcl/internal/test_fixtures/plugin/structs"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
 )
 
 // constantNumberOptions returns parser options with a custom function

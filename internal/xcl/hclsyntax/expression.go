@@ -1,5 +1,6 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
+// Modifications Copyright (c) Jumppad Labs
 
 package hclsyntax
 
@@ -11,9 +12,9 @@ import (
 
 	"github.com/jumppad-labs/xcl/internal/xcl"
 	"github.com/jumppad-labs/xcl/internal/xcl/ext/customdecode"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/convert"
-	"github.com/zclconf/go-cty/cty/function"
+	"github.com/jumppad-labs/xcl/internal/cty"
+	"github.com/jumppad-labs/xcl/internal/cty/convert"
+	"github.com/jumppad-labs/xcl/internal/cty/function"
 )
 
 // Expression is the abstract type for nodes that behave as HCL expressions.

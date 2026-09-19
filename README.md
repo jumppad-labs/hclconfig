@@ -69,16 +69,16 @@ Resources to be parsed are defined as Go structs that implement the Resource int
 type Config struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	ID string `hcl:"id"`
+	ID string `xcl:"id"`
 
-	DBConnectionString string `hcl:"db_connection_string"`
+	DBConnectionString string `xcl:"db_connection_string"`
 
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
-	Timeouts *Timeouts `hcl:"timeouts,block"`
+	Timeouts *Timeouts `xcl:"timeouts,block"`
 }
 
 // Parse is called when the resource is read from the file
@@ -104,16 +104,16 @@ func (t *Config) Parse() error {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location"`
-	Port     int    `hcl:"port"`
-	DBName   string `hcl:"name"`
-	Username string `hcl:"username"`
-	Password string `hcl:"password"`
+	Location string `xcl:"location"`
+	Port     int    `xcl:"port"`
+	DBName   string `xcl:"name"`
+	Username string `xcl:"username"`
+	Password string `xcl:"password"`
 
 	// ConnectionString is a computed field and must be marked optional
-	ConnectionString string `hcl:"connection_string,optional"`
+	ConnectionString string `xcl:"connection_string,optional"`
 }
 
 // Process is called using an order calculated from the dependency graph
@@ -222,14 +222,14 @@ fmt.Println("db_connection_string", c.db_connection_string) // = postgresql://ad
 To create types that can be converted from HCL your top level resource needs to embed the
 following type into your structs.
 
-``types.ResourceBase `hcl:",remain"` ``
+``types.ResourceBase `xcl:",remain"` ``
 
-The struct tag `` `hcl:",remain"` ``, must be included with this type as it tells the HCL parser
+The struct tag `` `xcl:",remain"` ``, must be included with this type as it tells the HCL parser
 to unfold the default properties such as `disabled` and `depends_on` from your custom type.
 
 ### Basic Attributes
 
-If you add the field `` Location string `hcl:"location"` `` to your type this will mean that 
+If you add the field `` Location string `xcl:"location"` `` to your type this will mean that 
 the hcl attribute `location` will be parsed into this Field. This creates a required
 attribute for HCL, not providing the `location` attribute on the hcl representing 
 the `PostgresSQL` struct will result in a parser error.
@@ -238,9 +238,9 @@ the `PostgresSQL` struct will result in a parser error.
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location"`
+	Location string `xcl:"location"`
 }
 ```
 
@@ -252,9 +252,9 @@ the previous example has been modified to make `location` optional.
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location,optional"`
+	Location string `xcl:"location,optional"`
 }
 ```
 
@@ -268,21 +268,21 @@ To configure a block the `block` struct tag is used after the hcl attribute
 name.
 
 ```
-`hcl:"timeouts,block"`
+`xcl:"timeouts,block"`
 ```
 
 This can be seen in the following code sample.
 
 ```go
 type Config struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	DBConnectionString string `hcl:"db_connection_string"`
+	DBConnectionString string `xcl:"db_connection_string"`
 
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
-	Timeouts Timeouts `hcl:"timeouts,block"`
+	Timeouts Timeouts `xcl:"timeouts,block"`
 }
 ```
 
@@ -307,14 +307,14 @@ To make child blocks optional you simply need to change the Field type to a refe
 
 ```go
 type Config struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	DBConnectionString string `hcl:"db_connection_string"`
+	DBConnectionString string `xcl:"db_connection_string"`
 
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
-	Timeouts *Timeouts `hcl:"timeouts,block"`
+	Timeouts *Timeouts `xcl:"timeouts,block"`
 }
 ```
 
@@ -334,14 +334,14 @@ slice.
 
 ```go
 type Config struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	DBConnectionString string `hcl:"db_connection_string"`
+	DBConnectionString string `xcl:"db_connection_string"`
 
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
-	Timeouts []Timeouts `hcl:"timeouts,block"`
+	Timeouts []Timeouts `xcl:"timeouts,block"`
 }
 ```
 
@@ -373,27 +373,27 @@ resource.
 
 ```go
 type Config struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
   // Other structs can be referenced by defining the type
   // to the other struct, the referenced type must implemented types.ResourceBase
-	MainDBConnection PostgreSQL `hcl:"main_db_connection"`
+	MainDBConnection PostgreSQL `xcl:"main_db_connection"`
   
   // It is also possible to reference arrays of structs 
-	OtherDBConnections []PostgreSQL `hcl:"other_db_connections"`
+	OtherDBConnections []PostgreSQL `xcl:"other_db_connections"`
 
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
-	Timeouts []Timeouts `hcl:"timeouts,block"`
+	Timeouts []Timeouts `xcl:"timeouts,block"`
 }
 
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location,optional"`
+	Location string `xcl:"location,optional"`
 }
 ```
 
@@ -452,29 +452,29 @@ and then embed this struct into the `postgres` and `mysql` structs.
 
 To enable this you define a common type that embed the `ResourceBase` type and
 then you can embed this type into the `postgres` and `mysql` types.
-Note: you must use the `hcl:",remain"` tag to ensure that the fields from the shared
+Note: you must use the `xcl:",remain"` tag to ensure that the fields from the shared
 type.
 
 ```go
 type DB struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location,optional"`
-	Port     int    `hcl:"port,optional"`
+	Location string `xcl:"location,optional"`
+	Port     int    `xcl:"port,optional"`
 }
 
 type PostgreSQL struct {
-  DB `hcl:",remain"`
+  DB `xcl:",remain"`
 
-  MaxLocks int `hcl:"max_locks"`
+  MaxLocks int `xcl:"max_locks"`
 }
 
 type MySQL struct {
-  DB `hcl:",remain"`
+  DB `xcl:",remain"`
 
-  CacheSize int `hcl:"cache_size"`
+  CacheSize int `xcl:"cache_size"`
 }
 ```
 
@@ -938,16 +938,16 @@ to compute the value of the attribute `connection_string`.
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location"`
-	Port     int    `hcl:"port"`
-	DBName   string `hcl:"name"`
-	Username string `hcl:"username"`
-	Password string `hcl:"password"`
+	Location string `xcl:"location"`
+	Port     int    `xcl:"port"`
+	DBName   string `xcl:"name"`
+	Username string `xcl:"username"`
+	Password string `xcl:"password"`
 
 	// ConnectionString is a computed field and must be marked optional
-	ConnectionString string `hcl:"connection_string,optional"`
+	ConnectionString string `xcl:"connection_string,optional"`
 }
 
 // Process is called using an order calculated from the dependency graph
@@ -967,16 +967,16 @@ For example, given the following custom resources
 type Config struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	ID string `hcl:"id"`
+	ID string `xcl:"id"`
 
-	DBConnectionString string `hcl:"db_connection_string"`
+	DBConnectionString string `xcl:"db_connection_string"`
 
 	// Fields that are of `struct` type must be marked using the `block`
 	// parameter in the tags. To make a `block` Field, types marked as block must be
 	// a reference i.e. *Timeouts
-	Timeouts *Timeouts `hcl:"timeouts,block"`
+	Timeouts *Timeouts `xcl:"timeouts,block"`
 }
 
 func (t *Config) Process() error {
@@ -992,16 +992,16 @@ func (t *Config) Process() error {
 type PostgreSQL struct {
 	// For a resource to be parsed by HCLConfig it needs to embed the ResourceInfo type and
 	// add the methods from the `Resource` interface
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Location string `hcl:"location"`
-	Port     int    `hcl:"port"`
-	DBName   string `hcl:"name"`
-	Username string `hcl:"username"`
-	Password string `hcl:"password"`
+	Location string `xcl:"location"`
+	Port     int    `xcl:"port"`
+	DBName   string `xcl:"name"`
+	Username string `xcl:"username"`
+	Password string `xcl:"password"`
 
 	// ConnectionString is a computed field and must be marked optional
-	ConnectionString string `hcl:"connection_string,optional"`
+	ConnectionString string `xcl:"connection_string,optional"`
 }
 
 // Process is called using an order calculated from the dependency graph

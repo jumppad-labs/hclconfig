@@ -12,10 +12,10 @@ import (
 // testResource is a resource shaped like a real provider resource, it embeds
 // types.ResourceBase with the remain tag and has a couple of plain fields.
 type testResource struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 
-	Name  string `hcl:"name" json:"name"`
-	Count int    `hcl:"count,optional" json:"count,omitempty"`
+	Name  string `xcl:"name" json:"name"`
+	Count int    `xcl:"count,optional" json:"count,omitempty"`
 }
 
 // providerWithDefaultChanged embeds DefaultChanged and does not define its own

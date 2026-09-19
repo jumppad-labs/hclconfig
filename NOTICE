@@ -18,3 +18,30 @@ These files are licensed under the Mozilla Public License, version 2.0, and
 remain under that license, including any modifications made to them. See
 internal/xcl/LICENSE for the full license text and internal/xcl/UPSTREAM.md
 for details of the origin and the modifications made.
+
+-------------------------------------------------------------------------------
+go-cty and go-cty-debug
+-------------------------------------------------------------------------------
+
+The directory internal/cty contains a copy of go-cty v1.15.0
+(https://github.com/zclconf/go-cty), with modifications to internal/cty/gocty,
+and internal/cty/ctydebug contains a copy of go-cty-debug
+(https://github.com/zclconf/go-cty-debug).
+
+Copyright (c) 2017-2018 Martin Atkins (go-cty)
+Copyright (c) 2019 Martin Atkins (go-cty-debug)
+
+These files are licensed under the MIT License. See internal/cty/LICENSE and
+internal/cty/ctydebug/LICENSE for the full license text and
+internal/cty/UPSTREAM.md for details of the origin and the modifications made.
+
+-------------------------------------------------------------------------------
+dag
+-------------------------------------------------------------------------------
+
+The directory internal/dag contains an unmodified copy of silas/dag
+(https://github.com/silas/dag), which is derived from HashiCorp Terraform.
+
+These files are licensed under the Mozilla Public License, version 2.0. See
+internal/dag/LICENSE for the full license text and internal/dag/UPSTREAM.md
+for details of the origin.

@@ -16,7 +16,7 @@ import (
 	"github.com/jumppad-labs/xcl/plugins"
 	"github.com/jumppad-labs/xcl/plugins/mocks"
 	"github.com/stretchr/testify/require"
-	"github.com/zclconf/go-cty/cty"
+	"github.com/jumppad-labs/xcl/internal/cty"
 )
 
 // TestPluginHost provides a convenient interface for testing plugins

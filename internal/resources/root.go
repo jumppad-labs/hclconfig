@@ -8,5 +8,5 @@ const TypeRoot = "root"
 // Module allows Shipyard configuration to be imported from external folder or
 // GitHub repositories
 type Root struct {
-	types.ResourceBase `hcl:",remain"`
+	types.ResourceBase `xcl:",remain"`
 }
