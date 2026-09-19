@@ -41,6 +41,17 @@ func findResource[T any](t *testing.T, s *state.State, path string) *T {
 	return result
 }
 
+// testOptions returns DefaultOptions with a test logger and the module cache
+// in the test's temp directory, so that tests never write to the working copy
+// or the users home folder
+func testOptions(t *testing.T) *ParserOptions {
+	o := DefaultOptions()
+	o.Logger = logger.NewTestLogger(t)
+	o.ModuleCache = filepath.Join(t.TempDir(), ConfigDirectory, "cache")
+
+	return o
+}
+
 func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin) {
 	home := os.Getenv("HOME")
 	os.Setenv("HOME", t.TempDir())
@@ -59,7 +70,7 @@ func setupParser(t *testing.T, options ...*ParserOptions) (*Parser, *TestPlugin)
 		ms.On("Load").Return(nil, nil)
 		ms.On("Save", mock.Anything).Return(nil)
 
-		o = DefaultOptions()
+		o = testOptions(t)
 		o.StateStore = ms
 	}
 
@@ -212,7 +223,7 @@ func TestLoadsVariableFilesInOptionsOverridingVariableDefaults(t *testing.T) {
 	ms.On("Save", mock.Anything).Return(nil)
 	ms.On("Exists").Return(false)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.VariablesFiles = []string{filepath.Join(absoluteFolderPath, "vars", "override.vars")}
 
@@ -705,7 +716,7 @@ func TestParserProcessesResourcesInCorrectOrder(t *testing.T) {
 	resolver := mocks.NewMockProviderResolver(t)
 	resolver.EXPECT().GetProviderForResource(mock.Anything).Return(adapter)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.ProviderResolver = resolver
 
@@ -1001,7 +1012,7 @@ func TestParserEventCallback(t *testing.T) {
 	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	// Setup parser with event callback
-	options := DefaultOptions()
+	options := testOptions(t)
 	options.Logger = logger.NewTestLogger(t)
 	options.OnParserEvent = func(event ParserEvent) {
 		eventsMu.Lock()
@@ -1070,7 +1081,7 @@ func TestParserCreateEventErrorCallback(t *testing.T) {
 	var events []ParserEvent
 	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
-	options := DefaultOptions()
+	options := testOptions(t)
 	options.OnParserEvent = func(event ParserEvent) {
 		eventsMu.Lock()
 		defer eventsMu.Unlock()
@@ -1104,7 +1115,7 @@ func TestParserReadEventErrorCallback(t *testing.T) {
 	firstStore := &statemocks.MockStateStore{}
 	firstStore.On("Exists").Return(false)
 
-	firstOptions := DefaultOptions()
+	firstOptions := testOptions(t)
 	firstOptions.StateStore = firstStore
 
 	firstParser, _ := setupParser(t, firstOptions)
@@ -1119,7 +1130,7 @@ func TestParserReadEventErrorCallback(t *testing.T) {
 	secondStore.On("Exists").Return(true)
 	secondStore.On("Load").Return(previousState, nil)
 
-	secondOptions := DefaultOptions()
+	secondOptions := testOptions(t)
 	secondOptions.StateStore = secondStore
 	secondOptions.OnParserEvent = func(event ParserEvent) {
 		eventsMu.Lock()
@@ -1154,7 +1165,7 @@ func TestParserEventForVariablesOutputsLocals(t *testing.T) {
 	var eventsMu sync.Mutex // the walker fires events from parallel goroutines
 
 	// Setup parser with event callback
-	options := DefaultOptions()
+	options := testOptions(t)
 	options.Logger = logger.NewTestLogger(t)
 	options.OnParserEvent = func(event ParserEvent) {
 		eventsMu.Lock()
@@ -1270,7 +1281,7 @@ func TestDestroyWithNoState(t *testing.T) {
 	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, nil)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 
@@ -1291,7 +1302,7 @@ func TestDestroyWithEmptyState(t *testing.T) {
 	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(existingState, nil)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 
@@ -1342,7 +1353,7 @@ func TestDestroyWithResources(t *testing.T) {
 	ms.On("Load").Return(existingState, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 
@@ -1387,7 +1398,7 @@ func TestDestroyWithFailedDestroy(t *testing.T) {
 	ms.On("Load").Return(existingState, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 
@@ -1415,7 +1426,7 @@ func TestDestroyWithInvalidStateType(t *testing.T) {
 	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(invalidState, nil)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 
@@ -1432,7 +1443,7 @@ func TestDestroyWithStateLoadError(t *testing.T) {
 	ms := &statemocks.MockStateStore{}
 	ms.On("Load").Return(nil, fmt.Errorf("failed to load state"))
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.Logger = logger.NewTestLogger(t)
 

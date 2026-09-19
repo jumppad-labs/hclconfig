@@ -17,7 +17,7 @@ func constantNumberOptions(t *testing.T) *ParserOptions {
 	constantNumber, err := functions.CreateCtyFunctionFromGoFunc(func() (int, error) { return 42, nil })
 	require.NoError(t, err)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.CustomFunctions = map[string]function.Function{
 		"constant_number": constantNumber,
 	}

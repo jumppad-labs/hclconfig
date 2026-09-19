@@ -94,7 +94,7 @@ func setupLifecycle(t *testing.T) *lifecycleHarness {
 func (h *lifecycleHarness) newParser(t *testing.T, onEvent func(ParserEvent)) *Parser {
 	t.Helper()
 
-	options := DefaultOptions()
+	options := testOptions(t)
 	options.Logger = logger.NewTestLogger(t)
 	if h.log != nil {
 		options.Logger = h.log

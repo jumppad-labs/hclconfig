@@ -60,6 +60,7 @@ func applyPeople(t *testing.T, reg *registry.PluginRegistry, store *state.FileSt
 
 	options := parser.DefaultOptions()
 	options.Logger = logger.NewTestLogger(t)
+	options.ModuleCache = filepath.Join(t.TempDir(), parser.ConfigDirectory, "cache")
 	options.PluginRegistry = reg
 	options.StateStore = store
 	options.OnParserEvent = collector.collect

@@ -14,7 +14,7 @@ import (
 // TestPluginRegistration tests that we can register and use plugins
 func TestPluginRegistration(t *testing.T) {
 	// Create a new parser with TestLogger and PluginRegistry
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.Logger = logger.NewTestLogger(t)
 	o.PluginRegistry = registry.NewPluginRegistry(o.Logger)
 
@@ -42,7 +42,7 @@ func TestPluginRegistration(t *testing.T) {
 
 // TestPluginResourceCreationWithFallback tests plugin creation with fallback to registered types
 func TestPluginResourceCreationWithFallback(t *testing.T) {
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.Logger = logger.NewTestLogger(t)
 	parser := NewParser(o)
 

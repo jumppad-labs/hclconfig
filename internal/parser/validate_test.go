@@ -687,7 +687,7 @@ func TestValidateRejectsNonOptionalComputedField(t *testing.T) {
 	ms.On("Load").Return(nil, nil)
 	ms.On("Save", mock.Anything).Return(nil)
 
-	o := DefaultOptions()
+	o := testOptions(t)
 	o.StateStore = ms
 	o.PluginRegistry = registry.NewPluginRegistry(logger.NewTestLogger(t))
 

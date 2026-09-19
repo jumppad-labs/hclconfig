@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	os.RemoveAll(".xcl")
+	os.RemoveAll(".xclconfig")
 
 	fmt.Println("## XCL Config Example")
 	fmt.Print("## Parsing config.hcl...\n\n")

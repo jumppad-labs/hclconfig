@@ -90,8 +90,12 @@ type ParserOptions struct {
 	CustomFunctions map[string]function.Function
 }
 
+// ConfigDirectory is the name of the directory, created in the users home
+// folder, that holds XCL's configuration and caches
+const ConfigDirectory = ".xclconfig"
+
 // DefaultOptions returns a ParserOptions object with the
-// ModuleCache set to the default directory of $HOME/.xcl/cache
+// ModuleCache set to the default directory of $HOME/.xclconfig/cache
 // if the $HOME folder can not be determined, the cache is set to the
 // current folder
 // VariableEnvPrefix is set to 'HCL_VAR_', should a variable be defined
@@ -100,20 +104,12 @@ type ParserOptions struct {
 // PluginRegistry is set to a registry containing only the builtin resource
 // types, add plugins to it or replace it to use custom resource types
 func DefaultOptions() *ParserOptions {
-	cacheDir, err := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		cacheDir = "."
-	}
-
-	os.MkdirAll(cacheDir, os.ModePerm)
-
-	// Default plugin directories
-	homeDir, _ := os.UserHomeDir()
-	if homeDir == "" {
 		homeDir = "."
 	}
 
-	cacheDir = filepath.Join(homeDir, ".xcl", "cache")
+	cacheDir := filepath.Join(homeDir, ConfigDirectory, "cache")
 
 	logger := logger.NewStdOutLogger()
 
