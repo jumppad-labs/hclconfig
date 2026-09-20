@@ -1,0 +1,118 @@
+# The configuration only example: a small Kubernetes-like deployment, parsed
+# into the Go types in ../resources. Nothing here is applied to a cluster, the
+# blocks are decoded into Go structs and the references between them are
+# resolved.
+#
+# Variables can be overridden with environment variables prefixed HCL_VAR_,
+# i.e. HCL_VAR_image_tag.
+variable "image_tag" {
+  default = "1.2.0"
+}
+
+variable "replicas" {
+  default = 3
+}
+
+# config_map holds values whose names are not known to the Go type, its data
+# is a map. The deployment reads single values out of it below.
+resource "config_map" "api" {
+  data = {
+    db_host   = "postgres.default.svc"
+    log_level = "info"
+  }
+}
+
+resource "deployment" "api" {
+  replicas = variable.replicas
+
+  # container is a repeated block, this deployment has two of them
+  container {
+    name  = "api"
+    image = "ghcr.io/example/api:${variable.image_tag}"
+
+    # port is repeated in turn, a block nested inside a block
+    port {
+      name           = "http"
+      container_port = 8080
+    }
+
+    port {
+      name           = "metrics"
+      container_port = 9090
+    }
+
+    # env values are read from the config map, so they are declared once
+    env {
+      name  = "DB_HOST"
+      value = resource.config_map.api.data.db_host
+    }
+
+    env {
+      name  = "LOG_LEVEL"
+      value = resource.config_map.api.data.log_level
+    }
+
+    # resources nests two more blocks of its own
+    resources {
+      limits {
+        cpu    = "500m"
+        memory = "512Mi"
+      }
+
+      requests {
+        cpu    = "100m"
+        memory = "128Mi"
+      }
+    }
+
+    volume_mount {
+      name = "config"
+      path = "/etc/api"
+    }
+  }
+
+  container {
+    name  = "proxy"
+    image = "ghcr.io/example/proxy:0.4.1"
+
+    port {
+      name           = "proxy"
+      container_port = 8081
+    }
+  }
+
+  volume {
+    name       = "config"
+    config_map = resource.config_map.api.meta.id
+  }
+}
+
+# The service is linked to the deployment by its id. Kubernetes would match
+# the two with a label selector, because a manifest can not point at another
+# object; here the reference does it directly.
+#
+# The port it sends traffic to is read out of the deployment as well. A
+# repeated block is referenced by position, container[0] is the first
+# container block.
+resource "service" "api" {
+  deployment  = resource.deployment.api.meta.id
+  port        = 80
+  target_port = resource.deployment.api.container[0].port[0].container_port
+}
+
+# The ingress is linked to the service the same way, by id and port.
+# References order the blocks too, so the service is always parsed before the
+# ingress that reads it.
+resource "ingress" "api" {
+  host = "api.example.com"
+
+  rule {
+    path    = "/"
+    service = resource.service.api.meta.id
+    port    = resource.service.api.port
+  }
+}
+
+output "api_url" {
+  value = "https://${resource.ingress.api.host}"
+}

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jumppad-labs/xcl/example/resources"
+	"github.com/jumppad-labs/xcl/example/configonly/resources"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/state"
@@ -20,22 +20,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// configDir is the shared example configuration
-const configDir = "../config"
+// configDir is the configuration this example parses
+const configDir = "./config"
 
-// declaredResourceIDs is every resource the shared example configuration
-// declares, sorted
+// declaredResourceIDs is every resource the configuration declares, sorted
 var declaredResourceIDs = []string{
-	"module.analytics",
-	"module.analytics.output.location",
-	"module.analytics.resource.postgres.analytics",
-	"module.analytics.variable.db_username",
-	"output.web_database",
-	"resource.app.web",
-	"resource.postgres.main",
-	"resource.postgres.replica",
-	"variable.db_password",
-	"variable.db_username",
+	"output.api_url",
+	"resource.config_map.api",
+	"resource.deployment.api",
+	"resource.ingress.api",
+	"resource.service.api",
+	"variable.image_tag",
+	"variable.replicas",
 }
 
 func resourceIDs(t *testing.T, found []any) []string {
@@ -69,6 +65,20 @@ func findResource(t *testing.T, found []any, id string) any {
 	return nil
 }
 
+// deployment runs the example and returns the parsed deployment, the
+// resource most of these tests are about
+func deployment(t *testing.T) *resources.Deployment {
+	t.Helper()
+
+	found, err := run(&bytes.Buffer{}, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	d, ok := findResource(t, found, "resource.deployment.api").(*resources.Deployment)
+	require.True(t, ok)
+
+	return d
+}
+
 func TestConfigOnlyExampleFindsDeclaredResources(t *testing.T) {
 	out := &bytes.Buffer{}
 
@@ -78,26 +88,128 @@ func TestConfigOnlyExampleFindsDeclaredResources(t *testing.T) {
 	require.Equal(t, declaredResourceIDs, resourceIDs(t, found))
 }
 
+// TestConfigOnlyExampleReturnsRegisteredGoTypes asserts each block is decoded
+// into the Go type that was registered for it, a registered type is held as
+// itself rather than a type generated from a schema
 func TestConfigOnlyExampleReturnsRegisteredGoTypes(t *testing.T) {
-	out := &bytes.Buffer{}
-
-	found, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
+	found, err := run(&bytes.Buffer{}, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	db, ok := findResource(t, found, "resource.postgres.main").(*resources.PostgreSQL)
+	_, ok := findResource(t, found, "resource.config_map.api").(*resources.ConfigMap)
 	require.True(t, ok)
-	require.Equal(t, "localhost", db.Location)
-	require.Equal(t, 5432, db.Port)
-	require.Equal(t, "admin", db.Username)
-	require.NotNil(t, db.Timeouts)
-	require.Equal(t, 10, db.Timeouts.Connection)
-	require.Equal(t, 60, db.Timeouts.KeepAlive)
 
-	app, ok := findResource(t, found, "resource.app.web").(*resources.App)
+	_, ok = findResource(t, found, "resource.deployment.api").(*resources.Deployment)
 	require.True(t, ok)
-	require.Equal(t, "localhost", app.DatabaseLocation)
-	require.Equal(t, "admin", app.DatabaseUser)
-	require.Equal(t, "analytics.localhost", app.AnalyticsLocation)
+
+	_, ok = findResource(t, found, "resource.service.api").(*resources.Service)
+	require.True(t, ok)
+
+	_, ok = findResource(t, found, "resource.ingress.api").(*resources.Ingress)
+	require.True(t, ok)
+}
+
+// TestConfigOnlyExampleDecodesRepeatedBlocks asserts a block that appears
+// more than once is decoded into a slice, in the order it was written
+func TestConfigOnlyExampleDecodesRepeatedBlocks(t *testing.T) {
+	d := deployment(t)
+
+	require.Len(t, d.Containers, 2)
+	require.Equal(t, "api", d.Containers[0].Name)
+	require.Equal(t, "proxy", d.Containers[1].Name)
+
+	require.Len(t, d.Containers[0].Ports, 2)
+	require.Equal(t, "http", d.Containers[0].Ports[0].Name)
+	require.Equal(t, 8080, d.Containers[0].Ports[0].ContainerPort)
+	require.Equal(t, "metrics", d.Containers[0].Ports[1].Name)
+	require.Equal(t, 9090, d.Containers[0].Ports[1].ContainerPort)
+
+	require.Len(t, d.Containers[1].Ports, 1)
+	require.Equal(t, 8081, d.Containers[1].Ports[0].ContainerPort)
+}
+
+// TestConfigOnlyExampleDecodesNestedBlocks asserts blocks nested inside a
+// nested block are decoded, resources holds limits and requests
+func TestConfigOnlyExampleDecodesNestedBlocks(t *testing.T) {
+	d := deployment(t)
+
+	api := d.Containers[0]
+	require.NotNil(t, api.Resources)
+	require.Equal(t, "500m", api.Resources.Limits.CPU)
+	require.Equal(t, "512Mi", api.Resources.Limits.Memory)
+	require.Equal(t, "100m", api.Resources.Requests.CPU)
+	require.Equal(t, "128Mi", api.Resources.Requests.Memory)
+
+	require.Len(t, api.VolumeMounts, 1)
+	require.Equal(t, "config", api.VolumeMounts[0].Name)
+	require.Equal(t, "/etc/api", api.VolumeMounts[0].Path)
+
+	require.Len(t, d.Volumes, 1)
+	require.Equal(t, "config", d.Volumes[0].Name)
+}
+
+// TestConfigOnlyExampleLeavesOmittedBlockNil asserts a block the
+// configuration leaves out is nil, the proxy container sets no resources
+func TestConfigOnlyExampleLeavesOmittedBlockNil(t *testing.T) {
+	d := deployment(t)
+
+	require.Nil(t, d.Containers[1].Resources)
+	require.Empty(t, d.Containers[1].Env)
+	require.Empty(t, d.Containers[1].VolumeMounts)
+}
+
+// TestConfigOnlyExampleReadsValuesFromConfigMap asserts values read out of a
+// map attribute of another resource are resolved
+func TestConfigOnlyExampleReadsValuesFromConfigMap(t *testing.T) {
+	d := deployment(t)
+
+	env := d.Containers[0].Env
+	require.Len(t, env, 2)
+	require.Equal(t, "DB_HOST", env[0].Name)
+	require.Equal(t, "postgres.default.svc", env[0].Value)
+	require.Equal(t, "LOG_LEVEL", env[1].Name)
+	require.Equal(t, "info", env[1].Value)
+
+	require.Equal(t, "resource.config_map.api", d.Volumes[0].ConfigMap)
+}
+
+// TestConfigOnlyExampleReadsVariables asserts a variable is read both as a
+// value of its own and inside an interpolated string
+func TestConfigOnlyExampleReadsVariables(t *testing.T) {
+	d := deployment(t)
+
+	require.Equal(t, 3, d.Replicas)
+	require.Equal(t, "ghcr.io/example/api:1.2.0", d.Containers[0].Image)
+}
+
+// TestConfigOnlyExampleLinksServiceToDeployment asserts the service names the
+// deployment by id and reads its target port out of it, the port coming from
+// a repeated block referenced by position
+func TestConfigOnlyExampleLinksServiceToDeployment(t *testing.T) {
+	found, err := run(&bytes.Buffer{}, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	service, ok := findResource(t, found, "resource.service.api").(*resources.Service)
+	require.True(t, ok)
+
+	require.Equal(t, "resource.deployment.api", service.Deployment)
+	require.Equal(t, 80, service.Port)
+	require.Equal(t, 8080, service.TargetPort)
+}
+
+// TestConfigOnlyExampleLinksIngressToService asserts the ingress rule names
+// the service it routes to by id, and reads its port
+func TestConfigOnlyExampleLinksIngressToService(t *testing.T) {
+	found, err := run(&bytes.Buffer{}, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	ingress, ok := findResource(t, found, "resource.ingress.api").(*resources.Ingress)
+	require.True(t, ok)
+
+	require.Equal(t, "api.example.com", ingress.Host)
+	require.Len(t, ingress.Rules, 1)
+	require.Equal(t, "/", ingress.Rules[0].Path)
+	require.Equal(t, "resource.service.api", ingress.Rules[0].Service)
+	require.Equal(t, 80, ingress.Rules[0].Port)
 }
 
 func TestConfigOnlyExamplePrintsEveryResource(t *testing.T) {
@@ -111,33 +223,39 @@ func TestConfigOnlyExamplePrintsEveryResource(t *testing.T) {
 	}
 }
 
-func TestConfigOnlyExamplePrintsQueryResult(t *testing.T) {
+// TestConfigOnlyExamplePrintsNestedBlocks asserts the printed deployment
+// walks the blocks nested inside it
+func TestConfigOnlyExamplePrintsNestedBlocks(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	_, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	require.Contains(t, out.String(), "## Databases\n")
-	require.Contains(t, out.String(), `resource.postgres.main location=localhost port=5432 connection_string=""`)
-	require.Contains(t, out.String(), `resource.postgres.replica location=replica.localhost port=5433 connection_string=""`)
-	require.Contains(t, out.String(), `module.analytics.resource.postgres.analytics location=analytics.localhost port=5432 connection_string=""`)
-	require.Contains(t, out.String(), "## App\n")
-	require.Contains(t, out.String(), "resource.app.web database_location=localhost database_user=admin analytics_location=analytics.localhost")
+	require.Contains(t, out.String(), "## Deployments\n")
+	require.Contains(t, out.String(), "  resource.deployment.api replicas=3\n")
+	require.Contains(t, out.String(), "    container api image=ghcr.io/example/api:1.2.0\n")
+	require.Contains(t, out.String(), "      port http container_port=8080\n")
+	require.Contains(t, out.String(), "      env DB_HOST=postgres.default.svc\n")
+	require.Contains(t, out.String(), "      limits cpu=500m memory=512Mi\n")
+	require.Contains(t, out.String(), "      requests cpu=100m memory=128Mi\n")
+	require.Contains(t, out.String(), "      volume_mount config path=/etc/api\n")
+	require.Contains(t, out.String(), "    volume config config_map=resource.config_map.api\n")
+	require.Contains(t, out.String(), "    container proxy image=ghcr.io/example/proxy:0.4.1\n")
 }
 
-func TestConfigOnlyExampleLeavesConnectionStringEmpty(t *testing.T) {
+// TestConfigOnlyExamplePrintsLinkedResources asserts the printed service and
+// ingress hold the values they read from the blocks they reference
+func TestConfigOnlyExamplePrintsLinkedResources(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	found, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
+	_, err := run(out, logger.NewTestLogger(t), configDir, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	db, ok := findResource(t, found, "resource.postgres.main").(*resources.PostgreSQL)
-	require.True(t, ok)
-	require.Empty(t, db.ConnectionString)
-
-	app, ok := findResource(t, found, "resource.app.web").(*resources.App)
-	require.True(t, ok)
-	require.Empty(t, app.ConnectionString)
+	require.Contains(t, out.String(), "## Service\n")
+	require.Contains(t, out.String(), "  resource.service.api deployment=resource.deployment.api port=80 target_port=8080\n")
+	require.Contains(t, out.String(), "## Ingress\n")
+	require.Contains(t, out.String(), "  resource.ingress.api host=api.example.com\n")
+	require.Contains(t, out.String(), "    rule path=/ service=resource.service.api port=80\n")
 }
 
 func TestConfigOnlyExampleFailsForMissingConfig(t *testing.T) {
@@ -232,16 +350,13 @@ func TestConfigOnlyExampleLogsParseEventWithFileAtDebug(t *testing.T) {
 	}
 
 	require.Equal(t, map[string]string{
-		"variable.db_username":                         "main.xcl",
-		"variable.db_password":                         "main.xcl",
-		"resource.postgres.main":                       "main.xcl",
-		"resource.postgres.replica":                    "main.xcl",
-		"module.analytics":                             "main.xcl",
-		"resource.app.web":                             "main.xcl",
-		"output.web_database":                          "main.xcl",
-		"module.analytics.variable.db_username":        "db.xcl",
-		"module.analytics.resource.postgres.analytics": "db.xcl",
-		"module.analytics.output.location":             "db.xcl",
+		"variable.image_tag":      "main.xcl",
+		"variable.replicas":       "main.xcl",
+		"resource.config_map.api": "main.xcl",
+		"resource.deployment.api": "main.xcl",
+		"resource.service.api":    "main.xcl",
+		"resource.ingress.api":    "main.xcl",
+		"output.api_url":          "main.xcl",
 	}, files)
 }
 
@@ -305,8 +420,10 @@ func TestConfigOnlyExampleDestroysEverythingItApplied(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := registry.NewPluginRegistry(logger.NewTestLogger(t))
-	require.NoError(t, reg.RegisterType("postgres", &resources.PostgreSQL{}))
-	require.NoError(t, reg.RegisterType("app", &resources.App{}))
+	require.NoError(t, reg.RegisterType("config_map", &resources.ConfigMap{}))
+	require.NoError(t, reg.RegisterType("deployment", &resources.Deployment{}))
+	require.NoError(t, reg.RegisterType("service", &resources.Service{}))
+	require.NoError(t, reg.RegisterType("ingress", &resources.Ingress{}))
 
 	store, err := state.NewFileStateStore(statePath, reg)
 	require.NoError(t, err)

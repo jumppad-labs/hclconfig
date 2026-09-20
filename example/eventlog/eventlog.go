@@ -1,6 +1,6 @@
 // Package eventlog logs the events xcl fires while it parses and applies a
 // configuration. The configonly and plugin examples share it, so both log
-// their events the same way.
+// their events the same way, and it is the only code they have in common.
 package eventlog
 
 import (

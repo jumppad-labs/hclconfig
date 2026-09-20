@@ -62,32 +62,96 @@ node in graph.
 
 ## Example
 
-The [`example`](./example) directory holds one configuration,
-[`example/config`](./example/config), and one set of Go types,
-[`example/resources`](./example/resources), used by two small programs:
+The [`example`](./example) directory holds two self-contained programs, each
+with its own configuration and Go types.
 
-- [`example/configonly`](./example/configonly) uses XCL for configuration
-  only. The block types are plain Go types registered on the plugin registry,
-  with no plugin and no provider.
-- [`example/plugin`](./example/plugin) applies the same configuration through
-  two plugins. `ExamplePlugin` (`internal/`) is an in-process plugin that
-  provides `postgres` and fills in the computed `connection_string` that the
-  configuration only example leaves empty. `external` (`external/`) is an
-  external plugin, compiled to its own binary and called over gRPC, that
-  provides `app`. Their providers log from each lifecycle method, and the
-  example logs every event with `xcl.WithEventHandler`. Everything a
-  plugin logs is tagged by xcl with the plugin, and with the provider for
-  provider logs, i.e.
-  `DEBU event=create plugin=ExamplePlugin provider=postgres resource=resource.postgres.main`.
-  Every line leads with its event, `event=log` when a message has none.
-  Everything in the example logs at debug except a failure, which logs at
-  error.
+### Configuration only
+
+[`example/configonly`](./example/configonly) uses XCL for what it is most
+often needed for: parsing a configuration into Go objects. The block types
+([`configonly/resources`](./example/configonly/resources)) are plain Go types
+registered on the plugin registry, with no plugin and no provider.
+
+Its configuration ([`configonly/config`](./example/configonly/config)) is a
+small Kubernetes-like deployment, chosen because that shape needs everything
+a configuration language is asked for:
+
+- **blocks nested inside blocks** — `resources` inside `container`, holding
+  `limits` and `requests` of its own
+- **repeated blocks** — two `container` blocks, each with its own `port` and
+  `env` blocks, decoded into a Go slice; a block that appears at most once is
+  a pointer, and is `nil` when it is left out
+- **links between resources** — the `service` names the `deployment` by id
+  and reads its target port out of it
+  (`resource.deployment.api.container[0].port[0].container_port`), the
+  `ingress` names the `service` the same way, and the container's environment
+  is read out of a `config_map`'s map attribute
+  (`resource.config_map.api.data.db_host`). Kubernetes matches a service to
+  its pods with a label selector because a manifest can not point at another
+  object; a reference does it directly.
+
+```hcl
+resource "deployment" "api" {
+  replicas = variable.replicas
+
+  container {
+    name  = "api"
+    image = "ghcr.io/example/api:${variable.image_tag}"
+
+    port {
+      name           = "http"
+      container_port = 8080
+    }
+
+    env {
+      name  = "DB_HOST"
+      value = resource.config_map.api.data.db_host
+    }
+
+    resources {
+      limits {
+        cpu    = "500m"
+        memory = "512Mi"
+      }
+    }
+  }
+}
+```
+
+### Plugins
+
+[`example/plugin`](./example/plugin) applies its configuration
+([`plugin/config`](./example/plugin/config)) through two plugins, each
+providing two block types with a provider of its own. `ExamplePlugin`
+(`internal/`) is an in-process plugin that provides `postgres` and `redis`,
+filling in a computed `connection_string` on both. `external` (`external/`)
+is an external plugin, compiled to its own binary and called over gRPC, that
+provides `app` and `ingress`. A plugin registers each block type with its own
+call to `plugins.RegisterResourceProvider` in `Init`.
+
+Computed values cross both ways: `app` reads the `connection_string` the
+in-process `redis` provider computed, and `ingress` reads the `url` the
+external `app` provider computed, so a value moves between two plugins and
+between two types of the same plugin. The configuration also uses a module,
+[`plugin/config/modules/db`](./example/plugin/config/modules/db).
+
+Their providers log from each lifecycle method, and the example logs every
+event with `xcl.WithEventHandler`. Everything a plugin logs is tagged by
+xcl with the plugin, and with the provider for provider logs, i.e.
+`DEBU event=create plugin=ExamplePlugin provider=postgres resource=resource.postgres.main`.
+Every line leads with its event, `event=log` when a message has none.
+Everything in the example logs at debug except a failure, which logs at
+error.
+
+### Running them
 
 Both examples keep their state in a file, apply the configuration, print the
 resources, then `Destroy` everything and print what is left under
-`## Destroyed`. They log every event xcl fires, parse and destroy events
-included, through the shared [`example/eventlog`](./example/eventlog)
-handler, at debug unless something fails.
+`## Destroyed`. For the configuration only example, where no provider is ever
+called, destroying only clears the state. They log every event xcl fires,
+parse and destroy events included, through the shared
+[`example/eventlog`](./example/eventlog) handler, at debug unless something
+fails.
 
 Run either one from its directory with `make run`. For `plugin` this builds
 the external plugin into `build/` first. Both have the same Makefile targets:
@@ -554,7 +618,8 @@ functionality into modules.
 
 A module is a default type, however you still need to create the go structs that 
 define the resources included in your module. The following example shows how you can
-use the module that is defined in [./example/modules/db/db.hcl](./example/modules/db/db.hcl)
+use the module that is defined in
+[./example/plugin/config/modules/db/db.xcl](./example/plugin/config/modules/db/db.xcl)
 
 Any sub folder can be a module, to create a module all that is needed is one or more `.hcl` files
 that contain your custom resources.

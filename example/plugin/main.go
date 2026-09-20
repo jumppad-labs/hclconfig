@@ -1,19 +1,24 @@
-// Command plugin shows XCL used with plugins. It applies the same
-// configuration and the same Go types as the configonly example, but the
-// block types are provided by two plugins whose providers take part in the
-// lifecycle, creating the resources on apply and destroying them at the end:
+// Command plugin shows XCL used with plugins. The block types are provided
+// by two plugins whose providers take part in the lifecycle, creating the
+// resources on apply and destroying them at the end. Each plugin provides two
+// block types, registered with a provider of their own:
 //
 //   - ExamplePlugin (./internal) is an in-process plugin, compiled into this
-//     program. It provides postgres, and fills in the computed
-//     connection_string that the configuration only example leaves empty.
+//     program. It provides postgres and redis, filling in the computed
+//     connection_string on both that the configuration only example leaves
+//     empty.
 //   - external (./external) is an external plugin, compiled to its own binary
 //     that xcl starts as a separate process and calls over gRPC. It provides
-//     app.
+//     app and ingress, and fills in the computed url on app that ingress
+//     reads.
+//
+// The Go types are in ./resources and the configuration it applies is in
+// ./config.
 //
 // Build the external plugin and run the example from this directory with
 // `make run`, see the Makefile for the other targets. The configuration
 // directory and the external plugin binary can be passed as arguments:
-// `go run . <config dir> <external plugin binary>`, they default to ../config
+// `go run . <config dir> <external plugin binary>`, they default to ./config
 // and ./build/external.
 package main
 
@@ -26,7 +31,7 @@ import (
 	"github.com/jumppad-labs/xcl"
 	"github.com/jumppad-labs/xcl/example/eventlog"
 	"github.com/jumppad-labs/xcl/example/plugin/internal"
-	"github.com/jumppad-labs/xcl/example/resources"
+	"github.com/jumppad-labs/xcl/example/plugin/resources"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/state"
@@ -34,7 +39,7 @@ import (
 )
 
 func main() {
-	dir := "../config"
+	dir := "./config"
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
@@ -126,14 +131,32 @@ func run(out io.Writer, log logger.Logger, dir string, externalPlugin string, st
 		fmt.Fprintf(out, "  %s location=%s port=%d connection_string=%q\n", db.Meta.ID, db.Location, db.Port, db.ConnectionString)
 	}
 
+	caches, err := xcl.NewQuerier[resources.Redis](c).FindResourcesByType("redis")
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintln(out, "## Caches")
+	for _, cache := range caches {
+		fmt.Fprintf(out, "  %s location=%s port=%d connection_string=%q\n", cache.Meta.ID, cache.Location, cache.Port, cache.ConnectionString)
+	}
+
 	app, err := xcl.NewQuerier[resources.App](c).FindResource("resource.app.web")
 	if err != nil {
 		return nil, err
 	}
 
 	fmt.Fprintln(out, "## App")
-	fmt.Fprintf(out, "  %s database_location=%s database_user=%s analytics_location=%s connection_string=%q\n",
-		app.Meta.ID, app.DatabaseLocation, app.DatabaseUser, app.AnalyticsLocation, app.ConnectionString)
+	fmt.Fprintf(out, "  %s database_location=%s database_user=%s analytics_location=%s connection_string=%q cache_connection_string=%q url=%q\n",
+		app.Meta.ID, app.DatabaseLocation, app.DatabaseUser, app.AnalyticsLocation, app.ConnectionString, app.CacheConnectionString, app.URL)
+
+	ingress, err := xcl.NewQuerier[resources.Ingress](c).FindResource("resource.ingress.web")
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintln(out, "## Ingress")
+	fmt.Fprintf(out, "  %s hostname=%s app_url=%q\n", ingress.Meta.ID, ingress.Hostname, ingress.AppURL)
 
 	applied := append([]any{}, c.GetResources()...)
 

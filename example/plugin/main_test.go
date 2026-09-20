@@ -13,14 +13,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jumppad-labs/xcl/example/resources"
+	"github.com/jumppad-labs/xcl/example/plugin/resources"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/types"
 	"github.com/stretchr/testify/require"
 )
 
-// configDir is the shared example configuration
-const configDir = "../config"
+// configDir is the configuration this example applies
+const configDir = "./config"
 
 // externalPlugin is the external plugin binary, built once for the package's
 // tests by TestMain
@@ -59,8 +59,10 @@ var declaredResourceIDs = []string{
 	"module.analytics.variable.db_username",
 	"output.web_database",
 	"resource.app.web",
+	"resource.ingress.web",
 	"resource.postgres.main",
 	"resource.postgres.replica",
+	"resource.redis.cache",
 	"variable.db_password",
 	"variable.db_username",
 }
@@ -162,6 +164,7 @@ func TestPluginExampleFillsConnectionString(t *testing.T) {
 	require.Contains(t, out.String(), `resource.postgres.main location=localhost port=5432 connection_string="postgres://admin@localhost:5432/main"`)
 	require.Contains(t, out.String(), `resource.postgres.replica location=replica.localhost port=5433 connection_string="postgres://admin@replica.localhost:5433/main"`)
 	require.Contains(t, out.String(), `module.analytics.resource.postgres.analytics location=analytics.localhost port=5432 connection_string="postgres://analytics@analytics.localhost:5432/analytics"`)
+	require.Contains(t, out.String(), `resource.redis.cache location=localhost port=6379 connection_string="redis://localhost:6379"`)
 }
 
 func TestPluginExamplePassesConnectionStringToReferencingBlock(t *testing.T) {
@@ -170,7 +173,19 @@ func TestPluginExamplePassesConnectionStringToReferencingBlock(t *testing.T) {
 	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	require.Contains(t, out.String(), `resource.app.web database_location=localhost database_user=admin analytics_location=analytics.localhost connection_string="postgres://admin@localhost:5432/main"`)
+	require.Contains(t, out.String(), `resource.app.web database_location=localhost database_user=admin analytics_location=analytics.localhost connection_string="postgres://admin@localhost:5432/main" cache_connection_string="redis://localhost:6379" url="http://web"`)
+}
+
+// TestPluginExamplePassesComputedURLToIngress asserts the url the app
+// provider computes reaches the ingress block, both types come from the
+// external plugin
+func TestPluginExamplePassesComputedURLToIngress(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	_, err := run(out, logger.NewTestLogger(t), configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
+	require.NoError(t, err)
+
+	require.Contains(t, out.String(), `resource.ingress.web hostname=example.com app_url="http://web"`)
 }
 
 // TestPluginExampleHoldsGeneratedTypes asserts plugin resources are held as
@@ -186,8 +201,14 @@ func TestPluginExampleHoldsGeneratedTypes(t *testing.T) {
 		_, isPostgres := r.(*resources.PostgreSQL)
 		require.False(t, isPostgres, "plugin resources are held as generated types")
 
+		_, isRedis := r.(*resources.Redis)
+		require.False(t, isRedis, "plugin resources are held as generated types")
+
 		_, isApp := r.(*resources.App)
 		require.False(t, isApp, "plugin resources are held as generated types")
+
+		_, isIngress := r.(*resources.Ingress)
+		require.False(t, isIngress, "plugin resources are held as generated types")
 	}
 }
 
@@ -198,9 +219,9 @@ func TestPluginExampleFailsForMissingConfig(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestPluginExampleDefinesNoTypesOrConfig asserts the plugin example and its
-// external plugin use the shared configuration and Go types, they declare no
-// resource type and hold no configuration of their own
+// TestPluginExampleDefinesNoTypesOrConfig asserts the example's program and
+// its two plugins hold the block types in ./resources and the configuration
+// in ./config, rather than declaring either where they are used
 func TestPluginExampleDefinesNoTypesOrConfig(t *testing.T) {
 	for _, dir := range []string{".", "./internal", "./external"} {
 		fset := token.NewFileSet()
@@ -229,7 +250,7 @@ func TestPluginExampleDefinesNoTypesOrConfig(t *testing.T) {
 						}
 
 						require.NotEqual(t, "ResourceBase", sel.Sel.Name,
-							"%s declares resource type %s, use the shared example/resources types", name, ts.Name.Name)
+							"%s declares resource type %s, put it in ./resources", name, ts.Name.Name)
 					}
 
 					return true
@@ -242,7 +263,7 @@ func TestPluginExampleDefinesNoTypesOrConfig(t *testing.T) {
 
 		for _, e := range entries {
 			require.NotEqual(t, ".xcl", filepath.Ext(e.Name()),
-				"%s is configuration, use the shared example/config", filepath.Join(dir, e.Name()))
+				"%s is configuration, put it in ./config", filepath.Join(dir, e.Name()))
 		}
 	}
 }
@@ -253,16 +274,20 @@ func TestPluginExampleLogsInProcessPluginInitAtDebug(t *testing.T) {
 	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	require.Len(t, log.withMessage("debug", "plugin=ExamplePlugin init"), 1)
+	require.Len(t, log.withMessage("debug", "event=init plugin=ExamplePlugin"), 1)
 }
 
+// TestPluginExampleLogsInProcessProviderInitAtDebug asserts each of the two
+// block types the in-process plugin provides is registered with its own
+// provider, each logging under its own provider tag
 func TestPluginExampleLogsInProcessProviderInitAtDebug(t *testing.T) {
 	log := &recordingLogger{}
 
 	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	require.Len(t, log.withMessage("debug", "plugin=ExamplePlugin provider=postgres init"), 1)
+	require.Len(t, log.withMessage("debug", "event=init plugin=ExamplePlugin provider=postgres"), 1)
+	require.Len(t, log.withMessage("debug", "event=init plugin=ExamplePlugin provider=redis"), 1)
 }
 
 func TestPluginExampleLogsInProcessProviderCreateAtDebug(t *testing.T) {
@@ -272,10 +297,14 @@ func TestPluginExampleLogsInProcessProviderCreateAtDebug(t *testing.T) {
 	require.NoError(t, err)
 
 	require.ElementsMatch(t, [][]any{
-		{"id", "resource.postgres.main", "connection_string", "postgres://admin@localhost:5432/main"},
-		{"id", "resource.postgres.replica", "connection_string", "postgres://admin@replica.localhost:5433/main"},
-		{"id", "module.analytics.resource.postgres.analytics", "connection_string", "postgres://analytics@analytics.localhost:5432/analytics"},
-	}, argsOf(log.withMessage("debug", "plugin=ExamplePlugin provider=postgres create")))
+		{"resource", "resource.postgres.main", "connection_string", "postgres://admin@localhost:5432/main"},
+		{"resource", "resource.postgres.replica", "connection_string", "postgres://admin@replica.localhost:5433/main"},
+		{"resource", "module.analytics.resource.postgres.analytics", "connection_string", "postgres://analytics@analytics.localhost:5432/analytics"},
+	}, argsOf(log.withMessage("debug", "event=create plugin=ExamplePlugin provider=postgres")))
+
+	require.Equal(t, [][]any{
+		{"resource", "resource.redis.cache", "connection_string", "redis://localhost:6379"},
+	}, argsOf(log.withMessage("debug", "event=create plugin=ExamplePlugin provider=redis")))
 }
 
 // TestPluginExampleLogsExternalProviderCreateAtDebug asserts a log from the external plugin process reaches the host logger,
@@ -287,8 +316,15 @@ func TestPluginExampleLogsExternalProviderCreateAtDebug(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, [][]any{
-		{"id", "resource.app.web", "connection_string", "postgres://admin@localhost:5432/main"},
-	}, argsOf(log.withMessage("debug", "plugin=external provider=app create")))
+		{"resource", "resource.app.web",
+			"connection_string", "postgres://admin@localhost:5432/main",
+			"cache_connection_string", "redis://localhost:6379",
+			"url", "http://web"},
+	}, argsOf(log.withMessage("debug", "event=create plugin=external provider=app")))
+
+	require.Equal(t, [][]any{
+		{"resource", "resource.ingress.web", "hostname", "example.com", "app_url", "http://web"},
+	}, argsOf(log.withMessage("debug", "event=create plugin=external provider=ingress")))
 }
 
 func TestPluginExampleFailsWithoutExternalPlugin(t *testing.T) {
@@ -335,7 +371,9 @@ func TestPluginExampleLogsEventsAtDebug(t *testing.T) {
 		"resource.postgres.main":                       {"start", "success"},
 		"resource.postgres.replica":                    {"start", "success"},
 		"module.analytics.resource.postgres.analytics": {"start", "success"},
+		"resource.redis.cache":                         {"start", "success"},
 		"resource.app.web":                             {"start", "success"},
+		"resource.ingress.web":                         {"start", "success"},
 		"module.analytics":                             {"success"},
 		"module.analytics.output.location":             {"success"},
 		"module.analytics.variable.db_username":        {"success"},
@@ -353,8 +391,8 @@ func TestPluginExampleLogsPluginsLoadedAtDebug(t *testing.T) {
 	_, err := run(&bytes.Buffer{}, log, configDir, externalPlugin, filepath.Join(t.TempDir(), "state.json"))
 	require.NoError(t, err)
 
-	require.Equal(t, [][]any{{"block_types", "postgres"}}, argsOf(log.withMessage("debug", "plugin=ExamplePlugin plugin loaded")))
-	require.Equal(t, [][]any{{"block_types", "app"}}, argsOf(log.withMessage("debug", "plugin=external plugin loaded")))
+	require.Equal(t, [][]any{{"block_types", "postgres, redis"}}, argsOf(log.withMessage("debug", "event=load plugin=ExamplePlugin plugin loaded")))
+	require.Equal(t, [][]any{{"block_types", "app, ingress"}}, argsOf(log.withMessage("debug", "event=load plugin=external plugin loaded")))
 }
 
 func TestPluginExampleLogsNoErrors(t *testing.T) {
@@ -404,8 +442,10 @@ func TestPluginExampleLogsParseEventWithFileAtDebug(t *testing.T) {
 		"variable.db_password":                         "main.xcl",
 		"resource.postgres.main":                       "main.xcl",
 		"resource.postgres.replica":                    "main.xcl",
+		"resource.redis.cache":                         "main.xcl",
 		"module.analytics":                             "main.xcl",
 		"resource.app.web":                             "main.xcl",
+		"resource.ingress.web":                         "main.xcl",
 		"output.web_database":                          "main.xcl",
 		"module.analytics.variable.db_username":        "db.xcl",
 		"module.analytics.resource.postgres.analytics": "db.xcl",
@@ -447,14 +487,22 @@ func TestPluginExampleProvidersLogDestroyForEveryResource(t *testing.T) {
 	require.NoError(t, err)
 
 	require.ElementsMatch(t, [][]any{
-		{"id", "resource.postgres.main", "force", false},
-		{"id", "resource.postgres.replica", "force", false},
-		{"id", "module.analytics.resource.postgres.analytics", "force", false},
-	}, argsOf(log.withMessage("debug", "plugin=ExamplePlugin provider=postgres destroy")))
+		{"resource", "resource.postgres.main", "force", false},
+		{"resource", "resource.postgres.replica", "force", false},
+		{"resource", "module.analytics.resource.postgres.analytics", "force", false},
+	}, argsOf(log.withMessage("debug", "event=destroy plugin=ExamplePlugin provider=postgres")))
 
 	require.Equal(t, [][]any{
-		{"id", "resource.app.web", "force", false},
-	}, argsOf(log.withMessage("debug", "plugin=external provider=app destroy")))
+		{"resource", "resource.redis.cache", "force", false},
+	}, argsOf(log.withMessage("debug", "event=destroy plugin=ExamplePlugin provider=redis")))
+
+	require.Equal(t, [][]any{
+		{"resource", "resource.app.web", "force", false},
+	}, argsOf(log.withMessage("debug", "event=destroy plugin=external provider=app")))
+
+	require.Equal(t, [][]any{
+		{"resource", "resource.ingress.web", "force", false},
+	}, argsOf(log.withMessage("debug", "event=destroy plugin=external provider=ingress")))
 }
 
 // TestPluginExampleLogsDestroyEventPhases asserts every resource's destroy events are logged at
@@ -470,7 +518,9 @@ func TestPluginExampleLogsDestroyEventPhases(t *testing.T) {
 		"resource.postgres.main":                       {"start", "success"},
 		"resource.postgres.replica":                    {"start", "success"},
 		"module.analytics.resource.postgres.analytics": {"start", "success"},
+		"resource.redis.cache":                         {"start", "success"},
 		"resource.app.web":                             {"start", "success"},
+		"resource.ingress.web":                         {"start", "success"},
 		"module.analytics":                             {"success"},
 		"module.analytics.output.location":             {"success"},
 		"module.analytics.variable.db_username":        {"success"},

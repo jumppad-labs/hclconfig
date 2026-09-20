@@ -4,7 +4,7 @@
 
 BUILD_DIR := build
 EXTERNAL_PLUGIN := $(BUILD_DIR)/external
-CONFIG_DIR := ../config
+CONFIG_DIR := ./config
 
 .PHONY: build run test clean
 

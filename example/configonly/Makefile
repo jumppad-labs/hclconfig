@@ -2,11 +2,11 @@
 # block types are plain Go types registered with the plugin registry.
 
 BUILD_DIR := build
-CONFIG_DIR := ../config
+CONFIG_DIR := ./config
 
 .PHONY: run test
 
-# Run the example against the shared configuration
+# Run the example against its configuration
 run:
 	go run . $(CONFIG_DIR)
 

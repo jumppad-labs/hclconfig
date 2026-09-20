@@ -34,6 +34,13 @@ resource "postgres" "replica" {
   password = variable.db_password
 }
 
+# redis is the second block type the in-process plugin provides, postgres is
+# the first
+resource "redis" "cache" {
+  location = "localhost"
+  port     = 6379
+}
+
 # Modules group configuration in a directory, their outputs can be read by the
 # configuration that uses them
 module "analytics" {
@@ -50,6 +57,18 @@ resource "app" "web" {
   # connection_string is computed on postgres, it only has a value when a
   # provider fills it in
   connection_string = resource.postgres.main.connection_string
+
+  # The cache is provided by a different plugin than the app, computed values
+  # cross from one plugin to the other
+  cache_connection_string = resource.redis.cache.connection_string
+}
+
+# ingress is the second block type the external plugin provides, app is the
+# first. It reads the computed url of the app, so both values come from the
+# same plugin.
+resource "ingress" "web" {
+  hostname = "example.com"
+  app_url  = resource.app.web.url
 }
 
 output "web_database" {

@@ -1,13 +1,20 @@
-// Command configonly shows XCL used for configuration only. The block types
-// are plain Go types registered on the plugin registry, there is no plugin and
-// no provider: blocks are decoded into the Go types, references between them
-// are resolved, and no provider is ever called. The state is kept in a file,
-// and after the resources are printed everything is destroyed again, which
-// for these types only clears them from the state.
+// Command configonly shows XCL used for configuration only: parsing a
+// configuration into Go objects. The block types are plain Go types
+// registered on the plugin registry, there is no plugin and no provider.
+// Blocks are decoded into the Go types, references between them are resolved,
+// and no provider is ever called.
+//
+// The configuration it parses (./config) is a small Kubernetes-like
+// deployment, and the Go types it parses into are in ./resources. Between
+// them they show blocks nested inside blocks, blocks that repeat into a
+// slice, and resources linked to each other by reference.
+//
+// The state is kept in a file, and after the resources are printed everything
+// is destroyed again, which for these types only clears them from the state.
 //
 // Run it from this directory with `make run`, see the Makefile for the other
 // targets. The configuration directory can be passed as an argument:
-// `go run . <config dir>`, it defaults to ../config.
+// `go run . <config dir>`, it defaults to ./config.
 package main
 
 import (
@@ -17,8 +24,8 @@ import (
 	"path/filepath"
 
 	"github.com/jumppad-labs/xcl"
+	"github.com/jumppad-labs/xcl/example/configonly/resources"
 	"github.com/jumppad-labs/xcl/example/eventlog"
-	"github.com/jumppad-labs/xcl/example/resources"
 	"github.com/jumppad-labs/xcl/logger"
 	"github.com/jumppad-labs/xcl/plugins/registry"
 	"github.com/jumppad-labs/xcl/state"
@@ -26,7 +33,7 @@ import (
 )
 
 func main() {
-	dir := "../config"
+	dir := "./config"
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
@@ -54,12 +61,22 @@ func main() {
 func run(out io.Writer, log logger.Logger, dir string, statePath string) ([]any, error) {
 	r := registry.NewPluginRegistry(log)
 
-	// Register each Go type under the block type name used in configuration
-	if err := r.RegisterType("postgres", &resources.PostgreSQL{}); err != nil {
+	// Register each Go type under the block type name used in configuration.
+	// A registered type needs nothing else: no plugin, no provider, no schema
+	// to write by hand.
+	if err := r.RegisterType("config_map", &resources.ConfigMap{}); err != nil {
 		return nil, err
 	}
 
-	if err := r.RegisterType("app", &resources.App{}); err != nil {
+	if err := r.RegisterType("deployment", &resources.Deployment{}); err != nil {
+		return nil, err
+	}
+
+	if err := r.RegisterType("service", &resources.Service{}); err != nil {
+		return nil, err
+	}
+
+	if err := r.RegisterType("ingress", &resources.Ingress{}); err != nil {
 		return nil, err
 	}
 
@@ -89,36 +106,89 @@ func run(out io.Writer, log logger.Logger, dir string, statePath string) ([]any,
 		fmt.Fprintf(out, "  %s\n", meta.ID)
 	}
 
-	// Registered types come back as the Go type that was registered
-	databases, err := xcl.NewQuerier[resources.PostgreSQL](c).FindResourcesByType("postgres")
-	if err != nil {
+	if err := printDeployments(out, c); err != nil {
 		return nil, err
 	}
 
-	fmt.Fprintln(out, "## Databases")
-	for _, db := range databases {
-		fmt.Fprintf(out, "  %s location=%s port=%d connection_string=%q\n", db.Meta.ID, db.Location, db.Port, db.ConnectionString)
-	}
-
-	app, err := xcl.NewQuerier[resources.App](c).FindResource("resource.app.web")
-	if err != nil {
+	if err := printRouting(out, c); err != nil {
 		return nil, err
 	}
-
-	fmt.Fprintln(out, "## App")
-	fmt.Fprintf(out, "  %s database_location=%s database_user=%s analytics_location=%s connection_string=%q\n",
-		app.Meta.ID, app.DatabaseLocation, app.DatabaseUser, app.AnalyticsLocation, app.ConnectionString)
 
 	applied := append([]any{}, c.GetResources()...)
 
-	// Destroy everything that was applied, dependents before what they depend
-	// on, working only from the saved state
-	if err := c.Destroy(); err != nil {
-		return nil, err
+	return applied, nil
+}
+
+// printDeployments writes each deployment and walks the blocks nested inside
+// it, the containers and, for each of those, its ports, environment and
+// resource limits. Registered types come back as the Go type that was
+// registered, so the nested blocks are ordinary Go structs and slices.
+func printDeployments(out io.Writer, c *xcl.Config) error {
+	deployments, err := xcl.NewQuerier[resources.Deployment](c).FindResourcesByType("deployment")
+	if err != nil {
+		return err
 	}
 
-	fmt.Fprintln(out, "## Destroyed")
-	fmt.Fprintf(out, "  %d resources remaining\n", c.ResourceCount())
+	fmt.Fprintln(out, "## Deployments")
+	for _, d := range deployments {
+		fmt.Fprintf(out, "  %s replicas=%d\n", d.Meta.ID, d.Replicas)
 
-	return applied, nil
+		for _, container := range d.Containers {
+			fmt.Fprintf(out, "    container %s image=%s\n", container.Name, container.Image)
+
+			for _, port := range container.Ports {
+				fmt.Fprintf(out, "      port %s container_port=%d\n", port.Name, port.ContainerPort)
+			}
+
+			// env values were read from the config map, the reference is
+			// resolved by the time the resource is returned
+			for _, env := range container.Env {
+				fmt.Fprintf(out, "      env %s=%s\n", env.Name, env.Value)
+			}
+
+			// A block that appears once is a pointer, nil when the
+			// configuration leaves it out
+			if container.Resources != nil {
+				fmt.Fprintf(out, "      limits cpu=%s memory=%s\n", container.Resources.Limits.CPU, container.Resources.Limits.Memory)
+				fmt.Fprintf(out, "      requests cpu=%s memory=%s\n", container.Resources.Requests.CPU, container.Resources.Requests.Memory)
+			}
+
+			for _, mount := range container.VolumeMounts {
+				fmt.Fprintf(out, "      volume_mount %s path=%s\n", mount.Name, mount.Path)
+			}
+		}
+
+		for _, volume := range d.Volumes {
+			fmt.Fprintf(out, "    volume %s config_map=%s\n", volume.Name, volume.ConfigMap)
+		}
+	}
+
+	return nil
+}
+
+// printRouting writes the two resources that are linked to the deployment,
+// their values were read from the blocks they reference rather than repeated
+// in the configuration
+func printRouting(out io.Writer, c *xcl.Config) error {
+	service, err := xcl.NewQuerier[resources.Service](c).FindResource("resource.service.api")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(out, "## Service")
+	fmt.Fprintf(out, "  %s deployment=%s port=%d target_port=%d\n", service.Meta.ID, service.Deployment, service.Port, service.TargetPort)
+
+	ingress, err := xcl.NewQuerier[resources.Ingress](c).FindResource("resource.ingress.api")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(out, "## Ingress")
+	fmt.Fprintf(out, "  %s host=%s\n", ingress.Meta.ID, ingress.Host)
+
+	for _, rule := range ingress.Rules {
+		fmt.Fprintf(out, "    rule path=%s service=%s port=%d\n", rule.Path, rule.Service, rule.Port)
+	}
+
+	return nil
 }

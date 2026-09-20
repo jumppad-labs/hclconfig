@@ -155,6 +155,13 @@ This does three things:
 3. Appends a `RegisteredType{Type, SubType, Schema, Adapter}` to
    `PluginBase.registeredTypes`.
 
+A plugin provides as many block types as it likes: call
+`RegisterResourceProvider` once per type in `Init`, each with its own
+provider. The adapter tags each provider's logger with its block type, so the
+providers of one plugin are told apart in the log. Both plugins in
+[`example/plugin`](../example/plugin) provide two types this way, the
+in-process one `postgres` and `redis`, the external one `app` and `ingress`.
+
 `PluginBase.GetTypes()` just returns that slice — it's what both
 `DirectPluginHost.GetTypes()` (directly) and `GRPCPluginHost.GetTypes()`
 (via a `GetTypes` RPC call to the plugin process) expose upward.
@@ -246,9 +253,9 @@ written by the adapter around the provider, which runs in the host for an
 in-process plugin and inside the plugin process for an external one:
 
 ```
-DEBU event=load plugin=ExamplePlugin plugin loaded block_types=postgres
+DEBU event=load plugin=ExamplePlugin plugin loaded block_types=postgres, redis
 DEBU event=create plugin=ExamplePlugin provider=postgres calling provider resource=resource.postgres.main
-DEBU event=load plugin=external plugin loaded block_types=app
+DEBU event=load plugin=external plugin loaded block_types=app, ingress
 DEBU event=create plugin=external provider=app calling provider resource=resource.app.web
 ```
 
@@ -279,9 +286,10 @@ types, and fail with a `*registry.TypeNameClashError` naming the type. A
 clashing plugin is stopped and not added, and discovery always returns clash
 errors, even when other plugins load.
 
-[`example/configonly`](../example/configonly) and
-[`example/plugin`](../example/plugin) apply the same configuration and Go
-types, first as registered types, then through an in-process plugin.
+[`example/configonly`](../example/configonly) parses a Kubernetes-like
+configuration into registered types this way, with no plugin at all.
+[`example/plugin`](../example/plugin) is the other half of the picture, four
+block types provided by two plugins instead.
 
 ## Mocks
 
